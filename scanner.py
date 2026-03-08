@@ -60,7 +60,7 @@ B_MAX_HOLD_DAYS    = 10
 
 # === Common filters ===
 MIN_PRICE      = 1.0
-MIN_VOLUME     = 10000
+MIN_VOLUME     = 10000       # 20일 평균거래량 기준
 BATCH_SIZE     = 80
 BATCH_DELAY    = 1.5
 
@@ -230,6 +230,7 @@ def scan_strategy_a(all_tickers):
                 if len(close) < 10:
                     continue
                 last_close = float(close.iloc[-1])
+                # ★ 20일 평균거래량 필터 (phase3 동일)
                 avg_vol = float(df['Volume'].dropna().tail(20).mean())
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
@@ -264,6 +265,7 @@ def scan_strategy_a(all_tickers):
                 high  = df['High'].astype(float)
                 low   = df['Low'].astype(float)
                 opn   = df['Open'].astype(float)
+                vol   = df['Volume'].astype(float)
                 n = len(close)
 
                 c_last = float(close.iloc[-1])
@@ -272,6 +274,11 @@ def scan_strategy_a(all_tickers):
                 o_last = float(opn.iloc[-1])
 
                 if o_last <= 0:
+                    continue
+
+                # ★ 20일 평균거래량 필터 (phase3 동일)
+                avg_vol = float(vol.tail(20).mean())
+                if c_last < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
 
                 # ── 조건 1: 일중 변동폭 > 20% ──
@@ -295,6 +302,7 @@ def scan_strategy_a(all_tickers):
                 if n < 5:
                     continue
                 low5_min = float(low.iloc[-5:].min())
+                # ★ 분모 = low5_min (phase3 동일)
                 dist_low5 = (c_last - low5_min) / max(low5_min, 0.01)
                 if dist_low5 >= A_DIST_LOW5:
                     continue
@@ -370,6 +378,7 @@ def scan_strategy_b(all_tickers):
                 if len(close) < 10:
                     continue
                 last_close = float(close.iloc[-1])
+                # ★ 20일 평균거래량 필터
                 avg_vol = float(df['Volume'].dropna().tail(20).mean())
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
@@ -412,6 +421,11 @@ def scan_strategy_b(all_tickers):
                 o_last = float(opn.iloc[-1])
 
                 if c_last < MIN_PRICE or o_last <= 0:
+                    continue
+
+                # ★ 20일 평균거래량 필터
+                avg_vol = float(vol.tail(20).mean())
+                if avg_vol < MIN_VOLUME:
                     continue
 
                 # === 조건 1: RSI7 < 20 ===
