@@ -230,7 +230,7 @@ def scan_strategy_a(all_tickers):
                 if len(close) < 10:
                     continue
                 last_close = float(close.iloc[-1])
-                avg_vol = float(df['Volume'].dropna().tail(10).mean())
+                avg_vol = float(df['Volume'].dropna().tail(20).mean())
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
                 # 넓은 RSI 필터 (Phase 2에서 정밀 체크)
@@ -295,7 +295,7 @@ def scan_strategy_a(all_tickers):
                 if n < 5:
                     continue
                 low5_min = float(low.iloc[-5:].min())
-                dist_low5 = (c_last - low5_min) / max(c_last, 0.01)
+                dist_low5 = (c_last - low5_min) / max(low5_min, 0.01)
                 if dist_low5 >= A_DIST_LOW5:
                     continue
 
@@ -370,7 +370,7 @@ def scan_strategy_b(all_tickers):
                 if len(close) < 10:
                     continue
                 last_close = float(close.iloc[-1])
-                avg_vol = float(df['Volume'].dropna().tail(10).mean())
+                avg_vol = float(df['Volume'].dropna().tail(20).mean())
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
                 rsi7 = calc_rsi_wilder(close, 7)
