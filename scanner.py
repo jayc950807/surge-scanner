@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B)
+  US Stock Surge Detection — Combined Scanner (Strategy A + B + C)
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
@@ -13,10 +13,18 @@
     매도: +15% 지정가 | -20% 손절 | 10일 종가청산
     백테스트: 90.3% (28/31)
 
+  Strategy C (+5% 2일 연속 급락 과매도 반등):
+    매수: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + ConsecDown>3 + DistLow5<3%
+    매도: +5% 익절 | -20% 손절 | 5일 타임아웃
+    백테스트: 86.9% (542/624), +7% 기준 81.4%
+
   Usage:
-    python scanner.py                    # Scan both strategies
+    python scanner.py                    # Scan all strategies (A+B+C)
     python scanner.py --strategy A       # Strategy A only
     python scanner.py --strategy B       # Strategy B only
+    python scanner.py --strategy C       # Strategy C only
+    python scanner.py --strategy AB      # Strategy A + B
+    python scanner.py --strategy ABC     # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -57,6 +65,16 @@ B_MA20_THRESH      = -0.25
 B_TAKE_PROFIT      = 0.15    # +15%
 B_STOP_LOSS        = -0.20   # -20%
 B_MAX_HOLD_DAYS    = 10
+
+# === Strategy C thresholds (+5% 과매도 반등) ===
+C_RSI7_THRESH    = 30        # RSI(7) < 30
+C_INTRA_THRESH   = 0.20      # 일중 변동폭 > 20%
+C_RET1D_THRESH   = -0.08     # 당일 수익률 < -8%
+C_CONSEC_DOWN    = 3          # 연속 하락 > 3일 (4일 이상)
+C_DIST_LOW5      = 0.03       # 5일 최저가 대비 < 3%
+C_TAKE_PROFIT    = 0.05       # +5%
+C_STOP_LOSS      = -0.20      # -20%
+C_MAX_HOLD_DAYS  = 5
 
 # === Common filters ===
 MIN_PRICE      = 1.0
@@ -509,9 +527,163 @@ def scan_strategy_b(all_tickers):
     return signals
 
 
+# ─── Strategy C Scanner (+5% 과매도 반등) ────────────────────────────────────
+
+def scan_strategy_c(all_tickers):
+    """Strategy C: +5% 2일 연속 급락 과매도 반등 (승률 86.9%, 624건/5년)
+    조건: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + ConsecDown>3 + DistLow5<3%
+    """
+    print(f"\n{'='*80}")
+    print("  [Strategy C] +5% 과매도 반등 Scanner")
+    print(f"{'='*80}")
+
+    # Phase 1: 빠른 필터링 (RSI < 35로 넓게 — C는 RSI7<30 기준이므로 여유 부여)
+    print(f"\n  Phase 1: 빠른 필터링 ({len(all_tickers)}개)...")
+    candidates = []
+    total_batches = (len(all_tickers) + BATCH_SIZE - 1) // BATCH_SIZE
+
+    for b_idx in range(0, len(all_tickers), BATCH_SIZE):
+        batch = all_tickers[b_idx:b_idx + BATCH_SIZE]
+        batch_num = b_idx // BATCH_SIZE + 1
+
+        if batch_num % 20 == 1 or batch_num == total_batches:
+            print(f"    Batch {batch_num}/{total_batches} ({len(candidates)} candidates)")
+
+        data = download_batch(batch, period='30d')
+        if data is None or data.empty:
+            time.sleep(BATCH_DELAY)
+            continue
+
+        for tk in batch:
+            try:
+                df = extract_ticker_df(data, tk, len(batch))
+                if df is None or len(df) < 10:
+                    continue
+                close = df['Close'].dropna()
+                if len(close) < 10:
+                    continue
+                last_close = float(close.iloc[-1])
+                avg_vol = float(df['Volume'].dropna().tail(20).mean())
+                if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
+                    continue
+                # 넓은 RSI 필터 (Phase 2에서 정밀 체크)
+                rsi7 = calc_rsi_wilder(close, 7)
+                if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 35:
+                    candidates.append(tk)
+            except:
+                continue
+        time.sleep(BATCH_DELAY)
+
+    print(f"  Phase 1 완료: {len(candidates)}개 후보")
+
+    # Phase 2: 6개 조건 정밀 체크
+    print(f"\n  Phase 2: 6개 조건 정밀 분석 ({len(candidates)}개)...")
+    signals = []
+
+    for b_idx in range(0, len(candidates), 20):
+        batch = candidates[b_idx:b_idx + 20]
+        data = download_batch(batch, period='60d')
+        if data is None or data.empty:
+            time.sleep(BATCH_DELAY)
+            continue
+
+        for tk in batch:
+            try:
+                df = extract_ticker_df(data, tk, len(batch))
+                if df is None or len(df) < 10:
+                    continue
+
+                close = df['Close'].astype(float)
+                high  = df['High'].astype(float)
+                low   = df['Low'].astype(float)
+                opn   = df['Open'].astype(float)
+                vol   = df['Volume'].astype(float)
+                n = len(close)
+
+                c_last = float(close.iloc[-1])
+                h_last = float(high.iloc[-1])
+                l_last = float(low.iloc[-1])
+                o_last = float(opn.iloc[-1])
+
+                if o_last <= 0:
+                    continue
+
+                # ★ 20일 평균거래량 필터
+                avg_vol = float(vol.tail(20).mean())
+                if c_last < MIN_PRICE or avg_vol < MIN_VOLUME:
+                    continue
+
+                # ── 조건 1: RSI(7) < 30 ──
+                rsi7 = calc_rsi_wilder(close, 7)
+                rsi7_val = float(rsi7.iloc[-1])
+                if pd.isna(rsi7_val) or rsi7_val >= C_RSI7_THRESH:
+                    continue
+
+                # ── 조건 2: 일중 변동폭 > 20% ──
+                intra = (h_last - l_last) / o_last
+                if intra <= C_INTRA_THRESH:
+                    continue
+
+                # ── 조건 3: 당일 수익률 < -8% ──
+                if n < 2:
+                    continue
+                ret1d = (c_last - float(close.iloc[-2])) / max(float(close.iloc[-2]), 0.01)
+                if ret1d >= C_RET1D_THRESH:
+                    continue
+
+                # ── 조건 4: 전일도 하락 (2일 연속 하락 확인) ──
+                if n < 3:
+                    continue
+                prev_close = float(close.iloc[-2])
+                prev2_close = float(close.iloc[-3])
+                if prev_close >= prev2_close:
+                    continue
+
+                # ── 조건 5: 연속 하락일 > 3 (4일 이상) ──
+                consec = calc_consec_down(close)
+                if consec <= C_CONSEC_DOWN:
+                    continue
+
+                # ── 조건 6: 5일 최저가 대비 < 3% ──
+                if n < 5:
+                    continue
+                low5_min = float(low.iloc[-5:].min())
+                dist_low5 = (c_last - low5_min) / max(low5_min, 0.01)
+                if dist_low5 >= C_DIST_LOW5:
+                    continue
+
+                # ★ 6개 조건 모두 충족 ★
+                tp_price = round(c_last * (1 + C_TAKE_PROFIT), 2)
+                sl_price = round(c_last * (1 + C_STOP_LOSS), 2)
+
+                signals.append({
+                    'strategy': 'C',
+                    'ticker': tk,
+                    'date': datetime.now().strftime('%Y-%m-%d'),
+                    'price': round(c_last, 2),
+                    'rsi7': round(rsi7_val, 1),
+                    'intraday': round(intra * 100, 1),
+                    'ret1d': round(ret1d * 100, 1),
+                    'consec_down': consec,
+                    'dist_low5': round(dist_low5 * 100, 2),
+                    'tp_price': tp_price,
+                    'sl_price': sl_price,
+                })
+                print(f"    ★ SIGNAL: {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                      f"Intra={intra*100:.0f}% Ret1d={ret1d*100:.1f}% "
+                      f"Down={consec}d Dist5={dist_low5*100:.1f}%")
+
+            except:
+                continue
+        time.sleep(BATCH_DELAY)
+
+    signals.sort(key=lambda x: x['rsi7'])
+    return signals
+
+
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b):
+def print_results(signals_a, signals_b, signals_c):
     """결과 출력"""
     date_str = datetime.now().strftime('%Y-%m-%d')
 
@@ -557,12 +729,33 @@ def print_results(signals_a, signals_b):
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_b)} signals")
 
+    # Strategy C
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY C — 과매도 반등 (+5%) — {date_str}")
+    print(f"  조건: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3d + DistLow5<3%")
+    print(f"  청산: +5% 익절 | -20% 손절 | 5일 타임아웃")
+    print(f"  백테스트: 승률 86.9% (624건/5년), +7% 기준 81.4%")
+    print(f"{'='*90}")
 
-def save_results(signals_a, signals_b):
+    if not signals_c:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'RSI7':>6} {'일중%':>7} {'1일%':>7} "
+              f"{'연속↓':>5} {'Low5%':>7} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_c:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} {s['rsi7']:>6.1f} "
+                  f"{s['intraday']:>6.1f}% {s['ret1d']:>6.1f}% "
+                  f"{s['consec_down']:>5}d {s['dist_low5']:>6.2f}% "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_c)} signals")
+
+
+def save_results(signals_a, signals_b, signals_c):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
     date_str = datetime.now().strftime('%Y-%m-%d')
-    all_signals = signals_a + signals_b
+    all_signals = signals_a + signals_b + signals_c
 
     # 오늘자 신호 파일
     daily_path = f"data/signal_{date_str}.csv"
@@ -594,6 +787,7 @@ def save_results(signals_a, signals_b):
         'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'strategy_a_count': len(signals_a),
         'strategy_b_count': len(signals_b),
+        'strategy_c_count': len(signals_c),
         'total_count': len(all_signals),
     }
     with open('data/latest_scan.json', 'w') as f:
@@ -605,17 +799,18 @@ def save_results(signals_a, signals_b):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B)')
-    parser.add_argument('--strategy', choices=['A', 'B', 'AB'], default='AB',
-                       help='Which strategy to run (default: AB = both)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C)')
+    parser.add_argument('--strategy', choices=['A', 'B', 'C', 'AB', 'AC', 'BC', 'ABC'], default='ABC',
+                       help='Which strategy to run (default: ABC = all)')
     args = parser.parse_args()
 
     t0 = time.time()
     date_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    strat_str = args.strategy
 
     print("=" * 80)
     print("  US Stock Surge Detection — Combined Scanner")
-    print(f"  Strategy A (+5%) + Strategy B (+15%)")
+    print(f"  Strategy: {strat_str}")
     print(f"  Scan Time: {date_str}")
     print("=" * 80)
 
@@ -625,24 +820,35 @@ def main():
 
     signals_a = []
     signals_b = []
+    signals_c = []
+
+    step = 2
 
     # Strategy A
-    if 'A' in args.strategy:
-        print(f"\n[2] Strategy A 스캔 중...")
+    if 'A' in strat_str:
+        print(f"\n[{step}] Strategy A 스캔 중...")
         signals_a = scan_strategy_a(all_tickers)
+        step += 1
 
     # Strategy B
-    if 'B' in args.strategy:
-        print(f"\n[3] Strategy B 스캔 중...")
+    if 'B' in strat_str:
+        print(f"\n[{step}] Strategy B 스캔 중...")
         signals_b = scan_strategy_b(all_tickers)
+        step += 1
+
+    # Strategy C
+    if 'C' in strat_str:
+        print(f"\n[{step}] Strategy C 스캔 중...")
+        signals_c = scan_strategy_c(all_tickers)
+        step += 1
 
     # 결과 출력 및 저장
-    print_results(signals_a, signals_b)
-    save_results(signals_a, signals_b)
+    print_results(signals_a, signals_b, signals_c)
+    save_results(signals_a, signals_b, signals_c)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | Strategy B: {len(signals_b)}건")
+    print(f"  Strategy A: {len(signals_a)}건 | Strategy B: {len(signals_b)}건 | Strategy C: {len(signals_c)}건")
 
 
 if __name__ == '__main__':
