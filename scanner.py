@@ -212,18 +212,17 @@ def download_batch(tickers, period='60d'):
     return None
 
 
-# ─── Strategy A Scanner (+5%) ────────────────────────────────────────────────
+# ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
-def scan_strategy_a(all_tickers):
-    """Strategy A: +5% in 5 Days (승률 90.1%, 262건/5년)
-    조건: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
+def phase1_rsi_filter(all_tickers):
+    """Phase 1: RSI(7) < 35 로 넓게 필터링 (A/B/C 공용)
+    A/B는 RSI<20, C는 RSI<30이므로 RSI<35로 한 번만 스캔.
     """
     print(f"\n{'='*80}")
-    print("  [Strategy A] +5% in 5 Days Scanner")
+    print("  [Phase 1] 공통 RSI 필터링 (RSI7 < 35)")
     print(f"{'='*80}")
+    print(f"  대상: {len(all_tickers)}개 종목")
 
-    # Phase 1: 빠른 필터링 (RSI < 30으로 넓게)
-    print(f"\n  Phase 1: 빠른 필터링 ({len(all_tickers)}개)...")
     candidates = []
     total_batches = (len(all_tickers) + BATCH_SIZE - 1) // BATCH_SIZE
 
@@ -248,173 +247,46 @@ def scan_strategy_a(all_tickers):
                 if len(close) < 10:
                     continue
                 last_close = float(close.iloc[-1])
-                # ★ 20일 평균거래량 필터 (phase3 동일)
                 avg_vol = float(df['Volume'].dropna().tail(20).mean())
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
-                # 넓은 RSI 필터 (Phase 2에서 정밀 체크)
                 rsi7 = calc_rsi_wilder(close, 7)
-                if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 30:
+                if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 35:
                     candidates.append(tk)
             except:
                 continue
         time.sleep(BATCH_DELAY)
 
     print(f"  Phase 1 완료: {len(candidates)}개 후보")
-
-    # Phase 2: 5개 조건 정밀 체크
-    print(f"\n  Phase 2: 5개 조건 정밀 분석 ({len(candidates)}개)...")
-    signals = []
-
-    for b_idx in range(0, len(candidates), 20):
-        batch = candidates[b_idx:b_idx + 20]
-        data = download_batch(batch, period='90d')
-        if data is None or data.empty:
-            time.sleep(BATCH_DELAY)
-            continue
-
-        for tk in batch:
-            try:
-                df = extract_ticker_df(data, tk, len(batch))
-                if df is None or len(df) < 25:
-                    continue
-
-                close = df['Close'].astype(float)
-                high  = df['High'].astype(float)
-                low   = df['Low'].astype(float)
-                opn   = df['Open'].astype(float)
-                vol   = df['Volume'].astype(float)
-                n = len(close)
-
-                c_last = float(close.iloc[-1])
-                h_last = float(high.iloc[-1])
-                l_last = float(low.iloc[-1])
-                o_last = float(opn.iloc[-1])
-
-                if o_last <= 0:
-                    continue
-
-                # ★ 20일 평균거래량 필터 (phase3 동일)
-                avg_vol = float(vol.tail(20).mean())
-                if c_last < MIN_PRICE or avg_vol < MIN_VOLUME:
-                    continue
-
-                # ── 조건 1: 일중 변동폭 > 20% ──
-                intra = (h_last - l_last) / o_last
-                if intra <= A_INTRA_THRESH:
-                    continue
-
-                # ── 조건 2: 3일 수익률 < -15% ──
-                if n < 4:
-                    continue
-                ret3d = c_last / float(close.iloc[-4]) - 1
-                if ret3d >= A_RET3D_THRESH:
-                    continue
-
-                # ── 조건 3: 연속 하락일 > 5 ──
-                consec = calc_consec_down(close)
-                if consec <= A_CONSEC_DOWN:
-                    continue
-
-                # ── 조건 4: 5일 최저가 대비 < 5% ──
-                if n < 5:
-                    continue
-                low5_min = float(low.iloc[-5:].min())
-                # ★ 분모 = low5_min (phase3 동일)
-                dist_low5 = (c_last - low5_min) / max(low5_min, 0.01)
-                if dist_low5 >= A_DIST_LOW5:
-                    continue
-
-                # ── 조건 5: RSI(7) < 20 ──
-                rsi7 = calc_rsi_wilder(close, 7)
-                rsi7_val = float(rsi7.iloc[-1])
-                if pd.isna(rsi7_val) or rsi7_val >= A_RSI7_THRESH:
-                    continue
-
-                # ★ 5개 조건 모두 충족 ★
-                tp_price = round(c_last * (1 + A_TAKE_PROFIT), 2)
-                sl_price = round(c_last * (1 + A_STOP_LOSS), 2)
-
-                signals.append({
-                    'strategy': 'A',
-                    'ticker': tk,
-                    'date': datetime.now().strftime('%Y-%m-%d'),
-                    'price': round(c_last, 2),
-                    'rsi7': round(rsi7_val, 1),
-                    'intraday': round(intra * 100, 1),
-                    'ret3d': round(ret3d * 100, 1),
-                    'consec_down': consec,
-                    'dist_low5': round(dist_low5 * 100, 1),
-                    'tp_price': tp_price,
-                    'sl_price': sl_price,
-                })
-                print(f"    ★ SIGNAL: {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
-                      f"Intra={intra*100:.0f}% Ret3d={ret3d*100:.1f}% "
-                      f"Down={consec}d Dist={dist_low5*100:.1f}%")
-
-            except:
-                continue
-        time.sleep(BATCH_DELAY)
-
-    signals.sort(key=lambda x: x['rsi7'])
-    return signals
+    return candidates
 
 
-# ─── Strategy B Scanner (+15%) ───────────────────────────────────────────────
+# ─── Unified Phase 2: 한 번의 다운로드로 A/B/C 동시 체크 ────────────────────
 
-def scan_strategy_b(all_tickers):
-    """Strategy B: +15% High-Gain (승률 90.3%, 31건)
-    조건: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
-    """
+def phase2_check_all(candidates, strat_str):
+    """Phase 2: 120d 데이터를 한 번만 받아서 A/B/C 조건을 모두 체크"""
     print(f"\n{'='*80}")
-    print("  [Strategy B] +15% High-Gain Scanner")
+    print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
 
-    # Phase 1: 빠른 필터링
-    print(f"\n  Phase 1: 빠른 필터링 ({len(all_tickers)}개)...")
-    candidates = []
-    total_batches = (len(all_tickers) + BATCH_SIZE - 1) // BATCH_SIZE
+    signals_a = []
+    signals_b = []
+    signals_c = []
 
-    for b_idx in range(0, len(all_tickers), BATCH_SIZE):
-        batch = all_tickers[b_idx:b_idx + BATCH_SIZE]
-        batch_num = b_idx // BATCH_SIZE + 1
-
-        if batch_num % 20 == 1 or batch_num == total_batches:
-            print(f"    Batch {batch_num}/{total_batches} ({len(candidates)} candidates)")
-
-        data = download_batch(batch, period='30d')
-        if data is None or data.empty:
-            time.sleep(BATCH_DELAY)
-            continue
-
-        for tk in batch:
-            try:
-                df = extract_ticker_df(data, tk, len(batch))
-                if df is None or len(df) < 10:
-                    continue
-                close = df['Close'].dropna()
-                if len(close) < 10:
-                    continue
-                last_close = float(close.iloc[-1])
-                # ★ 20일 평균거래량 필터
-                avg_vol = float(df['Volume'].dropna().tail(20).mean())
-                if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
-                    continue
-                rsi7 = calc_rsi_wilder(close, 7)
-                if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 30:
-                    candidates.append(tk)
-            except:
-                continue
-        time.sleep(BATCH_DELAY)
-
-    print(f"  Phase 1 완료: {len(candidates)}개 후보")
-
-    # Phase 2: 6개 조건 정밀 체크
-    print(f"\n  Phase 2: 6개 조건 정밀 분석 ({len(candidates)}개)...")
-    signals = []
+    run_a = 'A' in strat_str
+    run_b = 'B' in strat_str
+    run_c = 'C' in strat_str
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
+        batch_num = b_idx // 20 + 1
+        total_p2 = (len(candidates) + 19) // 20
+
+        if batch_num % 10 == 1 or batch_num == total_p2:
+            print(f"    Phase2 Batch {batch_num}/{total_p2} | "
+                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)}")
+
+        # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요)
         data = download_batch(batch, period='120d')
         if data is None or data.empty:
             time.sleep(BATCH_DELAY)
@@ -438,247 +310,152 @@ def scan_strategy_b(all_tickers):
                 l_last = float(low.iloc[-1])
                 o_last = float(opn.iloc[-1])
 
-                if c_last < MIN_PRICE or o_last <= 0:
+                if o_last <= 0 or c_last < MIN_PRICE:
                     continue
 
-                # ★ 20일 평균거래량 필터
                 avg_vol = float(vol.tail(20).mean())
                 if avg_vol < MIN_VOLUME:
                     continue
 
-                # === 조건 1: RSI7 < 20 ===
+                # ── 공통 계산 (한 번만) ──
                 rsi7 = calc_rsi_wilder(close, 7)
                 rsi7_val = float(rsi7.iloc[-1])
-                if pd.isna(rsi7_val) or rsi7_val >= B_RSI7_THRESH:
+                if pd.isna(rsi7_val):
                     continue
 
-                # === 조건 2: ATR ratio > 3 (SMA(TR,5)/SMA(TR,20)) ===
-                tr_arr = np.maximum(
-                    high.values - low.values,
-                    np.maximum(
-                        np.abs(high.values - np.roll(close.values, 1)),
-                        np.abs(low.values - np.roll(close.values, 1))
-                    )
-                )
-                tr_arr[0] = high.values[0] - low.values[0]
-                tr_s = pd.Series(tr_arr, index=close.index)
-                atr5 = tr_s.rolling(5).mean()
-                atr20 = tr_s.rolling(20).mean()
-                atr_ratio = float(atr5.iloc[-1]) / max(float(atr20.iloc[-1]), 0.001)
-                if pd.isna(atr_ratio) or atr_ratio <= B_ATR_RATIO_THRESH:
-                    continue
-
-                # === 조건 3: revenueGrowth > 0 (yfinance info에서 가져오기) ===
-                try:
-                    info = yf.Ticker(tk).info
-                    rev_growth = info.get('revenueGrowth', None)
-                    if rev_growth is None or rev_growth <= 0:
-                        continue
-                except:
-                    continue
-
-                # === 조건 4: MA20 position <= -25% ===
-                ma20 = close.rolling(20).mean()
-                ma20_val = float(ma20.iloc[-1])
-                if pd.isna(ma20_val) or ma20_val <= 0:
-                    continue
-                ma20_pos = (c_last - ma20_val) / ma20_val
-                if ma20_pos > B_MA20_THRESH:
-                    continue
-
-                # === 조건 5: RSI14 < 35 ===
-                rsi14 = calc_rsi_wilder(close, 14)
-                rsi14_val = float(rsi14.iloc[-1])
-                if pd.isna(rsi14_val) or rsi14_val >= B_RSI14_THRESH:
-                    continue
-
-                # === 조건 6: Intraday range > 15% ===
                 intra = (h_last - l_last) / o_last
-                if intra <= B_INTRA_THRESH:
-                    continue
-
-                # ★ 6개 조건 모두 충족 ★
-                tp_price = round(c_last * (1 + B_TAKE_PROFIT), 2)
-                sl_price = round(c_last * (1 + B_STOP_LOSS), 2)
-
-                signals.append({
-                    'strategy': 'B',
-                    'ticker': tk,
-                    'date': datetime.now().strftime('%Y-%m-%d'),
-                    'price': round(c_last, 2),
-                    'rsi7': round(rsi7_val, 1),
-                    'rsi14': round(rsi14_val, 1),
-                    'atr_ratio': round(atr_ratio, 2),
-                    'intra_pct': round(intra * 100, 1),
-                    'ma20_pos': round(ma20_pos * 100, 1),
-                    'rev_growth': round(rev_growth * 100, 1),
-                    'tp_price': tp_price,
-                    'sl_price': sl_price,
-                })
-                print(f"    ★ SIGNAL: {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
-                      f"RSI14={rsi14_val:.1f} ATR={atr_ratio:.1f} "
-                      f"Intra={intra*100:.0f}% MA20={ma20_pos*100:.1f}%")
-
-            except:
-                continue
-        time.sleep(BATCH_DELAY)
-
-    signals.sort(key=lambda x: x['ticker'])
-    return signals
-
-
-# ─── Strategy C Scanner (+5% 과매도 반등) ────────────────────────────────────
-
-def scan_strategy_c(all_tickers):
-    """Strategy C: +5% 2일 연속 급락 과매도 반등 (승률 86.9%, 624건/5년)
-    조건: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + ConsecDown>3 + DistLow5<3%
-    """
-    print(f"\n{'='*80}")
-    print("  [Strategy C] +5% 과매도 반등 Scanner")
-    print(f"{'='*80}")
-
-    # Phase 1: 빠른 필터링 (RSI < 35로 넓게 — C는 RSI7<30 기준이므로 여유 부여)
-    print(f"\n  Phase 1: 빠른 필터링 ({len(all_tickers)}개)...")
-    candidates = []
-    total_batches = (len(all_tickers) + BATCH_SIZE - 1) // BATCH_SIZE
-
-    for b_idx in range(0, len(all_tickers), BATCH_SIZE):
-        batch = all_tickers[b_idx:b_idx + BATCH_SIZE]
-        batch_num = b_idx // BATCH_SIZE + 1
-
-        if batch_num % 20 == 1 or batch_num == total_batches:
-            print(f"    Batch {batch_num}/{total_batches} ({len(candidates)} candidates)")
-
-        data = download_batch(batch, period='30d')
-        if data is None or data.empty:
-            time.sleep(BATCH_DELAY)
-            continue
-
-        for tk in batch:
-            try:
-                df = extract_ticker_df(data, tk, len(batch))
-                if df is None or len(df) < 10:
-                    continue
-                close = df['Close'].dropna()
-                if len(close) < 10:
-                    continue
-                last_close = float(close.iloc[-1])
-                avg_vol = float(df['Volume'].dropna().tail(20).mean())
-                if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
-                    continue
-                # 넓은 RSI 필터 (Phase 2에서 정밀 체크)
-                rsi7 = calc_rsi_wilder(close, 7)
-                if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 35:
-                    candidates.append(tk)
-            except:
-                continue
-        time.sleep(BATCH_DELAY)
-
-    print(f"  Phase 1 완료: {len(candidates)}개 후보")
-
-    # Phase 2: 6개 조건 정밀 체크
-    print(f"\n  Phase 2: 6개 조건 정밀 분석 ({len(candidates)}개)...")
-    signals = []
-
-    for b_idx in range(0, len(candidates), 20):
-        batch = candidates[b_idx:b_idx + 20]
-        data = download_batch(batch, period='60d')
-        if data is None or data.empty:
-            time.sleep(BATCH_DELAY)
-            continue
-
-        for tk in batch:
-            try:
-                df = extract_ticker_df(data, tk, len(batch))
-                if df is None or len(df) < 10:
-                    continue
-
-                close = df['Close'].astype(float)
-                high  = df['High'].astype(float)
-                low   = df['Low'].astype(float)
-                opn   = df['Open'].astype(float)
-                vol   = df['Volume'].astype(float)
-                n = len(close)
-
-                c_last = float(close.iloc[-1])
-                h_last = float(high.iloc[-1])
-                l_last = float(low.iloc[-1])
-                o_last = float(opn.iloc[-1])
-
-                if o_last <= 0:
-                    continue
-
-                # ★ 20일 평균거래량 필터
-                avg_vol = float(vol.tail(20).mean())
-                if c_last < MIN_PRICE or avg_vol < MIN_VOLUME:
-                    continue
-
-                # ── 조건 1: RSI(7) < 30 ──
-                rsi7 = calc_rsi_wilder(close, 7)
-                rsi7_val = float(rsi7.iloc[-1])
-                if pd.isna(rsi7_val) or rsi7_val >= C_RSI7_THRESH:
-                    continue
-
-                # ── 조건 2: 일중 변동폭 > 20% ──
-                intra = (h_last - l_last) / o_last
-                if intra <= C_INTRA_THRESH:
-                    continue
-
-                # ── 조건 3: 당일 수익률 < -8% ──
-                if n < 2:
-                    continue
-                ret1d = (c_last - float(close.iloc[-2])) / max(float(close.iloc[-2]), 0.01)
-                if ret1d >= C_RET1D_THRESH:
-                    continue
-
-                # ── 조건 4: 전일도 하락 (2일 연속 하락 확인) ──
-                if n < 3:
-                    continue
-                prev_close = float(close.iloc[-2])
-                prev2_close = float(close.iloc[-3])
-                if prev_close >= prev2_close:
-                    continue
-
-                # ── 조건 5: 연속 하락일 > 3 (4일 이상) ──
                 consec = calc_consec_down(close)
-                if consec <= C_CONSEC_DOWN:
-                    continue
 
-                # ── 조건 6: 5일 최저가 대비 < 3% ──
-                if n < 5:
-                    continue
-                low5_min = float(low.iloc[-5:].min())
-                dist_low5 = (c_last - low5_min) / max(low5_min, 0.01)
-                if dist_low5 >= C_DIST_LOW5:
-                    continue
+                low5_min = float(low.iloc[-5:].min()) if n >= 5 else None
+                dist_low5 = (c_last - low5_min) / max(low5_min, 0.01) if low5_min else None
 
-                # ★ 6개 조건 모두 충족 ★
-                tp_price = round(c_last * (1 + C_TAKE_PROFIT), 2)
-                sl_price = round(c_last * (1 + C_STOP_LOSS), 2)
+                # ══════════════════════════════════════════════
+                # Strategy A: Intra>20% + Ret3d<-15% + Down>5 + DistLow5<5% + RSI7<20
+                # ══════════════════════════════════════════════
+                if run_a and rsi7_val < A_RSI7_THRESH:
+                    if (intra > A_INTRA_THRESH and
+                        n >= 4 and
+                        consec > A_CONSEC_DOWN and
+                        dist_low5 is not None and dist_low5 < A_DIST_LOW5):
 
-                signals.append({
-                    'strategy': 'C',
-                    'ticker': tk,
-                    'date': datetime.now().strftime('%Y-%m-%d'),
-                    'price': round(c_last, 2),
-                    'rsi7': round(rsi7_val, 1),
-                    'intraday': round(intra * 100, 1),
-                    'ret1d': round(ret1d * 100, 1),
-                    'consec_down': consec,
-                    'dist_low5': round(dist_low5 * 100, 2),
-                    'tp_price': tp_price,
-                    'sl_price': sl_price,
-                })
-                print(f"    ★ SIGNAL: {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
-                      f"Intra={intra*100:.0f}% Ret1d={ret1d*100:.1f}% "
-                      f"Down={consec}d Dist5={dist_low5*100:.1f}%")
+                        ret3d = c_last / float(close.iloc[-4]) - 1
+                        if ret3d < A_RET3D_THRESH:
+                            tp_price = round(c_last * (1 + A_TAKE_PROFIT), 2)
+                            sl_price = round(c_last * (1 + A_STOP_LOSS), 2)
+                            signals_a.append({
+                                'strategy': 'A',
+                                'ticker': tk,
+                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                'price': round(c_last, 2),
+                                'rsi7': round(rsi7_val, 1),
+                                'intraday': round(intra * 100, 1),
+                                'ret3d': round(ret3d * 100, 1),
+                                'consec_down': consec,
+                                'dist_low5': round(dist_low5 * 100, 1),
+                                'tp_price': tp_price,
+                                'sl_price': sl_price,
+                            })
+                            print(f"    ★ [A] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                                  f"Intra={intra*100:.0f}% Ret3d={ret3d*100:.1f}% "
+                                  f"Down={consec}d Dist={dist_low5*100:.1f}%")
+
+                # ══════════════════════════════════════════════
+                # Strategy B: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
+                # ══════════════════════════════════════════════
+                if run_b and rsi7_val < B_RSI7_THRESH and intra > B_INTRA_THRESH:
+                    # ATR ratio
+                    tr_arr = np.maximum(
+                        high.values - low.values,
+                        np.maximum(
+                            np.abs(high.values - np.roll(close.values, 1)),
+                            np.abs(low.values - np.roll(close.values, 1))
+                        )
+                    )
+                    tr_arr[0] = high.values[0] - low.values[0]
+                    tr_s = pd.Series(tr_arr, index=close.index)
+                    atr5 = tr_s.rolling(5).mean()
+                    atr20 = tr_s.rolling(20).mean()
+                    atr_ratio = float(atr5.iloc[-1]) / max(float(atr20.iloc[-1]), 0.001)
+
+                    if not pd.isna(atr_ratio) and atr_ratio > B_ATR_RATIO_THRESH:
+                        # MA20
+                        ma20 = close.rolling(20).mean()
+                        ma20_val = float(ma20.iloc[-1])
+                        if not pd.isna(ma20_val) and ma20_val > 0:
+                            ma20_pos = (c_last - ma20_val) / ma20_val
+                            if ma20_pos <= B_MA20_THRESH:
+                                # RSI14
+                                rsi14 = calc_rsi_wilder(close, 14)
+                                rsi14_val = float(rsi14.iloc[-1])
+                                if not pd.isna(rsi14_val) and rsi14_val < B_RSI14_THRESH:
+                                    # RevGrowth (API 호출 — 가장 마지막에)
+                                    try:
+                                        info = yf.Ticker(tk).info
+                                        rev_growth = info.get('revenueGrowth', None)
+                                        if rev_growth is not None and rev_growth > 0:
+                                            tp_price = round(c_last * (1 + B_TAKE_PROFIT), 2)
+                                            sl_price = round(c_last * (1 + B_STOP_LOSS), 2)
+                                            signals_b.append({
+                                                'strategy': 'B',
+                                                'ticker': tk,
+                                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                                'price': round(c_last, 2),
+                                                'rsi7': round(rsi7_val, 1),
+                                                'rsi14': round(rsi14_val, 1),
+                                                'atr_ratio': round(atr_ratio, 2),
+                                                'intra_pct': round(intra * 100, 1),
+                                                'ma20_pos': round(ma20_pos * 100, 1),
+                                                'rev_growth': round(rev_growth * 100, 1),
+                                                'tp_price': tp_price,
+                                                'sl_price': sl_price,
+                                            })
+                                            print(f"    ★ [B] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                                                  f"RSI14={rsi14_val:.1f} ATR={atr_ratio:.1f} "
+                                                  f"Intra={intra*100:.0f}% MA20={ma20_pos*100:.1f}%")
+                                    except:
+                                        pass
+
+                # ══════════════════════════════════════════════
+                # Strategy C: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3 + DistLow5<3%
+                # ══════════════════════════════════════════════
+                if run_c and rsi7_val < C_RSI7_THRESH and intra > C_INTRA_THRESH:
+                    if (n >= 3 and
+                        consec > C_CONSEC_DOWN and
+                        dist_low5 is not None and dist_low5 < C_DIST_LOW5):
+
+                        ret1d = (c_last - float(close.iloc[-2])) / max(float(close.iloc[-2]), 0.01)
+                        prev_close = float(close.iloc[-2])
+                        prev2_close = float(close.iloc[-3])
+
+                        if ret1d < C_RET1D_THRESH and prev_close < prev2_close:
+                            tp_price = round(c_last * (1 + C_TAKE_PROFIT), 2)
+                            sl_price = round(c_last * (1 + C_STOP_LOSS), 2)
+                            signals_c.append({
+                                'strategy': 'C',
+                                'ticker': tk,
+                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                'price': round(c_last, 2),
+                                'rsi7': round(rsi7_val, 1),
+                                'intraday': round(intra * 100, 1),
+                                'ret1d': round(ret1d * 100, 1),
+                                'consec_down': consec,
+                                'dist_low5': round(dist_low5 * 100, 2),
+                                'tp_price': tp_price,
+                                'sl_price': sl_price,
+                            })
+                            print(f"    ★ [C] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                                  f"Intra={intra*100:.0f}% Ret1d={ret1d*100:.1f}% "
+                                  f"Down={consec}d Dist5={dist_low5*100:.1f}%")
 
             except:
                 continue
         time.sleep(BATCH_DELAY)
 
-    signals.sort(key=lambda x: x['rsi7'])
-    return signals
+    signals_a.sort(key=lambda x: x['rsi7'])
+    signals_b.sort(key=lambda x: x['ticker'])
+    signals_c.sort(key=lambda x: x['rsi7'])
+
+    return signals_a, signals_b, signals_c
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
@@ -814,35 +591,19 @@ def main():
     print(f"  Scan Time: {date_str}")
     print("=" * 80)
 
-    # 종목 수집
+    # [1] 종목 수집
     print("\n[1] 종목 수집 중...")
     all_tickers = get_all_tickers()
 
-    signals_a = []
-    signals_b = []
-    signals_c = []
+    # [2] Phase 1: 공통 RSI 필터 (한 번만 스캔)
+    print("\n[2] Phase 1: 공통 RSI 필터...")
+    candidates = phase1_rsi_filter(all_tickers)
 
-    step = 2
+    # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
+    print("\n[3] Phase 2: 전략별 정밀 분석...")
+    signals_a, signals_b, signals_c = phase2_check_all(candidates, strat_str)
 
-    # Strategy A
-    if 'A' in strat_str:
-        print(f"\n[{step}] Strategy A 스캔 중...")
-        signals_a = scan_strategy_a(all_tickers)
-        step += 1
-
-    # Strategy B
-    if 'B' in strat_str:
-        print(f"\n[{step}] Strategy B 스캔 중...")
-        signals_b = scan_strategy_b(all_tickers)
-        step += 1
-
-    # Strategy C
-    if 'C' in strat_str:
-        print(f"\n[{step}] Strategy C 스캔 중...")
-        signals_c = scan_strategy_c(all_tickers)
-        step += 1
-
-    # 결과 출력 및 저장
+    # [4] 결과 출력 및 저장
     print_results(signals_a, signals_b, signals_c)
     save_results(signals_a, signals_b, signals_c)
 
