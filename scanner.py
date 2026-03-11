@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D)
+  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E)
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
@@ -23,11 +23,16 @@
     매도: +20% 익절 | 30일 타임아웃
     백테스트: 97.7% (127/130), 건당 평균 +18.9%, 중간 도달일 2일
 
+  Strategy E (+10% 저가주 급락 반등):
+    매수: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + AvgVol>=20만
+    매도: +10% 익절 | 30일 타임아웃
+    백테스트: 91.0% (273/300), 건당 평균 max +104.9%, 중간 도달일 2일
+
   Usage:
-    python scanner.py                     # Scan all strategies (A+B+C+D)
-    python scanner.py --strategy A        # Strategy A only
-    python scanner.py --strategy D        # Strategy D only
-    python scanner.py --strategy ABCD     # All strategies
+    python scanner.py                      # Scan all strategies (A+B+C+D+E)
+    python scanner.py --strategy A         # Strategy A only
+    python scanner.py --strategy DE        # Strategy D + E only
+    python scanner.py --strategy ABCDE     # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -86,6 +91,16 @@ D_INTRA_THRESH   = 0.30       # 일중 변동폭 >= 30%
 D_RSI14_THRESH   = 25         # RSI(14) <= 25
 D_TAKE_PROFIT    = 0.20       # +20%
 D_MAX_HOLD_DAYS  = 30
+
+# === Strategy E thresholds (+10% 저가주 급락 반등) ===
+E_PRICE_MIN      = 3.0        # 종가 >= $3
+E_PRICE_MAX      = 10.0       # 종가 <= $10
+E_RET5D_THRESH   = -0.25      # 5일 수익률 <= -25%
+E_INTRA_THRESH   = 0.20       # 일중 변동폭 >= 20%
+E_CONSEC_DOWN    = 5           # 연속 하락 >= 5일
+E_VOL_MIN        = 200000     # 20일 평균 거래량 >= 20만주
+E_TAKE_PROFIT    = 0.10       # +10%
+E_MAX_HOLD_DAYS  = 30
 
 # === Common filters ===
 MIN_PRICE      = 1.0
@@ -226,14 +241,15 @@ def download_batch(tickers, period='60d'):
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
 def phase1_rsi_filter(all_tickers, strat_str):
-    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3)
+    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10)
     한 번의 30d 스캔으로 모든 전략 후보를 수집.
     """
     run_d = 'D' in strat_str
+    run_e = 'E' in strat_str
     run_abc = any(s in strat_str for s in ['A', 'B', 'C'])
 
     print(f"\n{'='*80}")
-    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''})")
+    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''})")
     print(f"{'='*80}")
     print(f"  대상: {len(all_tickers)}개 종목")
 
@@ -274,6 +290,10 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 # D 후보: Price <= $3 (추가 다운로드 없이 동일 데이터 사용)
                 if run_d and last_close <= D_PRICE_THRESH:
                     candidates.add(tk)
+
+                # E 후보: Price $3~$10 + AvgVol >= 20만
+                if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
+                    candidates.add(tk)
             except:
                 continue
         time.sleep(BATCH_DELAY)
@@ -295,11 +315,13 @@ def phase2_check_all(candidates, strat_str):
     signals_b = []
     signals_c = []
     signals_d = []
+    signals_e = []
 
     run_a = 'A' in strat_str
     run_b = 'B' in strat_str
     run_c = 'C' in strat_str
     run_d = 'D' in strat_str
+    run_e = 'E' in strat_str
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
@@ -308,7 +330,7 @@ def phase2_check_all(candidates, strat_str):
 
         if batch_num % 10 == 1 or batch_num == total_p2:
             print(f"    Phase2 Batch {batch_num}/{total_p2} | "
-                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)}")
+                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)}")
 
         # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요)
         data = download_batch(batch, period='120d')
@@ -497,6 +519,41 @@ def phase2_check_all(candidates, strat_str):
                                       f"Intra={intra*100:.0f}% Ret5d={ret5d*100:.1f}% "
                                       f"TP=${tp_price:.2f}")
 
+                # ══════════════════════════════════════════════
+                # Strategy E: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + Vol>=20만
+                # ══════════════════════════════════════════════
+                if run_e and E_PRICE_MIN <= c_last <= E_PRICE_MAX and intra >= E_INTRA_THRESH:
+                    if avg_vol >= E_VOL_MIN and consec >= E_CONSEC_DOWN:
+                        if n >= 6:
+                            ret5d_e = c_last / float(close.iloc[-6]) - 1
+                            if ret5d_e <= E_RET5D_THRESH:
+                                # D전략과 중복 제외 (pr<=3 & ret5d<=-40 & intra>=30 & rsi14<=25)
+                                is_d = False
+                                if c_last <= D_PRICE_THRESH and ret5d_e <= D_RET5D_THRESH and intra >= D_INTRA_THRESH:
+                                    rsi14_e = calc_rsi_wilder(close, 14)
+                                    rsi14_e_val = float(rsi14_e.iloc[-1])
+                                    if not pd.isna(rsi14_e_val) and rsi14_e_val <= D_RSI14_THRESH:
+                                        is_d = True
+
+                                if not is_d:
+                                    tp_price = round(c_last * (1 + E_TAKE_PROFIT), 2)
+                                    signals_e.append({
+                                        'strategy': 'E',
+                                        'ticker': tk,
+                                        'date': datetime.now().strftime('%Y-%m-%d'),
+                                        'price': round(c_last, 2),
+                                        'ret5d': round(ret5d_e * 100, 1),
+                                        'intraday': round(intra * 100, 1),
+                                        'consec_down': consec,
+                                        'vol_avg': int(avg_vol),
+                                        'tp_price': tp_price,
+                                        'hold_days': E_MAX_HOLD_DAYS,
+                                    })
+                                    print(f"    ★ [E] {tk} @ ${c_last:.2f} | "
+                                          f"Ret5d={ret5d_e*100:.1f}% Intra={intra*100:.0f}% "
+                                          f"Down={consec}d Vol={avg_vol/1000:.0f}K "
+                                          f"TP=${tp_price:.2f}")
+
             except:
                 continue
         time.sleep(BATCH_DELAY)
@@ -505,13 +562,14 @@ def phase2_check_all(candidates, strat_str):
     signals_b.sort(key=lambda x: x['ticker'])
     signals_c.sort(key=lambda x: x['rsi7'])
     signals_d.sort(key=lambda x: x['price'])
+    signals_e.sort(key=lambda x: x['ret5d'])
 
-    return signals_a, signals_b, signals_c, signals_d
+    return signals_a, signals_b, signals_c, signals_d, signals_e
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """결과 출력"""
     date_str = datetime.now().strftime('%Y-%m-%d')
 
@@ -598,12 +656,33 @@ def print_results(signals_a, signals_b, signals_c, signals_d):
                   f"${s['tp_price']:>9.2f} {s['hold_days']:>5}d")
         print(f"  Total: {len(signals_d)} signals")
 
+    # Strategy E
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY E — 저가주 급락 반등 (+10%) — {date_str}")
+    print(f"  조건: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + AvgVol>=20만")
+    print(f"  청산: +10% 익절 | 30일 타임아웃")
+    print(f"  백테스트: 승률 91.0% (300건/5년), 평균 max +104.9%, 중간 도달일 2일")
+    print(f"{'='*90}")
 
-def save_results(signals_a, signals_b, signals_c, signals_d):
+    if not signals_e:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'5일%':>7} {'일중%':>7} "
+              f"{'연속↓':>5} {'거래량':>10} {'익절가':>10} {'보유일':>6}")
+        print("-" * 90)
+        for s in signals_e:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} "
+                  f"{s['ret5d']:>6.1f}% {s['intraday']:>6.1f}% "
+                  f"{s['consec_down']:>5}d {s['vol_avg']:>10,} "
+                  f"${s['tp_price']:>9.2f} {s['hold_days']:>5}d")
+        print(f"  Total: {len(signals_e)} signals")
+
+
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
     date_str = datetime.now().strftime('%Y-%m-%d')
-    all_signals = signals_a + signals_b + signals_c + signals_d
+    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e
 
     # 오늘자 신호 파일
     daily_path = f"data/signal_{date_str}.csv"
@@ -637,6 +716,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d):
         'strategy_b_count': len(signals_b),
         'strategy_c_count': len(signals_c),
         'strategy_d_count': len(signals_d),
+        'strategy_e_count': len(signals_e),
         'total_count': len(all_signals),
     }
     with open('data/latest_scan.json', 'w') as f:
@@ -648,9 +728,9 @@ def save_results(signals_a, signals_b, signals_c, signals_d):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D)')
-    parser.add_argument('--strategy', default='ABCD',
-                       help='Which strategies to run, e.g. A, AB, ABCD (default: ABCD)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E)')
+    parser.add_argument('--strategy', default='ABCDE',
+                       help='Which strategies to run, e.g. A, AB, ABCDE (default: ABCDE)')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -673,15 +753,15 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d = phase2_check_all(candidates, strat_str)
+    signals_a, signals_b, signals_c, signals_d, signals_e = phase2_check_all(candidates, strat_str)
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d)
-    save_results(signals_a, signals_b, signals_c, signals_d)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건")
+    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건")
 
 
 if __name__ == '__main__':
