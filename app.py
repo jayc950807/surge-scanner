@@ -2,7 +2,7 @@
 """
 ================================================================================
   US Stock Surge Scanner — Streamlit Dashboard
-  Strategy A (+5%) + B (+15%) + C (+5% 과매도 반등) + D (+20% 초저가 폭락) 대시보드
+  Strategy A/B/C/D/E 대시보드
 ================================================================================
 """
 import streamlit as st
@@ -63,16 +63,18 @@ if scan_info:
                f"A: {scan_info.get('strategy_a_count', 0)}건 | "
                f"B: {scan_info.get('strategy_b_count', 0)}건 | "
                f"C: {scan_info.get('strategy_c_count', 0)}건 | "
-               f"D: {scan_info.get('strategy_d_count', 0)}건")
+               f"D: {scan_info.get('strategy_d_count', 0)}건 | "
+               f"E: {scan_info.get('strategy_e_count', 0)}건")
 else:
     st.caption("아직 스캔 결과가 없습니다. scanner.py를 실행하세요.")
 st.divider()
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_a, tab_b, tab_c, tab_d, tab_history = st.tabs([
+tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
     "🟢 A — 급락 반등 +5%",
     "🔵 B — 고수익 +15%",
     "🟠 C — 과매도 반등 +5%",
     "🔴 D — 초저가 폭락 +20%",
+    "🟣 E — 급락 속반등 +10%",
     "📊 히스토리",
 ])
 today_signals = load_today_signals()
@@ -301,6 +303,67 @@ with tab_d:
                 st.subheader("최근 30일 신호")
                 st.dataframe(recent_d.sort_values('date', ascending=False).reset_index(drop=True),
                            use_container_width=True)
+# ─── Tab: Strategy E ─────────────────────────────────────────────────────────
+with tab_e:
+    st.subheader("🟣 전략 E — 급락 속반등 (+10% / 최대 30일)")
+    st.markdown("""
+    📌 **이런 종목을 찾습니다:**
+    $3~$10 저가주가 5일간 -25% 이상 급락하면서,
+    5일 이상 연속 하락하고,
+    장중 변동폭이 20% 이상으로 크게 흔들리며,
+    평균 거래량 20만주 이상으로 유동성이 확보된 종목
+
+    💰 **매매 방법:**
+    매수: 다음 거래일 시장가 (D+1 시가) ─
+    익절: +10% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
+    손절: 없음 ─
+    보유: 최대 30일, 미도달 시 종가 청산
+
+    📊 **백테스트 (5년, 300건):** 승률 91.0% | 건당 평균 max +104.9%
+
+    ⏱ **보유기간별 도달률:**
+    2일 보유: 53.0% (159/300건) ─
+    5일 보유: 68.3% (205/300건) ─
+    10일 보유: 78.7% (236/300건) ─
+    30일 보유: 91.0% (273/300건)
+    """)
+    st.divider()
+    if not today_signals.empty and 'strategy' in today_signals.columns:
+        sig_e = today_signals[today_signals['strategy'] == 'E']
+    else:
+        sig_e = pd.DataFrame()
+    if not sig_e.empty:
+        st.success(f"오늘 신호: {len(sig_e)}건")
+        display_cols_e = ['ticker', 'price', 'ret5d', 'intraday', 'consec_down',
+                         'vol_avg', 'tp_price', 'hold_days']
+        available_cols = [c for c in display_cols_e if c in sig_e.columns]
+        st.dataframe(
+            sig_e[available_cols].reset_index(drop=True),
+            use_container_width=True,
+            column_config={
+                "ticker": st.column_config.TextColumn("종목", width="small"),
+                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                "ret5d": st.column_config.NumberColumn("5일%", format="%.1f%%"),
+                "intraday": st.column_config.NumberColumn("일중%", format="%.1f%%"),
+                "consec_down": st.column_config.NumberColumn("연속↓", format="%d일"),
+                "vol_avg": st.column_config.NumberColumn("평균거래량", format="%d"),
+                "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
+            },
+        )
+        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +10% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
+    else:
+        st.markdown('<div class="no-signal">오늘 Strategy E 신호 없음</div>', unsafe_allow_html=True)
+    if not history.empty and 'strategy' in history.columns:
+        hist_e = history[history['strategy'] == 'E']
+        if not hist_e.empty:
+            cutoff = datetime.now() - timedelta(days=30)
+            recent_e = hist_e[hist_e['date'] >= cutoff]
+            if not recent_e.empty:
+                st.divider()
+                st.subheader("최근 30일 신호")
+                st.dataframe(recent_e.sort_values('date', ascending=False).reset_index(drop=True),
+                           use_container_width=True)
 # ─── Tab: History ─────────────────────────────────────────────────────────────
 with tab_history:
     st.subheader("📊 신호 히스토리")
@@ -312,7 +375,7 @@ with tab_history:
         else:
             monthly_counts = hist_monthly.groupby('month').size().to_frame('signals')
         st.bar_chart(monthly_counts)
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
             st.metric("전체 신호", f"{len(history)}건")
         with col2:
@@ -327,6 +390,9 @@ with tab_history:
         with col5:
             if 'strategy' in history.columns:
                 st.metric("Strategy D", f"{len(history[history['strategy']=='D'])}건")
+        with col6:
+            if 'strategy' in history.columns:
+                st.metric("Strategy E", f"{len(history[history['strategy']=='E'])}건")
         st.divider()
         st.dataframe(
             history.sort_values('date', ascending=False).reset_index(drop=True),
@@ -350,6 +416,7 @@ with st.sidebar:
     | B | +15% | 90.3% | 10일 |
     | C | +5% | 86.9% | 5일 |
     | D | +20% | 97.7% | 30일 |
+    | E | +10% | 91.0% | 30일 |
 
     ---
     GitHub Actions로 평일 자동 실행
