@@ -1,1 +1,3 @@
-strategy,ticker,date,price
+strategy,ticker,date,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days
+C,QNTM,2026-03-11,2.1,9.9,32.9,-25.0,5.0,1.45,2.2,1.68,,,
+D,QNTM,2026-03-11,2.1,,32.9,,,,2.52,,18.5,-44.7,30.0
