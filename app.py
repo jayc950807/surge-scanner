@@ -69,36 +69,33 @@ else:
 st.divider()
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
 tab_a, tab_b, tab_c, tab_d, tab_history = st.tabs([
-    "🟢 Strategy A (+5%)",
-    "🔵 Strategy B (+15%)",
-    "🟠 Strategy C (+5% 반등)",
-    "🔴 Strategy D (+20% 폭락반등)",
+    "🟢 A — 급락 반등 +5%",
+    "🔵 B — 고수익 +15%",
+    "🟠 C — 과매도 반등 +5%",
+    "🔴 D — 초저가 폭락 +20%",
     "📊 히스토리",
 ])
 today_signals = load_today_signals()
 history = load_history()
 # ─── Tab: Strategy A ─────────────────────────────────────────────────────────
 with tab_a:
-    st.subheader("Strategy A — Weekly Signal (+5% in 5 Days)")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **매수 조건** (5개 모두 충족):
-        - 일중 변동폭 > 20%
-        - 3일 수익률 < -15%
-        - 연속 하락일 > 5일
-        - 5일 최저가 대비 < 5%
-        - RSI(7) < 20
-        """)
-    with col2:
-        st.markdown("""
-        **청산 규칙**:
-        - 익절: +5%
-        - 손절: -20%
-        - 트레일링: -3%
-        - 타임아웃: 5일
-        **백테스트**: 승률 90.1% (262건), 누적 +515%
-        """)
+    st.subheader("🟢 전략 A — 급락 반등 (+5% / 5일)")
+    st.markdown("""
+    📌 **이런 종목을 찾습니다:**
+    5일 넘게 연속 하락하면서 3일간 -15% 이상 빠지고,
+    장중 위아래로 20% 이상 흔들리며,
+    RSI가 20 이하로 극단적 과매도 상태이고,
+    현재가가 5일 최저가와 거의 같은 바닥권 종목
+
+    💰 **매매 방법:**
+    매수: 다음 거래일 시장가 (D+1 시가) ─
+    익절: +5% 도달 시 즉시 매도 ─
+    손절: -20% ─
+    트레일링: 고점 대비 -3% 하락 시 매도 ─
+    보유: 최대 5일, 미도달 시 종가 청산
+
+    📊 **백테스트 (5년, 262건):** 승률 90.1% | 누적 +515%
+    """)
     st.divider()
     if not today_signals.empty and 'strategy' in today_signals.columns:
         sig_a = today_signals[today_signals['strategy'] == 'A']
@@ -139,26 +136,22 @@ with tab_a:
                            use_container_width=True)
 # ─── Tab: Strategy B ─────────────────────────────────────────────────────────
 with tab_b:
-    st.subheader("Strategy B — High-Gain (+15%)")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **매수 조건** (6개 모두 충족):
-        - RSI(7) < 20
-        - RSI(14) < 35
-        - ATR 배율 > 3 (SMA5/SMA20)
-        - 일중 변동폭 > 15%
-        - MA20 대비 <= -25%
-        - 매출 성장률 > 0%
-        """)
-    with col2:
-        st.markdown("""
-        **청산 규칙**:
-        - 익절: +15% 지정가
-        - 손절: -20%
-        - 타임아웃: 10일 종가청산
-        **백테스트**: 승률 90.3% (31건/28적중)
-        """)
+    st.subheader("🔵 전략 B — 고수익 폭락 반등 (+15% / 10일)")
+    st.markdown("""
+    📌 **이런 종목을 찾습니다:**
+    RSI 7일·14일 모두 극단적 과매도 구간이면서,
+    최근 변동성이 평소의 3배 이상으로 폭발하고,
+    20일 이동평균 대비 -25% 이상 괴리가 벌어졌지만,
+    매출은 여전히 성장 중인 펀더멘탈 있는 종목
+
+    💰 **매매 방법:**
+    매수: 다음 거래일 시장가 (D+1 시가) ─
+    익절: +15% 지정가 매도 ─
+    손절: -20% ─
+    보유: 최대 10일, 미체결 시 종가 청산
+
+    📊 **백테스트 (5년, 31건):** 승률 90.3% | 28건 적중
+    """)
     st.divider()
     if not today_signals.empty and 'strategy' in today_signals.columns:
         sig_b = today_signals[today_signals['strategy'] == 'B']
@@ -200,27 +193,23 @@ with tab_b:
                            use_container_width=True)
 # ─── Tab: Strategy C ─────────────────────────────────────────────────────────
 with tab_c:
-    st.subheader("Strategy C — 과매도 반등 (+5% in 5 Days)")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **매수 조건** (6개 모두 충족):
-        - RSI(7) < 30
-        - 일중 변동폭 > 20%
-        - 당일 수익률 < -8%
-        - 전일도 하락 (2일 연속 하락)
-        - 연속 하락일 > 3일 (4일 이상)
-        - 5일 최저가 대비 < 3%
-        """)
-    with col2:
-        st.markdown("""
-        **청산 규칙**:
-        - 익절: +5%
-        - 손절: -20%
-        - 타임아웃: 5일
+    st.subheader("🟠 전략 C — 과매도 급락 반등 (+5% / 5일)")
+    st.markdown("""
+    📌 **이런 종목을 찾습니다:**
+    최근 4일 이상 연속 하락하면서
+    오늘 하루에만 -8% 이상 급락하고,
+    장중 위아래로 20% 이상 흔들리며,
+    RSI가 30 이하로 극단적 과매도 상태이고,
+    현재가가 5일 최저가와 거의 같은 바닥권 종목
 
-        **백테스트**: 승률 86.9% (624건/5년), +7% 기준 81.4%
-        """)
+    💰 **매매 방법:**
+    매수: 다음 거래일 시장가 (D+1 시가) ─
+    익절: +5% 도달 시 즉시 매도 ─
+    손절: -20% ─
+    보유: 최대 5일, 미도달 시 종가 청산
+
+    📊 **백테스트 (5년, 624건):** 승률 86.9% | 건당 평균 +3.8%
+    """)
     st.divider()
     if not today_signals.empty and 'strategy' in today_signals.columns:
         sig_c = today_signals[today_signals['strategy'] == 'C']
@@ -261,25 +250,21 @@ with tab_c:
                            use_container_width=True)
 # ─── Tab: Strategy D ─────────────────────────────────────────────────────────
 with tab_d:
-    st.subheader("Strategy D — 초저가 폭락 반등 (+20% in 30 Days)")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **매수 조건** (4개 모두 충족):
-        - 종가 <= $3 (초저가주)
-        - 5일 수익률 <= -40% (대폭락)
-        - 일중 변동폭 >= 30%
-        - RSI(14) <= 25 (극단적 과매도)
-        """)
-    with col2:
-        st.markdown("""
-        **청산 규칙**:
-        - 익절: +20%
-        - 타임아웃: 30일 (종가 청산)
-        - 손절 없음
+    st.subheader("🔴 전략 D — 초저가 폭락 반등 (+20% / 30일)")
+    st.markdown("""
+    📌 **이런 종목을 찾습니다:**
+    $3 이하 초저가주가 5일간 -40% 이상 대폭락하면서,
+    장중 변동폭이 30% 이상으로 극단적으로 흔들리고,
+    RSI(14)가 25 이하로 완전히 바닥을 찍은 종목
 
-        **백테스트**: 승률 97.7% (130건/5년), 건당 +18.9%
-        """)
+    💰 **매매 방법:**
+    매수: 다음 거래일 시장가 (D+1 시가) ─
+    익절: +20% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
+    손절: 없음 ─
+    보유: 최대 30일, 미도달 시 종가 청산
+
+    📊 **백테스트 (5년, 130건):** 승률 97.7% | 건당 평균 +18.9%
+    """)
     st.divider()
     if not today_signals.empty and 'strategy' in today_signals.columns:
         sig_d = today_signals[today_signals['strategy'] == 'D']
@@ -356,24 +341,15 @@ with st.sidebar:
     st.markdown("""
     **US Stock Surge Scanner**
 
-    매일 미국 장 마감 후 (KST 06:00) 자동 스캔하여
+    매일 미국 장 마감 후 자동 스캔하여
     급락 후 반등 가능성이 높은 종목을 포착합니다.
 
-    **Strategy A** — 단기 +5% 목표
-    - 승률 90.1%, 누적 +515%
-    - 5일 이내 청산
-
-    **Strategy B** — 중기 +15% 목표
-    - 승률 90.3%
-    - 10일 이내 청산
-
-    **Strategy C** — 과매도 반등 +5% 목표
-    - 승률 86.9% (624건)
-    - 5일 이내 청산
-
-    **Strategy D** — 초저가 폭락 반등 +20% 목표
-    - 승률 97.7% (130건)
-    - 30일 이내 청산, 손절 없음
+    | 전략 | 목표 | 승률 | 보유 |
+    |------|------|------|------|
+    | A | +5% | 90.1% | 5일 |
+    | B | +15% | 90.3% | 10일 |
+    | C | +5% | 86.9% | 5일 |
+    | D | +20% | 97.7% | 30일 |
 
     ---
     GitHub Actions로 평일 자동 실행
