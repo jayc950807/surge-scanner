@@ -1,0 +1,2 @@
+strategy,ticker,date,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price
+A,ZNB,2026-03-13,5.8,12.6,37.9,-63.7,6,4.8,6.1,4.64
