@@ -2,7 +2,7 @@
 """
 ================================================================================
   US Stock Surge Scanner — Streamlit Dashboard
-  Strategy A/B/C/D/E 대시보드
+  Strategy A/B/C/D/E 대시보드 + 상세 히스토리 추적
 ================================================================================
 """
 import streamlit as st
@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import os
 from datetime import datetime, timedelta
+
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Surge Scanner",
@@ -17,20 +18,56 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-# ─── Custom CSS (모바일 반응형) ───────────────────────────────────────────────
+
+# ─── Custom CSS (모바일 반응형 + 히스토리 스타일) ─────────────────────────────
 st.markdown("""
 <style>
-    .main .block-container { padding-top: 1rem; max-width: 1200px; }
+    .main .block-container { padding-top: 1rem; max-width: 1400px; }
     .stMetric > div { background: #f8f9fa; border-radius: 8px; padding: 12px; }
     .no-signal {
         text-align: center; padding: 40px; color: #888;
         font-size: 1.2em; background: #f8f9fa; border-radius: 12px;
     }
+    /* 히스토리 카드 스타일 */
+    .pos-card {
+        background: #ffffff; border: 1px solid #e0e0e0;
+        border-radius: 12px; padding: 16px; margin: 8px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .pos-card.win { border-left: 4px solid #00c853; }
+    .pos-card.loss { border-left: 4px solid #ff1744; }
+    .pos-card.expired { border-left: 4px solid #ff9100; }
+    .pos-card.open { border-left: 4px solid #2979ff; }
+    .pos-card.pending { border-left: 4px solid #9e9e9e; }
+    .pos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .pos-ticker { font-size: 1.3em; font-weight: 700; color: #1a1a1a; }
+    .pos-strategy { font-size: 0.85em; padding: 2px 8px; border-radius: 12px; color: #fff; font-weight: 600; }
+    .strat-A { background: #00c853; } .strat-B { background: #2979ff; }
+    .strat-C { background: #ff9100; } .strat-D { background: #ff1744; }
+    .strat-E { background: #7c4dff; }
+    .pos-detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 0.88em; }
+    .pos-detail-item { }
+    .pos-detail-label { color: #888; font-size: 0.8em; }
+    .pos-detail-value { font-weight: 600; color: #333; }
+    .achievement-bar {
+        height: 8px; border-radius: 4px; background: #e8e8e8; margin-top: 4px; overflow: hidden;
+    }
+    .achievement-fill {
+        height: 100%; border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .badge-win { background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
+    .badge-loss { background: #ffebee; color: #c62828; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
+    .badge-expired { background: #fff3e0; color: #e65100; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
+    .badge-open { background: #e3f2fd; color: #1565c0; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
+    .badge-pending { background: #f5f5f5; color: #616161; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.85em; }
     @media (max-width: 768px) {
         .main .block-container { padding: 0.5rem; }
+        .pos-detail { grid-template-columns: repeat(2, 1fr); }
     }
 </style>
 """, unsafe_allow_html=True)
+
 # ─── Data Loading ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_latest_scan():
@@ -39,6 +76,7 @@ def load_latest_scan():
         with open(json_path, 'r') as f:
             return json.load(f)
     return None
+
 @st.cache_data(ttl=300)
 def load_today_signals():
     today = datetime.now().strftime('%Y-%m-%d')
@@ -47,6 +85,7 @@ def load_today_signals():
         df = pd.read_csv(path)
         return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
+
 @st.cache_data(ttl=300)
 def load_history():
     path = "data/history.csv"
@@ -55,19 +94,253 @@ def load_history():
         df['date'] = pd.to_datetime(df['date'])
         return df
     return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def load_open_positions():
+    path = "data/open_positions.csv"
+    if os.path.exists(path):
+        df = pd.read_csv(path, dtype=str)
+        return df if len(df) > 0 else pd.DataFrame()
+    return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def load_closed_positions():
+    path = "data/closed_positions.csv"
+    if os.path.exists(path):
+        df = pd.read_csv(path, dtype=str)
+        return df if len(df) > 0 else pd.DataFrame()
+    return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def load_tracker_summary():
+    path = "data/tracker_summary.json"
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            return json.load(f)
+    return None
+
+# ─── Helper: Strategy config ─────────────────────────────────────────────────
+
+STRATEGY_EMOJI = {'A': '🟢', 'B': '🔵', 'C': '🟠', 'D': '🔴', 'E': '🟣'}
+STRATEGY_NAMES = {
+    'A': '급락 반등 +5%',
+    'B': '고수익 +15%',
+    'C': '과매도 반등 +5%',
+    'D': '초저가 폭락 +20%',
+    'E': '급락 속반등 +10%',
+}
+STRATEGY_TP = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10}
+
+# ─── Helper: Render position card ────────────────────────────────────────────
+
+def safe_float(val, default=0):
+    try:
+        return float(val) if val and str(val).strip() not in ('', 'nan', 'None') else default
+    except:
+        return default
+
+def render_position_card(row, status_type='open'):
+    """포지션 카드를 HTML로 렌더링"""
+    strategy = str(row.get('strategy', ''))
+    ticker = str(row.get('ticker', ''))
+    signal_date = str(row.get('signal_date', ''))
+    signal_price = safe_float(row.get('signal_price'))
+    entry_date = str(row.get('entry_date', ''))
+    entry_price = safe_float(row.get('entry_price'))
+    current_price = safe_float(row.get('current_price'))
+    max_price = safe_float(row.get('max_price'))
+    max_price_date = str(row.get('max_price_date', ''))
+    min_price = safe_float(row.get('min_price'))
+    achievement_pct = safe_float(row.get('achievement_pct'))
+    days_held = str(row.get('days_held', '0'))
+    tp_price = safe_float(row.get('tp_price'))
+    sl_price = safe_float(row.get('sl_price'))
+    change_pct = safe_float(row.get('change_pct'))
+    last_updated = str(row.get('last_updated', ''))
+    status = str(row.get('status', ''))
+
+    # 청산 정보 (closed positions)
+    close_date = str(row.get('close_date', ''))
+    close_price = safe_float(row.get('close_price'))
+    result_pct = safe_float(row.get('result_pct'))
+    result_status = str(row.get('result_status', ''))
+    tp_hit_date = str(row.get('tp_hit_date', ''))
+    max_achievement_pct = safe_float(row.get('max_achievement_pct'))
+
+    # 카드 클래스
+    if result_status == 'WIN':
+        card_class = 'win'
+        badge = f'<span class="badge-win">✅ 익절 성공</span>'
+    elif result_status == 'LOSS':
+        card_class = 'loss'
+        badge = f'<span class="badge-loss">❌ 손절</span>'
+    elif result_status == 'EXPIRED':
+        card_class = 'expired'
+        badge = f'<span class="badge-expired">⏰ 만기 청산</span>'
+    elif status == 'OPEN':
+        card_class = 'open'
+        badge = f'<span class="badge-open">🔄 진행중</span>'
+    else:
+        card_class = 'pending'
+        badge = f'<span class="badge-pending">⏳ 대기</span>'
+
+    strat_name = STRATEGY_NAMES.get(strategy, strategy)
+    strat_emoji = STRATEGY_EMOJI.get(strategy, '')
+    tp_target = STRATEGY_TP.get(strategy, 0)
+
+    # 수익률 색상
+    if status_type == 'closed':
+        pct_val = result_pct
+    else:
+        pct_val = change_pct
+    pct_color = '#00c853' if pct_val > 0 else '#ff1744' if pct_val < 0 else '#666'
+    pct_str = f'{pct_val:+.2f}%' if pct_val != 0 else '—'
+
+    # 달성률 바
+    ach_val = max_achievement_pct if status_type == 'closed' else achievement_pct
+    ach_val = min(ach_val, 100)
+    ach_color = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#2979ff'
+
+    html = f'''
+    <div class="pos-card {card_class}">
+        <div class="pos-header">
+            <div>
+                <span class="pos-ticker">{ticker}</span>
+                <span class="pos-strategy strat-{strategy}">{strat_emoji} {strategy} — {strat_name}</span>
+            </div>
+            <div>
+                {badge}
+            </div>
+        </div>
+        <div class="pos-detail">
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">신호일</div>
+                <div class="pos-detail-value">{signal_date}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">신호가</div>
+                <div class="pos-detail-value">${signal_price:.2f}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">진입일</div>
+                <div class="pos-detail-value">{entry_date if entry_date and entry_date != 'nan' else '—'}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">진입가 (D+1 시가)</div>
+                <div class="pos-detail-value">${entry_price:.2f}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">익절 목표가</div>
+                <div class="pos-detail-value">${tp_price:.2f} (+{tp_target}%)</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">손절가</div>
+                <div class="pos-detail-value">{"${:.2f}".format(sl_price) if sl_price > 0 else "없음"}</div>
+            </div>
+    '''
+
+    if status_type == 'closed':
+        html += f'''
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">청산일</div>
+                <div class="pos-detail-value">{close_date}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">청산가</div>
+                <div class="pos-detail-value">${close_price:.2f}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">최종 수익률</div>
+                <div class="pos-detail-value" style="color:{pct_color}; font-size:1.1em">{pct_str}</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">보유일</div>
+                <div class="pos-detail-value">{days_held}일</div>
+            </div>
+        '''
+        if result_status == 'WIN' and tp_hit_date and tp_hit_date != 'nan':
+            html += f'''
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">익절 도달일</div>
+                <div class="pos-detail-value" style="color:#00c853; font-weight:700">{tp_hit_date}</div>
+            </div>
+            '''
+        if result_status in ('LOSS', 'EXPIRED'):
+            html += f'''
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">기간 중 최고가</div>
+                <div class="pos-detail-value">${max_price:.2f} ({max_price_date if max_price_date and max_price_date != 'nan' else ''})</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">목표 달성률</div>
+                <div class="pos-detail-value">{max_achievement_pct:.1f}%</div>
+            </div>
+            '''
+    else:
+        # OPEN / PENDING
+        html += f'''
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">현재가</div>
+                <div class="pos-detail-value" style="color:{pct_color}; font-size:1.1em">${current_price:.2f} ({pct_str})</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">기간 중 최고가</div>
+                <div class="pos-detail-value">${max_price:.2f} ({max_price_date if max_price_date and max_price_date != 'nan' else ''})</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">보유일</div>
+                <div class="pos-detail-value">{days_held}일</div>
+            </div>
+            <div class="pos-detail-item">
+                <div class="pos-detail-label">마지막 업데이트</div>
+                <div class="pos-detail-value">{last_updated}</div>
+            </div>
+        '''
+
+    # 달성률 바
+    html += f'''
+        </div>
+        <div style="margin-top: 10px;">
+            <div class="pos-detail-label">목표 달성률: {ach_val:.1f}%</div>
+            <div class="achievement-bar">
+                <div class="achievement-fill" style="width: {min(ach_val, 100)}%; background: {ach_color};"></div>
+            </div>
+        </div>
+    </div>
+    '''
+    return html
+
+
 # ─── Header ───────────────────────────────────────────────────────────────────
 st.title("📈 US Stock Surge Scanner")
+
 scan_info = load_latest_scan()
+tracker_info = load_tracker_summary()
+
+header_parts = []
 if scan_info:
-    st.caption(f"마지막 스캔: {scan_info.get('scan_time', 'N/A')} | "
-               f"A: {scan_info.get('strategy_a_count', 0)}건 | "
-               f"B: {scan_info.get('strategy_b_count', 0)}건 | "
-               f"C: {scan_info.get('strategy_c_count', 0)}건 | "
-               f"D: {scan_info.get('strategy_d_count', 0)}건 | "
-               f"E: {scan_info.get('strategy_e_count', 0)}건")
+    header_parts.append(f"마지막 스캔: {scan_info.get('scan_time', 'N/A')}")
+    header_parts.append(
+        f"A: {scan_info.get('strategy_a_count', 0)}건 | "
+        f"B: {scan_info.get('strategy_b_count', 0)}건 | "
+        f"C: {scan_info.get('strategy_c_count', 0)}건 | "
+        f"D: {scan_info.get('strategy_d_count', 0)}건 | "
+        f"E: {scan_info.get('strategy_e_count', 0)}건"
+    )
+if tracker_info:
+    header_parts.append(
+        f"📍 추적: OPEN {tracker_info.get('open_count', 0)}건 | "
+        f"WIN {tracker_info.get('win_count', 0)}건 | "
+        f"LOSS {tracker_info.get('loss_count', 0)}건"
+    )
+
+if header_parts:
+    st.caption(" | ".join(header_parts))
 else:
     st.caption("아직 스캔 결과가 없습니다. scanner.py를 실행하세요.")
+
 st.divider()
+
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
 tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
     "🟢 A — 급락 반등 +5%",
@@ -77,8 +350,10 @@ tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
     "🟣 E — 급락 속반등 +10%",
     "📊 히스토리",
 ])
+
 today_signals = load_today_signals()
 history = load_history()
+
 # ─── Tab: Strategy A ─────────────────────────────────────────────────────────
 with tab_a:
     st.subheader("🟢 전략 A — 급락 반등 (+5% / 5일)")
@@ -126,16 +401,7 @@ with tab_a:
         st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 수익 시 -3% 트레일링 → 목표 +5% 또는 5일 타임아웃")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy A 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_a = history[history['strategy'] == 'A']
-        if not hist_a.empty:
-            cutoff = datetime.now() - timedelta(days=30)
-            recent_a = hist_a[hist_a['date'] >= cutoff]
-            if not recent_a.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                st.dataframe(recent_a.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+
 # ─── Tab: Strategy B ─────────────────────────────────────────────────────────
 with tab_b:
     st.subheader("🔵 전략 B — 고수익 폭락 반등 (+15% / 10일)")
@@ -183,16 +449,7 @@ with tab_b:
         st.info("※ 매수 즉시 +15% 지정가 매도 + -20% 손절 주문 동시 설정. 둘 다 미체결 시 10거래일 후 종가 청산")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy B 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_b = history[history['strategy'] == 'B']
-        if not hist_b.empty:
-            cutoff = datetime.now() - timedelta(days=30)
-            recent_b = hist_b[hist_b['date'] >= cutoff]
-            if not recent_b.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                st.dataframe(recent_b.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+
 # ─── Tab: Strategy C ─────────────────────────────────────────────────────────
 with tab_c:
     st.subheader("🟠 전략 C — 과매도 급락 반등 (+5% / 5일)")
@@ -240,16 +497,7 @@ with tab_c:
         st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 목표 +5% 또는 5일 타임아웃")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy C 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_c = history[history['strategy'] == 'C']
-        if not hist_c.empty:
-            cutoff = datetime.now() - timedelta(days=30)
-            recent_c = hist_c[hist_c['date'] >= cutoff]
-            if not recent_c.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                st.dataframe(recent_c.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+
 # ─── Tab: Strategy D ─────────────────────────────────────────────────────────
 with tab_d:
     st.subheader("🔴 전략 D — 초저가 폭락 반등 (+20% / 30일)")
@@ -293,16 +541,7 @@ with tab_d:
         st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +20% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy D 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_d = history[history['strategy'] == 'D']
-        if not hist_d.empty:
-            cutoff = datetime.now() - timedelta(days=30)
-            recent_d = hist_d[hist_d['date'] >= cutoff]
-            if not recent_d.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                st.dataframe(recent_d.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+
 # ─── Tab: Strategy E ─────────────────────────────────────────────────────────
 with tab_e:
     st.subheader("🟣 전략 E — 급락 속반등 (+10% / 최대 30일)")
@@ -354,267 +593,325 @@ with tab_e:
         st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +10% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy E 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_e = history[history['strategy'] == 'E']
-        if not hist_e.empty:
-            cutoff = datetime.now() - timedelta(days=30)
-            recent_e = hist_e[hist_e['date'] >= cutoff]
-            if not recent_e.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                st.dataframe(recent_e.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
-# ─── Data Loading: Positions ─────────────────────────────────────────────────
-@st.cache_data(ttl=300)
-def load_open_positions():
-    path = "data/open_positions.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path, dtype=str)
-        return df if len(df) > 0 else pd.DataFrame()
-    return pd.DataFrame()
-@st.cache_data(ttl=300)
-def load_closed_positions():
-    path = "data/closed_positions.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path, dtype=str)
-        return df if len(df) > 0 else pd.DataFrame()
-    return pd.DataFrame()
-# ─── Tab: History ─────────────────────────────────────────────────────────────
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 📊 히스토리 탭 — 완전 리디자인
+# ═══════════════════════════════════════════════════════════════════════════════
 with tab_history:
-    st.subheader("📊 실전 성적표")
+    st.subheader("📊 실전 추적 히스토리")
 
     open_pos = load_open_positions()
     closed_pos = load_closed_positions()
 
-    # ── 전체 데이터 합치기 (탐지건: open+closed, 달성건: closed의 WIN) ──
-    all_records = pd.DataFrame()
-    frames = []
-    if not open_pos.empty and 'strategy' in open_pos.columns:
-        frames.append(open_pos[['strategy', 'signal_date', 'status']].copy())
-    if not closed_pos.empty and 'strategy' in closed_pos.columns:
-        frames.append(closed_pos[['strategy', 'signal_date', 'status']].copy())
-    if frames:
-        all_records = pd.concat(frames, ignore_index=True)
-        all_records['signal_date'] = pd.to_datetime(all_records['signal_date'], errors='coerce')
-        all_records = all_records.dropna(subset=['signal_date'])
-        all_records['date_str'] = all_records['signal_date'].dt.strftime('%m/%d')
-        all_records['month_str'] = all_records['signal_date'].dt.strftime('%Y-%m')
+    # ── 상단 요약 메트릭 ──
+    total_open = len(open_pos[open_pos['status'] == 'OPEN']) if not open_pos.empty and 'status' in open_pos.columns else 0
+    total_pending = len(open_pos[open_pos['status'] == 'PENDING']) if not open_pos.empty and 'status' in open_pos.columns else 0
+    total_closed = len(closed_pos) if not closed_pos.empty else 0
 
-    strategies = ['A', 'B', 'C', 'D', 'E']
+    total_win = len(closed_pos[closed_pos['result_status'] == 'WIN']) if not closed_pos.empty and 'result_status' in closed_pos.columns else 0
+    total_loss = len(closed_pos[closed_pos['result_status'] == 'LOSS']) if not closed_pos.empty and 'result_status' in closed_pos.columns else 0
+    total_expired = len(closed_pos[closed_pos['result_status'] == 'EXPIRED']) if not closed_pos.empty and 'result_status' in closed_pos.columns else 0
+    overall_wr = (total_win / total_closed * 100) if total_closed > 0 else 0
 
-    # ── 서브 탭: 일별 | 월별 | 승률 | 진행중 ──
-    h_daily, h_monthly, h_winrate, h_active = st.tabs([
-        "📅 일별", "📆 월별", "🏆 승률", "🟡 진행중"
+    avg_return = 0
+    if not closed_pos.empty and 'result_pct' in closed_pos.columns:
+        avg_return = pd.to_numeric(closed_pos['result_pct'], errors='coerce').mean()
+        avg_return = avg_return if not pd.isna(avg_return) else 0
+
+    mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
+    mc1.metric("🔄 진행중", f"{total_open}건")
+    mc2.metric("⏳ 대기", f"{total_pending}건")
+    mc3.metric("✅ 익절", f"{total_win}건")
+    mc4.metric("❌ 손절", f"{total_loss}건")
+    mc5.metric("🏆 승률", f"{overall_wr:.1f}%")
+    mc6.metric("📈 평균수익률", f"{avg_return:+.1f}%")
+
+    st.divider()
+
+    # ── 서브 탭 ──
+    h_active, h_all_history, h_by_strategy, h_stats = st.tabs([
+        "🔄 진행중 포지션",
+        "📋 전체 히스토리",
+        "📊 전략별 상세",
+        "🏆 성과 통계",
     ])
 
     # ════════════════════════════════════════════════════════════════════
-    # 1) 일별: 날짜(가로) × 전략(세로) — 달성건/탐지건
+    # 1) 진행중 포지션 — 카드 형태
     # ════════════════════════════════════════════════════════════════════
-    with h_daily:
-        if all_records.empty:
+    with h_active:
+        active_positions = pd.DataFrame()
+        if not open_pos.empty and 'status' in open_pos.columns:
+            active_positions = open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])]
+
+        if active_positions.empty:
+            st.markdown('<div class="no-signal">진행 중인 포지션이 없습니다</div>', unsafe_allow_html=True)
+        else:
+            # OPEN 먼저, PENDING 나중
+            open_first = active_positions[active_positions['status'] == 'OPEN']
+            pending_second = active_positions[active_positions['status'] == 'PENDING']
+
+            if not open_first.empty:
+                st.markdown(f"### 🔄 진행중 ({len(open_first)}건)")
+                for _, row in open_first.iterrows():
+                    st.markdown(render_position_card(row, 'open'), unsafe_allow_html=True)
+
+            if not pending_second.empty:
+                st.markdown(f"### ⏳ 진입 대기 ({len(pending_second)}건)")
+                for _, row in pending_second.iterrows():
+                    st.markdown(render_position_card(row, 'open'), unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════════
+    # 2) 전체 히스토리 — 필터 + 테이블 + 카드
+    # ════════════════════════════════════════════════════════════════════
+    with h_all_history:
+        if closed_pos.empty:
+            st.markdown('<div class="no-signal">아직 청산된 포지션이 없습니다</div>', unsafe_allow_html=True)
+        else:
+            # 필터
+            filter_col1, filter_col2, filter_col3 = st.columns(3)
+            with filter_col1:
+                filter_strategy = st.multiselect(
+                    "전략 선택",
+                    options=['A', 'B', 'C', 'D', 'E'],
+                    default=['A', 'B', 'C', 'D', 'E'],
+                    key='hist_strat_filter'
+                )
+            with filter_col2:
+                filter_status = st.multiselect(
+                    "결과 선택",
+                    options=['WIN', 'LOSS', 'EXPIRED'],
+                    default=['WIN', 'LOSS', 'EXPIRED'],
+                    key='hist_status_filter'
+                )
+            with filter_col3:
+                view_mode = st.radio("보기 방식", ["카드", "테이블"], horizontal=True, key='hist_view')
+
+            # 필터 적용
+            filtered = closed_pos.copy()
+            if 'strategy' in filtered.columns:
+                filtered = filtered[filtered['strategy'].isin(filter_strategy)]
+            if 'result_status' in filtered.columns:
+                filtered = filtered[filtered['result_status'].isin(filter_status)]
+
+            # 날짜순 정렬 (최신순)
+            if 'signal_date' in filtered.columns:
+                filtered = filtered.sort_values('signal_date', ascending=False)
+
+            st.markdown(f"**총 {len(filtered)}건**")
+
+            if view_mode == "카드":
+                # 카드 뷰 (최대 50개)
+                display_count = min(len(filtered), 50)
+                for i, (_, row) in enumerate(filtered.head(display_count).iterrows()):
+                    st.markdown(render_position_card(row, 'closed'), unsafe_allow_html=True)
+                if len(filtered) > display_count:
+                    st.info(f"최근 {display_count}건만 표시됩니다. 테이블 뷰로 전체를 확인하세요.")
+            else:
+                # 테이블 뷰
+                table_cols = [
+                    'strategy', 'ticker', 'signal_date', 'signal_price',
+                    'entry_date', 'entry_price', 'tp_price', 'sl_price',
+                    'close_date', 'close_price', 'result_pct', 'result_status',
+                    'tp_hit_date', 'max_price', 'max_price_date',
+                    'achievement_pct', 'max_achievement_pct', 'days_held',
+                ]
+                avail_cols = [c for c in table_cols if c in filtered.columns]
+                st.dataframe(
+                    filtered[avail_cols].reset_index(drop=True),
+                    use_container_width=True,
+                    column_config={
+                        "strategy": st.column_config.TextColumn("전략", width="small"),
+                        "ticker": st.column_config.TextColumn("종목", width="small"),
+                        "signal_date": st.column_config.TextColumn("신호일"),
+                        "signal_price": st.column_config.TextColumn("신호가"),
+                        "entry_date": st.column_config.TextColumn("진입일"),
+                        "entry_price": st.column_config.TextColumn("진입가"),
+                        "tp_price": st.column_config.TextColumn("익절가"),
+                        "sl_price": st.column_config.TextColumn("손절가"),
+                        "close_date": st.column_config.TextColumn("청산일"),
+                        "close_price": st.column_config.TextColumn("청산가"),
+                        "result_pct": st.column_config.TextColumn("수익률%"),
+                        "result_status": st.column_config.TextColumn("결과"),
+                        "tp_hit_date": st.column_config.TextColumn("익절도달일"),
+                        "max_price": st.column_config.TextColumn("최고가"),
+                        "max_price_date": st.column_config.TextColumn("최고가일"),
+                        "achievement_pct": st.column_config.TextColumn("달성률%"),
+                        "max_achievement_pct": st.column_config.TextColumn("최대달성률%"),
+                        "days_held": st.column_config.TextColumn("보유일"),
+                    },
+                    height=600,
+                )
+
+    # ════════════════════════════════════════════════════════════════════
+    # 3) 전략별 상세 분석
+    # ════════════════════════════════════════════════════════════════════
+    with h_by_strategy:
+        if closed_pos.empty and (open_pos.empty or 'strategy' not in open_pos.columns):
             st.markdown('<div class="no-signal">아직 데이터가 없습니다</div>', unsafe_allow_html=True)
         else:
-            # 최근 30일만 표시
-            cutoff = all_records['signal_date'].max() - pd.Timedelta(days=30)
-            recent = all_records[all_records['signal_date'] >= cutoff].copy()
+            strategies = ['A', 'B', 'C', 'D', 'E']
+            selected_strat = st.selectbox("전략 선택", strategies,
+                                         format_func=lambda x: f"{STRATEGY_EMOJI.get(x, '')} 전략 {x} — {STRATEGY_NAMES.get(x, '')}",
+                                         key='strat_detail_select')
 
-            # 날짜 정렬
-            date_order = sorted(recent['date_str'].unique(),
-                                key=lambda x: pd.to_datetime(x, format='%m/%d'))
+            st.markdown(f"### {STRATEGY_EMOJI.get(selected_strat, '')} 전략 {selected_strat} — {STRATEGY_NAMES.get(selected_strat, '')}")
 
-            # 탐지건 피벗
-            detected = recent.groupby(['strategy', 'date_str']).size().reset_index(name='cnt')
-            det_pivot = detected.pivot(index='strategy', columns='date_str', values='cnt').fillna(0).astype(int)
+            # 해당 전략의 포지션들
+            strat_open = open_pos[open_pos['strategy'] == selected_strat] if not open_pos.empty and 'strategy' in open_pos.columns else pd.DataFrame()
+            strat_closed = closed_pos[closed_pos['strategy'] == selected_strat] if not closed_pos.empty and 'strategy' in closed_pos.columns else pd.DataFrame()
 
-            # 달성건 피벗 (WIN만)
-            wins_only = recent[recent['status'] == 'WIN']
-            if not wins_only.empty:
-                achieved = wins_only.groupby(['strategy', 'date_str']).size().reset_index(name='cnt')
-                ach_pivot = achieved.pivot(index='strategy', columns='date_str', values='cnt').fillna(0).astype(int)
+            # 메트릭
+            sc1, sc2, sc3, sc4 = st.columns(4)
+
+            s_total = len(strat_closed)
+            s_win = len(strat_closed[strat_closed['result_status'] == 'WIN']) if not strat_closed.empty and 'result_status' in strat_closed.columns else 0
+            s_loss = len(strat_closed[strat_closed['result_status'] == 'LOSS']) if not strat_closed.empty and 'result_status' in strat_closed.columns else 0
+            s_expired = len(strat_closed[strat_closed['result_status'] == 'EXPIRED']) if not strat_closed.empty and 'result_status' in strat_closed.columns else 0
+            s_wr = (s_win / s_total * 100) if s_total > 0 else 0
+            s_active = len(strat_open[strat_open['status'].isin(['OPEN', 'PENDING'])]) if not strat_open.empty and 'status' in strat_open.columns else 0
+
+            sc1.metric("총 청산건", f"{s_total}건")
+            sc2.metric("승률", f"{s_wr:.1f}%")
+            sc3.metric(f"✅ {s_win} / ❌ {s_loss} / ⏰ {s_expired}", "")
+            sc4.metric("진행중", f"{s_active}건")
+
+            if not strat_closed.empty and 'result_pct' in strat_closed.columns:
+                s_avg_ret = pd.to_numeric(strat_closed['result_pct'], errors='coerce').mean()
+                s_max_ret = pd.to_numeric(strat_closed['result_pct'], errors='coerce').max()
+                s_min_ret = pd.to_numeric(strat_closed['result_pct'], errors='coerce').min()
+
+                sr1, sr2, sr3 = st.columns(3)
+                sr1.metric("평균 수익률", f"{s_avg_ret:+.2f}%" if not pd.isna(s_avg_ret) else "—")
+                sr2.metric("최대 수익", f"{s_max_ret:+.2f}%" if not pd.isna(s_max_ret) else "—")
+                sr3.metric("최대 손실", f"{s_min_ret:+.2f}%" if not pd.isna(s_min_ret) else "—")
+
+                # 평균 달성률 (미달성 건만)
+                non_win = strat_closed[strat_closed['result_status'] != 'WIN']
+                if not non_win.empty and 'max_achievement_pct' in non_win.columns:
+                    avg_ach = pd.to_numeric(non_win['max_achievement_pct'], errors='coerce').mean()
+                    if not pd.isna(avg_ach):
+                        st.info(f"📊 미달성 건의 평균 목표 달성률: {avg_ach:.1f}% (목표 +{STRATEGY_TP.get(selected_strat, 0)}%의 {avg_ach:.1f}%까지 도달)")
+
+                # 평균 보유일
+                if 'days_held' in strat_closed.columns:
+                    win_days = pd.to_numeric(strat_closed[strat_closed['result_status'] == 'WIN']['days_held'], errors='coerce').mean()
+                    if not pd.isna(win_days):
+                        st.success(f"⏱ 익절 평균 소요일: {win_days:.1f}일")
+
+            st.divider()
+
+            # 해당 전략 포지션 목록
+            st.markdown("**청산 완료 포지션**")
+            if not strat_closed.empty:
+                strat_closed_sorted = strat_closed.sort_values('signal_date', ascending=False) if 'signal_date' in strat_closed.columns else strat_closed
+                for _, row in strat_closed_sorted.head(30).iterrows():
+                    st.markdown(render_position_card(row, 'closed'), unsafe_allow_html=True)
             else:
-                ach_pivot = pd.DataFrame(0, index=strategies, columns=date_order)
+                st.markdown('<div class="no-signal">청산 데이터 없음</div>', unsafe_allow_html=True)
 
-            # 모든 전략 행 보장
-            for s in strategies:
-                if s not in det_pivot.index:
-                    det_pivot.loc[s] = 0
-                if s not in ach_pivot.index:
-                    ach_pivot.loc[s] = 0
-
-            # 날짜 열 정렬 & 일치시키기
-            for col in date_order:
-                if col not in det_pivot.columns:
-                    det_pivot[col] = 0
-                if col not in ach_pivot.columns:
-                    ach_pivot[col] = 0
-
-            det_pivot = det_pivot[date_order].reindex(strategies)
-            ach_pivot = ach_pivot[date_order].reindex(strategies)
-
-            # 달성/탐지 합쳐서 문자열로
-            display_df = pd.DataFrame(index=strategies, columns=date_order)
-            for s in strategies:
-                for d in date_order:
-                    det_val = int(det_pivot.loc[s, d])
-                    ach_val = int(ach_pivot.loc[s, d])
-                    if det_val == 0:
-                        display_df.loc[s, d] = "—"
-                    else:
-                        display_df.loc[s, d] = f"{ach_val}/{det_val}"
-
-            display_df.index.name = "전략"
-            st.markdown("**최근 30일** — 각 셀: `달성건/탐지건`")
-            st.dataframe(display_df, use_container_width=True)
+            if not strat_open.empty and 'status' in strat_open.columns:
+                active_strat = strat_open[strat_open['status'].isin(['OPEN', 'PENDING'])]
+                if not active_strat.empty:
+                    st.divider()
+                    st.markdown("**진행중 포지션**")
+                    for _, row in active_strat.iterrows():
+                        st.markdown(render_position_card(row, 'open'), unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════
-    # 2) 월별: 월(가로) × 전략(세로) — 탐지건 & 달성건
+    # 4) 전체 성과 통계
     # ════════════════════════════════════════════════════════════════════
-    with h_monthly:
-        if all_records.empty:
-            st.markdown('<div class="no-signal">아직 데이터가 없습니다</div>', unsafe_allow_html=True)
-        else:
-            month_order = sorted(all_records['month_str'].unique())
-
-            # 탐지건
-            m_det = all_records.groupby(['strategy', 'month_str']).size().reset_index(name='탐지')
-            m_det_pivot = m_det.pivot(index='strategy', columns='month_str', values='탐지').fillna(0).astype(int)
-
-            # 달성건
-            m_wins = all_records[all_records['status'] == 'WIN']
-            if not m_wins.empty:
-                m_ach = m_wins.groupby(['strategy', 'month_str']).size().reset_index(name='달성')
-                m_ach_pivot = m_ach.pivot(index='strategy', columns='month_str', values='달성').fillna(0).astype(int)
-            else:
-                m_ach_pivot = pd.DataFrame(0, index=strategies, columns=month_order)
-
-            for s in strategies:
-                if s not in m_det_pivot.index:
-                    m_det_pivot.loc[s] = 0
-                if s not in m_ach_pivot.index:
-                    m_ach_pivot.loc[s] = 0
-
-            for col in month_order:
-                if col not in m_det_pivot.columns:
-                    m_det_pivot[col] = 0
-                if col not in m_ach_pivot.columns:
-                    m_ach_pivot[col] = 0
-
-            m_det_pivot = m_det_pivot[month_order].reindex(strategies)
-            m_ach_pivot = m_ach_pivot[month_order].reindex(strategies)
-
-            # 탐지건 테이블
-            st.markdown("**📌 탐지건** (월별 신호 발생 수)")
-            m_det_display = m_det_pivot.copy()
-            m_det_display.index.name = "전략"
-            st.dataframe(m_det_display, use_container_width=True)
-
-            # 달성건 테이블
-            st.markdown("**✅ 달성건** (월별 익절 성공 수)")
-            m_ach_display = m_ach_pivot.copy()
-            m_ach_display.index.name = "전략"
-            st.dataframe(m_ach_display, use_container_width=True)
-
-            # 달성/탐지 합산 테이블
-            st.markdown("**📊 달성/탐지** (합산)")
-            m_combined = pd.DataFrame(index=strategies, columns=month_order)
-            for s in strategies:
-                for m in month_order:
-                    det_v = int(m_det_pivot.loc[s, m])
-                    ach_v = int(m_ach_pivot.loc[s, m])
-                    if det_v == 0:
-                        m_combined.loc[s, m] = "—"
-                    else:
-                        m_combined.loc[s, m] = f"{ach_v}/{det_v}"
-            m_combined.index.name = "전략"
-            st.dataframe(m_combined, use_container_width=True)
-
-    # ════════════════════════════════════════════════════════════════════
-    # 3) 승률: 전략별 실제 승률 요약
-    # ════════════════════════════════════════════════════════════════════
-    with h_winrate:
+    with h_stats:
         if closed_pos.empty:
             st.markdown('<div class="no-signal">아직 청산 데이터가 없습니다</div>', unsafe_allow_html=True)
         else:
-            winrate_rows = []
+            st.markdown("### 전략별 성과 비교")
+
+            strategies = ['A', 'B', 'C', 'D', 'E']
+            perf_rows = []
+
             for strat in strategies:
-                s_all = all_records[all_records['strategy'] == strat] if not all_records.empty else pd.DataFrame()
-                s_closed = closed_pos[closed_pos['strategy'] == strat] if not closed_pos.empty else pd.DataFrame()
+                s_closed = closed_pos[closed_pos['strategy'] == strat] if 'strategy' in closed_pos.columns else pd.DataFrame()
+                s_open_df = open_pos[(open_pos['strategy'] == strat) & (open_pos['status'].isin(['OPEN', 'PENDING']))] if not open_pos.empty and 'strategy' in open_pos.columns else pd.DataFrame()
 
-                total_detected = len(s_all)
-                total_closed = len(s_closed)
-                wins = len(s_closed[s_closed['status'] == 'WIN']) if not s_closed.empty else 0
-                losses = len(s_closed[s_closed['status'] == 'LOSS']) if not s_closed.empty else 0
-                expired = len(s_closed[s_closed['status'] == 'EXPIRED']) if not s_closed.empty else 0
+                total = len(s_closed)
+                wins = len(s_closed[s_closed['result_status'] == 'WIN']) if not s_closed.empty and 'result_status' in s_closed.columns else 0
+                losses = len(s_closed[s_closed['result_status'] == 'LOSS']) if not s_closed.empty and 'result_status' in s_closed.columns else 0
+                expired = len(s_closed[s_closed['result_status'] == 'EXPIRED']) if not s_closed.empty and 'result_status' in s_closed.columns else 0
+                active_count = len(s_open_df)
 
-                # 진행중 건수
-                s_open = open_pos[
-                    (open_pos['strategy'] == strat) &
-                    (open_pos['status'].isin(['PENDING', 'OPEN']))
-                ] if not open_pos.empty and 'status' in open_pos.columns else pd.DataFrame()
-                in_progress = len(s_open)
+                wr = (wins / total * 100) if total > 0 else 0
 
-                win_rate = (wins / total_closed * 100) if total_closed > 0 else 0
+                avg_ret_val = pd.to_numeric(s_closed['result_pct'], errors='coerce').mean() if not s_closed.empty and 'result_pct' in s_closed.columns else 0
+                avg_ret_str = f"{avg_ret_val:+.1f}%" if not pd.isna(avg_ret_val) and avg_ret_val != 0 else "—"
 
-                # 평균 수익률
-                if not s_closed.empty and 'result_pct' in s_closed.columns:
-                    avg_ret = pd.to_numeric(s_closed['result_pct'], errors='coerce').mean()
-                    avg_ret_str = f"{avg_ret:+.1f}%"
-                else:
-                    avg_ret_str = "—"
+                # 평균 익절 소요일
+                win_rows = s_closed[s_closed['result_status'] == 'WIN'] if not s_closed.empty and 'result_status' in s_closed.columns else pd.DataFrame()
+                avg_win_days = pd.to_numeric(win_rows['days_held'], errors='coerce').mean() if not win_rows.empty and 'days_held' in win_rows.columns else 0
+                avg_win_days_str = f"{avg_win_days:.1f}일" if not pd.isna(avg_win_days) and avg_win_days > 0 else "—"
 
-                winrate_rows.append({
-                    '전략': strat,
-                    '탐지건': total_detected,
-                    '청산건': total_closed,
+                # 미달성 건 평균 달성률
+                non_win = s_closed[s_closed['result_status'] != 'WIN'] if not s_closed.empty and 'result_status' in s_closed.columns else pd.DataFrame()
+                avg_ach = pd.to_numeric(non_win['max_achievement_pct'], errors='coerce').mean() if not non_win.empty and 'max_achievement_pct' in non_win.columns else 0
+                avg_ach_str = f"{avg_ach:.0f}%" if not pd.isna(avg_ach) and avg_ach > 0 else "—"
+
+                perf_rows.append({
+                    '전략': f"{STRATEGY_EMOJI.get(strat, '')} {strat}",
+                    '목표': f"+{STRATEGY_TP.get(strat, 0)}%",
+                    '청산건': total,
                     '✅ 익절': wins,
                     '❌ 손절': losses,
                     '⏰ 만기': expired,
-                    '🔄 진행중': in_progress,
-                    '승률': f"{win_rate:.1f}%",
+                    '🔄 진행중': active_count,
+                    '실전 승률': f"{wr:.1f}%",
                     '평균수익률': avg_ret_str,
+                    '익절소요일': avg_win_days_str,
+                    '미달성 도달률': avg_ach_str,
                 })
 
-            wr_df = pd.DataFrame(winrate_rows)
-            st.dataframe(wr_df, use_container_width=True, hide_index=True)
+            perf_df = pd.DataFrame(perf_rows)
+            st.dataframe(perf_df, use_container_width=True, hide_index=True, height=250)
 
-            # 전체 요약 메트릭
             st.divider()
-            total_all = wr_df['청산건'].sum()
-            total_wins = wr_df['✅ 익절'].sum()
-            overall_wr = (total_wins / total_all * 100) if total_all > 0 else 0
-            col1, col2, col3 = st.columns(3)
-            col1.metric("총 청산건", f"{total_all}건")
-            col2.metric("총 익절건", f"{total_wins}건")
-            col3.metric("전체 승률", f"{overall_wr:.1f}%")
 
-    # ════════════════════════════════════════════════════════════════════
-    # 4) 진행중: 현재 PENDING/OPEN 포지션
-    # ════════════════════════════════════════════════════════════════════
-    with h_active:
-        active = pd.DataFrame()
-        if not open_pos.empty and 'status' in open_pos.columns:
-            active = open_pos[open_pos['status'].isin(['PENDING', 'OPEN'])]
-        if not active.empty:
-            st.success(f"현재 진행 중: {len(active)}건")
-            disp_cols = ['strategy', 'ticker', 'signal_date', 'entry_date',
-                         'entry_price', 'tp_price', 'max_hold', 'status']
-            avail = [c for c in disp_cols if c in active.columns]
-            st.dataframe(
-                active[avail].reset_index(drop=True),
-                use_container_width=True,
-                column_config={
-                    "strategy": st.column_config.TextColumn("전략", width="small"),
-                    "ticker": st.column_config.TextColumn("종목", width="small"),
-                    "signal_date": st.column_config.TextColumn("신호일"),
-                    "entry_date": st.column_config.TextColumn("진입일"),
-                    "entry_price": st.column_config.TextColumn("진입가"),
-                    "tp_price": st.column_config.TextColumn("익절가"),
-                    "max_hold": st.column_config.TextColumn("최대보유"),
-                    "status": st.column_config.TextColumn("상태"),
-                },
-            )
-        else:
-            st.markdown('<div class="no-signal">진행 중 포지션 없음</div>', unsafe_allow_html=True)
+            # 전체 요약
+            st.markdown("### 전체 요약")
+            tot1, tot2, tot3, tot4 = st.columns(4)
+            tot1.metric("총 청산건", f"{total_closed}건")
+            tot2.metric("총 익절건", f"{total_win}건")
+            tot3.metric("전체 승률", f"{overall_wr:.1f}%")
+            tot4.metric("전체 평균수익률", f"{avg_return:+.1f}%")
+
+            # 월별 추이 (간단 테이블)
+            if 'signal_date' in closed_pos.columns:
+                closed_pos_copy = closed_pos.copy()
+                closed_pos_copy['month'] = pd.to_datetime(closed_pos_copy['signal_date'], errors='coerce').dt.strftime('%Y-%m')
+                closed_pos_copy = closed_pos_copy.dropna(subset=['month'])
+
+                if not closed_pos_copy.empty:
+                    st.divider()
+                    st.markdown("### 월별 추이")
+
+                    month_data = []
+                    for month in sorted(closed_pos_copy['month'].unique()):
+                        m_df = closed_pos_copy[closed_pos_copy['month'] == month]
+                        m_total = len(m_df)
+                        m_win = len(m_df[m_df['result_status'] == 'WIN'])
+                        m_wr = (m_win / m_total * 100) if m_total > 0 else 0
+                        m_ret = pd.to_numeric(m_df['result_pct'], errors='coerce').mean()
+                        month_data.append({
+                            '월': month,
+                            '건수': m_total,
+                            '익절': m_win,
+                            '승률': f"{m_wr:.0f}%",
+                            '평균수익률': f"{m_ret:+.1f}%" if not pd.isna(m_ret) else "—",
+                        })
+
+                    month_df = pd.DataFrame(month_data)
+                    st.dataframe(month_df, use_container_width=True, hide_index=True)
+
+
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("정보")
@@ -635,6 +932,15 @@ with st.sidebar:
     ---
     GitHub Actions로 평일 자동 실행
     """)
+
+    st.divider()
+    tracker_info = load_tracker_summary()
+    if tracker_info:
+        st.markdown(f"**마지막 추적:** {tracker_info.get('last_tracked', 'N/A')}")
+        st.markdown(f"진행중: {tracker_info.get('open_count', 0)}건 | "
+                   f"대기: {tracker_info.get('pending_count', 0)}건 | "
+                   f"청산: {tracker_info.get('closed_count', 0)}건")
+
     if st.button("🔄 새로고침"):
         st.cache_data.clear()
         st.rerun()
