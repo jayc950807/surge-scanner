@@ -30,6 +30,9 @@ jobs:
       - name: Run scanner
         run: python scanner.py
 
+      - name: Run position tracker
+        run: python tracker.py
+
       - name: Commit and push results
         run: |
           git config user.name "github-actions[bot]"
@@ -38,7 +41,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "scan: $(date +%Y-%m-%d) signal update"
+            git commit -m "scan: $(date +%Y-%m-%d) signal + tracker update"
             git push
           fi
 
