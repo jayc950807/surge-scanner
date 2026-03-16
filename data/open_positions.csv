@@ -1,3 +1,7 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated
 A,ZNB,2026-03-16,4.24,,,4.45,3.39,0.05,5,PENDING,,,,,,,,0,2026-03-16
 C,ZNB,2026-03-16,4.24,,,4.45,3.39,0.05,5,PENDING,,,,,,,,0,2026-03-16
+A,SMX,2026-03-16,11.78,,,12.37,9.42,0.05,5,PENDING,,,,,,,,0,2026-03-16
+C,SMX,2026-03-16,11.78,,,12.37,9.42,0.05,5,PENDING,,,,,,,,0,2026-03-16
+E,SNBR,2026-03-16,3.23,,,3.55,,0.1,30,PENDING,,,,,,,,0,2026-03-16
+E,LFCR,2026-03-16,4.36,,,4.8,,0.1,30,PENDING,,,,,,,,0,2026-03-16
