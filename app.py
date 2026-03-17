@@ -554,8 +554,8 @@ with tab_history:
     st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
 
     # ── 서브 탭 ──
-    h_daily, h_monthly, h_winrate, h_active, h_closed_detail = st.tabs([
-        "📅 일별 성적", "📆 월별 성적", "🏆 전략별 승률", "🟡 진행중 포지션", "📋 청산 내역"
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker = st.tabs([
+        "📅 일별 성적", "📆 월별 성적", "🏆 전략별 승률", "🟡 진행중 포지션", "📋 청산 내역", "🔍 티커별"
     ])
 
     # ══════════════════════════════════════════════════════════════════
@@ -873,6 +873,187 @@ with tab_history:
             </p>''', unsafe_allow_html=True)
         else:
             st.markdown('<div class="no-signal">청산된 포지션이 없습니다</div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════
+    # 6) 티커별 히스토리
+    # ══════════════════════════════════════════════════════════════════
+    with h_ticker:
+        # 모든 포지션(open + closed)에서 티커 목록 수집
+        all_tickers = set()
+        if not open_pos.empty and 'ticker' in open_pos.columns:
+            all_tickers.update(open_pos['ticker'].dropna().unique())
+        if not closed_pos.empty and 'ticker' in closed_pos.columns:
+            all_tickers.update(closed_pos['ticker'].dropna().unique())
+
+        if not all_tickers:
+            st.markdown('<div class="no-signal">아직 추적 중인 티커가 없습니다</div>', unsafe_allow_html=True)
+        else:
+            sorted_tickers = sorted(all_tickers)
+            selected_ticker = st.selectbox("종목 선택", sorted_tickers, key='ticker_select')
+
+            if selected_ticker:
+                # 해당 티커의 open + closed 포지션 모아보기
+                tk_open = open_pos[open_pos['ticker'] == selected_ticker] if not open_pos.empty and 'ticker' in open_pos.columns else pd.DataFrame()
+                tk_closed = closed_pos[closed_pos['ticker'] == selected_ticker] if not closed_pos.empty and 'ticker' in closed_pos.columns else pd.DataFrame()
+
+                tk_total = len(tk_open) + len(tk_closed)
+                tk_wins = len(tk_closed[tk_closed[rs_col_name] == 'WIN']) if not tk_closed.empty and rs_col_name in tk_closed.columns else 0
+                tk_losses = len(tk_closed[tk_closed[rs_col_name] == 'LOSS']) if not tk_closed.empty and rs_col_name in tk_closed.columns else 0
+                tk_expired = len(tk_closed[tk_closed[rs_col_name] == 'EXPIRED']) if not tk_closed.empty and rs_col_name in tk_closed.columns else 0
+                tk_active = len(tk_open[tk_open['status'].isin(['OPEN', 'PENDING'])]) if not tk_open.empty and 'status' in tk_open.columns else 0
+                tk_closed_cnt = len(tk_closed)
+                tk_wr = (tk_wins / tk_closed_cnt * 100) if tk_closed_cnt > 0 else 0
+
+                # 티커 요약 카드
+                tc1, tc2, tc3, tc4, tc5 = st.columns(5)
+                with tc1:
+                    st.markdown(render_summary_card(f'{tk_total}', '총 신호', '#64b5f6'), unsafe_allow_html=True)
+                with tc2:
+                    st.markdown(render_summary_card(f'{tk_active}', '진행중', '#ffb74d'), unsafe_allow_html=True)
+                with tc3:
+                    st.markdown(render_summary_card(f'{tk_wins}', 'WIN', '#81c784'), unsafe_allow_html=True)
+                with tc4:
+                    st.markdown(render_summary_card(f'{tk_losses + tk_expired}', 'LOSS/만기', '#e57373'), unsafe_allow_html=True)
+                with tc5:
+                    wr_c = '#81c784' if tk_wr >= 80 else '#ffb74d' if tk_wr >= 50 else '#e57373'
+                    st.markdown(render_summary_card(f'{tk_wr:.0f}%' if tk_closed_cnt > 0 else '—', '승률', wr_c), unsafe_allow_html=True)
+
+                st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+
+                # ── 진행중 포지션 ──
+                if not tk_open.empty and tk_active > 0:
+                    active_tk = tk_open[tk_open['status'].isin(['OPEN', 'PENDING'])]
+                    st.markdown(f'<p style="font-weight:700;font-size:1.05em;margin-bottom:6px">진행중 포지션 ({tk_active}건)</p>', unsafe_allow_html=True)
+                    html = '<table class="pos-table"><thead><tr>'
+                    html += '<th>전략</th><th>신호일</th><th>진입일</th><th>진입가</th><th>현재가</th><th>수익률</th>'
+                    html += '<th>익절가</th><th>최고가</th><th>최고가일</th><th>TP달성률</th><th>TP잔여</th><th>보유일</th><th>상태</th>'
+                    html += '</tr></thead><tbody>'
+
+                    for _, row in active_tk.iterrows():
+                        s = safe_str(row.get('strategy'))
+                        sig_dt = safe_str(row.get('signal_date'))
+                        ent_dt = safe_str(row.get('entry_date'))
+                        ent_pr_raw = safe_str(row.get('entry_price'))
+                        cur_pr_raw = safe_str(row.get('current_price'))
+                        tp_pr_raw = safe_str(row.get('tp_price'))
+                        max_pr_raw = safe_str(row.get('max_price'))
+                        max_pr_dt = safe_str(row.get('max_price_date'))
+                        ach_pct_raw = safe_str(row.get('achievement_pct'))
+                        chg_pct_raw = safe_str(row.get('change_pct'))
+                        days_held = safe_str(row.get('days_held'))
+                        mh = safe_str(row.get('max_hold'))
+                        status = safe_str(row.get('status'))
+
+                        ent_pr_html = f'${ent_pr_raw}' if ent_pr_raw != '—' else '—'
+                        cur_pr_html = f'${cur_pr_raw}' if cur_pr_raw != '—' else '—'
+                        tp_pr_html = f'${tp_pr_raw}' if tp_pr_raw != '—' else '—'
+                        max_pr_html = f'${max_pr_raw}' if max_pr_raw != '—' else '—'
+
+                        chg_val = safe_float(chg_pct_raw)
+                        chg_cls = 'cell-win' if chg_val > 0 else 'status-loss' if chg_val < 0 else 'cell-none'
+                        chg_html = f'<span class="{chg_cls}">{chg_val:+.1f}%</span>' if chg_pct_raw != '—' else '—'
+
+                        ach_val = safe_float(ach_pct_raw)
+                        a_col = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
+                        if ach_pct_raw != '—' and ach_val > 0:
+                            ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
+                                <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
+                                    <div style="width:{min(ach_val,100):.0f}%;background:{a_col};height:100%;border-radius:4px"></div>
+                                </div>
+                                <span style="font-size:0.82em;font-weight:700;color:{a_col}">{ach_val:.0f}%</span>
+                            </div>'''
+                        else:
+                            ach_html = '—'
+
+                        tp_remain_html = '—'
+                        cur_f = safe_float(cur_pr_raw)
+                        tp_f = safe_float(tp_pr_raw)
+                        if cur_f > 0 and tp_f > 0:
+                            remain = (tp_f - cur_f) / cur_f * 100
+                            tp_remain_html = f'<span style="color:#2979ff;font-weight:600">+{remain:.1f}%</span>' if remain > 0 else '<span class="cell-win">달성</span>'
+
+                        days_html = f'{days_held}/{mh}일' if days_held != '—' and mh != '—' else days_held
+                        st_cls = 'status-open' if status == 'OPEN' else 'status-pending'
+
+                        html += f'<tr><td>{strat_badge(s)}</td><td>{sig_dt}</td><td>{ent_dt}</td>'
+                        html += f'<td>{ent_pr_html}</td><td>{cur_pr_html}</td><td>{chg_html}</td>'
+                        html += f'<td>{tp_pr_html}</td><td style="font-weight:600">{max_pr_html}</td><td>{max_pr_dt}</td>'
+                        html += f'<td>{ach_html}</td><td>{tp_remain_html}</td><td>{days_html}</td>'
+                        html += f'<td class="{st_cls}">{status}</td></tr>'
+
+                    html += '</tbody></table>'
+                    st.markdown(html, unsafe_allow_html=True)
+                    st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
+
+                # ── 청산 이력 ──
+                if not tk_closed.empty:
+                    st.markdown(f'<p style="font-weight:700;font-size:1.05em;margin-bottom:6px">청산 이력 ({len(tk_closed)}건)</p>', unsafe_allow_html=True)
+                    tc_sorted = tk_closed.copy()
+                    tc_sorted['_close_dt'] = pd.to_datetime(tc_sorted.get('close_date', ''), errors='coerce')
+                    tc_sorted = tc_sorted.sort_values('_close_dt', ascending=False)
+
+                    html = '<table class="pos-table"><thead><tr>'
+                    html += '<th>전략</th><th>신호일</th><th>진입일</th><th>진입가</th>'
+                    html += '<th>결과</th><th>청산일</th><th>청산가</th><th>수익률</th>'
+                    html += '<th>TP달성일</th><th>최고가</th><th>최고가일</th><th>최대달성률</th>'
+                    html += '</tr></thead><tbody>'
+
+                    for _, row in tc_sorted.iterrows():
+                        s = safe_str(row.get('strategy'))
+                        sig_dt = safe_str(row.get('signal_date'))
+                        ent_dt = safe_str(row.get('entry_date'))
+                        ent_pr = safe_str(row.get('entry_price'))
+                        result = safe_str(row.get(rs_col_name, 'status'))
+                        close_dt = safe_str(row.get('close_date'))
+                        close_pr = safe_str(row.get('close_price'))
+                        rp_raw = safe_str(row.get('result_pct'))
+                        tp_hit_dt = safe_str(row.get('tp_hit_date'))
+                        max_pr = safe_str(row.get('max_price'))
+                        max_pr_dt = safe_str(row.get('max_price_date'))
+                        max_ach_raw = safe_str(row.get('max_achievement_pct'))
+
+                        if result == 'WIN':
+                            res_html = '<span class="status-win">WIN</span>'
+                        elif result == 'LOSS':
+                            res_html = '<span class="status-loss">LOSS</span>'
+                        elif result == 'EXPIRED':
+                            res_html = '<span class="status-expired">EXPIRED</span>'
+                        else:
+                            res_html = result
+
+                        rp_val = safe_float(rp_raw)
+                        rp_cls = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
+                        rp_html = f'<span class="{rp_cls}">{rp_val:+.1f}%</span>' if rp_raw != '—' else '—'
+
+                        tp_hit_html = f'<span class="cell-win">{tp_hit_dt}</span>' if tp_hit_dt != '—' else '<span class="price-none">미달성</span>'
+
+                        max_pr_html = f'${max_pr}' if max_pr != '—' else '—'
+                        if tp_hit_dt == '—' and max_pr != '—':
+                            max_pr_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
+                            max_pr_dt_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
+                        else:
+                            max_pr_dt_html = max_pr_dt
+
+                        max_ach_val = safe_float(max_ach_raw)
+                        if max_ach_raw != '—' and max_ach_val > 0:
+                            ac = '#00c853' if max_ach_val >= 100 else '#ff9100' if max_ach_val >= 50 else '#e57373'
+                            max_ach_html = f'<span style="color:{ac};font-weight:700">{max_ach_val:.0f}%</span>'
+                        else:
+                            max_ach_html = '—'
+
+                        ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '—'
+                        close_pr_html = f'${close_pr}' if close_pr != '—' else '—'
+
+                        html += f'<tr><td>{strat_badge(s)}</td><td>{sig_dt}</td><td>{ent_dt}</td><td>{ent_pr_html}</td>'
+                        html += f'<td>{res_html}</td><td>{close_dt}</td><td>{close_pr_html}</td><td>{rp_html}</td>'
+                        html += f'<td>{tp_hit_html}</td><td>{max_pr_html}</td><td>{max_pr_dt_html}</td><td>{max_ach_html}</td></tr>'
+
+                    html += '</tbody></table>'
+                    st.markdown(html, unsafe_allow_html=True)
+
+                if tk_open.empty and tk_closed.empty:
+                    st.markdown('<div class="no-signal">해당 티커의 포지션 기록이 없습니다</div>', unsafe_allow_html=True)
+
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("정보")
