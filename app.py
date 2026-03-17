@@ -546,7 +546,7 @@ with tab_history:
     with c3:
         st.markdown(render_summary_card(f'{total_win}', '익절 성공', '#81c784'), unsafe_allow_html=True)
     with c4:
-        st.markdown(render_summary_card(f'{total_loss + total_expired}', '손절/만기', '#e57373'), unsafe_allow_html=True)
+        st.markdown(render_summary_card(f'{total_loss + total_expired}', '손절/기간초과', '#e57373'), unsafe_allow_html=True)
     with c5:
         wr_color = '#81c784' if overall_wr >= 80 else '#ffb74d' if overall_wr >= 50 else '#e57373'
         st.markdown(render_summary_card(f'{overall_wr:.1f}%', '실전 승률', wr_color), unsafe_allow_html=True)
@@ -596,7 +596,7 @@ with tab_history:
                 html += '</tr>'
 
             html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">최근 30일 — 셀: <b>달성/탐지</b></p>{html}', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">최근 30일 — 셀: <b>익절 성공건수 / 총 탐지건수</b> (초록=전부달성, 주황=일부달성, 회색=미탐지)</p>{html}', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
     # 2) 월별 매트릭스
@@ -630,16 +630,16 @@ with tab_history:
                     html += f'<td>{cell_html(ach_v, det_v)}</td>'
                 html += '</tr>'
             html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">월별 종합 — 셀: <b>달성/탐지</b></p>{html}', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">월별 종합 — 셀: <b>익절 성공건수 / 총 탐지건수</b></p>{html}', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
     # 3) 전략별 승률
     # ══════════════════════════════════════════════════════════════════
     with h_winrate:
         html = '<table class="matrix-table"><thead><tr>'
-        html += '<th class="strat-col">전략</th><th>목표</th><th>탐지</th><th>청산</th>'
-        html += '<th>익절</th><th>손절</th><th>만기</th><th>진행중</th>'
-        html += '<th>실전 승률</th><th>백테 승률</th><th>평균수익률</th>'
+        html += '<th class="strat-col">전략</th><th>익절 목표</th><th>총 탐지건수</th><th>청산 완료</th>'
+        html += '<th>익절 성공</th><th>손절 처리</th><th>보유기간 초과청산</th><th>현재 진행중</th>'
+        html += '<th>실전 승률</th><th>백테스트 승률</th><th>건당 평균수익률</th>'
         html += '</tr></thead><tbody>'
 
         for s in strategies:
@@ -689,11 +689,11 @@ with tab_history:
             active = open_pos[open_pos['status'].isin(['PENDING', 'OPEN'])]
         if not active.empty:
             html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목</th><th>신호일</th><th>진입일</th>'
-            html += '<th>진입가</th><th>현재가</th><th>수익률</th>'
-            html += '<th>익절가</th><th>최고가</th><th>최고가일</th>'
-            html += '<th>TP달성률</th><th>TP잔여</th>'
-            html += '<th>보유일</th><th>상태</th>'
+            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th>'
+            html += '<th>매수가</th><th>현재가</th><th>현재 손익률</th>'
+            html += '<th>목표 익절가</th><th>보유중 최고가</th><th>최고가 도달일</th>'
+            html += '<th>익절목표 달성률</th><th>익절까지 남은%</th>'
+            html += '<th>보유일/최대</th><th>현재 상태</th>'
             html += '</tr></thead><tbody>'
 
             for _, row in active.iterrows():
@@ -787,9 +787,9 @@ with tab_history:
             cp_sorted = cp_sorted.sort_values('_close_dt', ascending=False)
 
             html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목</th><th>신호일</th><th>진입일</th><th>진입가</th>'
-            html += '<th>결과</th><th>청산일</th><th>청산가</th><th>수익률</th>'
-            html += '<th>TP달성일</th><th>최고가</th><th>최고가일</th><th>최대달성률</th>'
+            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
+            html += '<th>청산 결과</th><th>청산일</th><th>청산가</th><th>최종 손익률</th>'
+            html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
             html += '</tr></thead><tbody>'
 
             for _, row in cp_sorted.iterrows():
@@ -875,185 +875,212 @@ with tab_history:
             st.markdown('<div class="no-signal">청산된 포지션이 없습니다</div>', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
-    # 6) 티커별 블로터 — 전체 종목 일람표
+    # 6) 티커별 — 그룹 헤더 + 개별 포지션 상세
     # ══════════════════════════════════════════════════════════════════
     with h_ticker:
-        # ── 모든 포지션(open + closed)을 티커 단위로 집계 ──
-        ticker_stats = {}  # ticker → {strategies, total, wins, losses, expired, active, ...}
+        # ── 모든 포지션을 통합 DataFrame으로 합치기 ──
+        tk_rows = []
 
-        # closed positions 집계
         if not closed_pos.empty and 'ticker' in closed_pos.columns:
             for _, row in closed_pos.iterrows():
-                tk = safe_str(row.get('ticker'))
-                if tk == '—':
-                    continue
-                if tk not in ticker_stats:
-                    ticker_stats[tk] = {
-                        'strategies': set(), 'total': 0, 'wins': 0, 'losses': 0,
-                        'expired': 0, 'active': 0, 'last_signal': '',
-                        'best_pct': None, 'worst_pct': None,
-                        'last_result': '', 'last_result_pct': 0,
-                        'max_ach': 0, 'tp_hit_dates': [],
-                        'max_price_info': '', 'max_price_date_info': '',
-                    }
-                s = ticker_stats[tk]
-                strat = safe_str(row.get('strategy'))
-                if strat != '—':
-                    s['strategies'].add(strat)
-                s['total'] += 1
                 result = safe_str(row.get(rs_col_name, 'status'))
-                if result == 'WIN':
-                    s['wins'] += 1
-                elif result == 'LOSS':
-                    s['losses'] += 1
-                elif result == 'EXPIRED':
-                    s['expired'] += 1
+                tk_rows.append({
+                    'ticker': safe_str(row.get('ticker')),
+                    'strategy': safe_str(row.get('strategy')),
+                    'signal_date': safe_str(row.get('signal_date')),
+                    'entry_date': safe_str(row.get('entry_date')),
+                    'entry_price': safe_str(row.get('entry_price')),
+                    'tp_price': safe_str(row.get('tp_price')),
+                    'current_price': safe_str(row.get('close_price')),
+                    'max_price': safe_str(row.get('max_price')),
+                    'max_price_date': safe_str(row.get('max_price_date')),
+                    'result': result,
+                    'result_pct': safe_str(row.get('result_pct')),
+                    'tp_hit_date': safe_str(row.get('tp_hit_date')),
+                    'max_ach': safe_str(row.get('max_achievement_pct')),
+                    'close_date': safe_str(row.get('close_date')),
+                    'is_open': False,
+                    'change_pct': safe_str(row.get('result_pct')),
+                    'achievement_pct': safe_str(row.get('max_achievement_pct')),
+                    'days_held': safe_str(row.get('days_held')),
+                })
 
-                rp = safe_float(row.get('result_pct'))
-                if s['best_pct'] is None or rp > s['best_pct']:
-                    s['best_pct'] = rp
-                if s['worst_pct'] is None or rp < s['worst_pct']:
-                    s['worst_pct'] = rp
-
-                sig_dt = safe_str(row.get('signal_date'))
-                if sig_dt > s['last_signal']:
-                    s['last_signal'] = sig_dt
-                    s['last_result'] = result
-                    s['last_result_pct'] = rp
-
-                tp_hit = safe_str(row.get('tp_hit_date'))
-                if tp_hit != '—':
-                    s['tp_hit_dates'].append(tp_hit)
-
-                ma = safe_float(row.get('max_achievement_pct'))
-                if ma > s['max_ach']:
-                    s['max_ach'] = ma
-                    s['max_price_info'] = safe_str(row.get('max_price'))
-                    s['max_price_date_info'] = safe_str(row.get('max_price_date'))
-
-        # open positions 집계
         if not open_pos.empty and 'ticker' in open_pos.columns:
             for _, row in open_pos.iterrows():
-                tk = safe_str(row.get('ticker'))
-                if tk == '—':
-                    continue
-                if tk not in ticker_stats:
-                    ticker_stats[tk] = {
-                        'strategies': set(), 'total': 0, 'wins': 0, 'losses': 0,
-                        'expired': 0, 'active': 0, 'last_signal': '',
-                        'best_pct': None, 'worst_pct': None,
-                        'last_result': '', 'last_result_pct': 0,
-                        'max_ach': 0, 'tp_hit_dates': [],
-                        'max_price_info': '', 'max_price_date_info': '',
-                    }
-                s = ticker_stats[tk]
-                strat = safe_str(row.get('strategy'))
-                if strat != '—':
-                    s['strategies'].add(strat)
-                s['total'] += 1
                 status = safe_str(row.get('status'))
-                if status in ('OPEN', 'PENDING'):
-                    s['active'] += 1
-                sig_dt = safe_str(row.get('signal_date'))
-                if sig_dt > s['last_signal']:
-                    s['last_signal'] = sig_dt
-                    s['last_result'] = status
-                    chg = safe_float(row.get('change_pct'))
-                    s['last_result_pct'] = chg
+                tk_rows.append({
+                    'ticker': safe_str(row.get('ticker')),
+                    'strategy': safe_str(row.get('strategy')),
+                    'signal_date': safe_str(row.get('signal_date')),
+                    'entry_date': safe_str(row.get('entry_date')),
+                    'entry_price': safe_str(row.get('entry_price')),
+                    'tp_price': safe_str(row.get('tp_price')),
+                    'current_price': safe_str(row.get('current_price')),
+                    'max_price': safe_str(row.get('max_price')),
+                    'max_price_date': safe_str(row.get('max_price_date')),
+                    'result': status,
+                    'result_pct': safe_str(row.get('change_pct')),
+                    'tp_hit_date': '—',
+                    'max_ach': safe_str(row.get('achievement_pct')),
+                    'close_date': '—',
+                    'is_open': True,
+                    'change_pct': safe_str(row.get('change_pct')),
+                    'achievement_pct': safe_str(row.get('achievement_pct')),
+                    'days_held': safe_str(row.get('days_held')),
+                })
 
-                ma = safe_float(row.get('achievement_pct'))
-                if ma > s['max_ach']:
-                    s['max_ach'] = ma
-                    s['max_price_info'] = safe_str(row.get('max_price'))
-                    s['max_price_date_info'] = safe_str(row.get('max_price_date'))
-
-        if not ticker_stats:
+        if not tk_rows:
             st.markdown('<div class="no-signal">아직 추적 중인 티커가 없습니다</div>', unsafe_allow_html=True)
         else:
-            # 최신 신호일 기준 정렬
-            sorted_tk = sorted(ticker_stats.items(), key=lambda x: x[1]['last_signal'], reverse=True)
+            # 티커별 그룹핑
+            from collections import defaultdict
+            ticker_groups = defaultdict(list)
+            for r in tk_rows:
+                if r['ticker'] != '—':
+                    ticker_groups[r['ticker']].append(r)
 
-            st.markdown(f'<p style="color:#888;font-size:0.85em;margin-bottom:8px">전체 {len(sorted_tk)}개 종목 — 최근 신호일 순</p>', unsafe_allow_html=True)
+            # 각 티커 내에서 signal_date 내림차순, 티커 간에는 최신 신호일 순
+            for tk in ticker_groups:
+                ticker_groups[tk].sort(key=lambda x: x['signal_date'], reverse=True)
+            sorted_tickers = sorted(ticker_groups.items(),
+                                    key=lambda x: x[1][0]['signal_date'] if x[1] else '', reverse=True)
 
-            html = '<table class="pos-table"><thead><tr>'
-            html += '<th>종목</th><th>전략</th><th>최근신호</th>'
-            html += '<th>신호</th><th>WIN</th><th>LOSS</th><th>만기</th><th>진행</th>'
-            html += '<th>승률</th><th>최고수익</th><th>최저수익</th>'
-            html += '<th>최대TP달성</th><th>최고가</th><th>최고가일</th><th>최근결과</th>'
-            html += '</tr></thead><tbody>'
+            st.markdown(f'<p style="color:#888;font-size:0.85em;margin-bottom:8px">전체 {len(sorted_tickers)}개 종목 — 티커별 모든 포지션 상세</p>', unsafe_allow_html=True)
 
-            for tk, s in sorted_tk:
-                # 전략 뱃지들
-                badges = ' '.join(strat_badge(st_) for st_ in sorted(s['strategies']))
+            html = ''
+            for tk, positions in sorted_tickers:
+                # ── 티커 그룹 집계 ──
+                n_total = len(positions)
+                n_win = sum(1 for p in positions if p['result'] == 'WIN')
+                n_loss = sum(1 for p in positions if p['result'] == 'LOSS')
+                n_exp = sum(1 for p in positions if p['result'] == 'EXPIRED')
+                n_active = sum(1 for p in positions if p['result'] in ('OPEN', 'PENDING'))
+                n_closed = n_win + n_loss + n_exp
+                wr = (n_win / n_closed * 100) if n_closed > 0 else 0
+                strats = sorted(set(p['strategy'] for p in positions if p['strategy'] != '—'))
+                badges = ' '.join(strat_badge(s_) for s_ in strats)
 
-                # 승률
-                closed_cnt = s['wins'] + s['losses'] + s['expired']
-                wr = (s['wins'] / closed_cnt * 100) if closed_cnt > 0 else 0
-                wr_cls = 'cell-win' if wr >= 80 else 'cell-partial' if wr > 0 else 'cell-none'
-                wr_html = f'<span class="{wr_cls}" style="font-size:1.05em">{wr:.0f}%</span>' if closed_cnt > 0 else '<span class="cell-none">—</span>'
+                wr_color = '#00c853' if wr >= 80 else '#ff9100' if wr > 0 else '#888'
+                wr_txt = f'{wr:.0f}%' if n_closed > 0 else '—'
 
-                # 최고/최저 수익
-                best_html = f'<span class="cell-win">{s["best_pct"]:+.1f}%</span>' if s['best_pct'] is not None else '—'
-                worst_html = f'<span class="status-loss">{s["worst_pct"]:+.1f}%</span>' if s['worst_pct'] is not None and s['worst_pct'] < 0 else (f'{s["worst_pct"]:+.1f}%' if s['worst_pct'] is not None else '—')
+                # 요약 바
+                summary_parts = []
+                if n_win > 0:
+                    summary_parts.append(f'<span class="status-win">{n_win}W</span>')
+                if n_loss > 0:
+                    summary_parts.append(f'<span class="status-loss">{n_loss}L</span>')
+                if n_exp > 0:
+                    summary_parts.append(f'<span class="status-expired">{n_exp}E</span>')
+                if n_active > 0:
+                    summary_parts.append(f'<span class="status-open">{n_active} 진행</span>')
+                summary_str = ' / '.join(summary_parts) if summary_parts else '—'
 
-                # 최대 TP 달성률
-                ma_val = s['max_ach']
-                if ma_val > 0:
-                    ac = '#00c853' if ma_val >= 100 else '#ff9100' if ma_val >= 50 else '#e57373'
-                    ma_html = f'<span style="color:{ac};font-weight:700">{ma_val:.0f}%</span>'
-                else:
-                    ma_html = '—'
+                # ── 티커 헤더 (진한 배경, 큰 글씨) ──
+                html += f'''<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;
+                    padding:14px 20px;margin:16px 0 2px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <span style="color:#fff;font-weight:800;font-size:1.3em">{tk}</span>
+                        <span>{badges}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:16px;color:#a0a0c0;font-size:0.88em">
+                        <span>{n_total}건</span>
+                        <span>{summary_str}</span>
+                        <span style="color:{wr_color};font-weight:700;font-size:1.1em">승률 {wr_txt}</span>
+                    </div>
+                </div>'''
 
-                # 최고가
-                mp = s['max_price_info']
-                mpd = s['max_price_date_info']
-                mp_html = f'<span style="font-weight:600">${mp}</span>' if mp and mp != '—' else '—'
-                mpd_html = mpd if mpd and mpd != '—' else '—'
+                # ── 해당 티커의 개별 포지션 테이블 ──
+                html += '<table class="pos-table" style="margin-bottom:0"><thead><tr>'
+                html += '<th>전략</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
+                html += '<th>청산 결과</th><th>최종 손익률</th>'
+                html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
+                html += '</tr></thead><tbody>'
 
-                # 최근 결과
-                lr = s['last_result']
-                lrp = s['last_result_pct']
-                if lr == 'WIN':
-                    lr_html = f'<span class="status-win">WIN {lrp:+.1f}%</span>'
-                elif lr == 'LOSS':
-                    lr_html = f'<span class="status-loss">LOSS {lrp:+.1f}%</span>'
-                elif lr == 'EXPIRED':
-                    lr_html = f'<span class="status-expired">EXP {lrp:+.1f}%</span>'
-                elif lr == 'OPEN':
-                    lr_cls = 'cell-win' if lrp > 0 else 'status-loss' if lrp < 0 else 'status-open'
-                    lr_html = f'<span class="{lr_cls}">OPEN {lrp:+.1f}%</span>'
-                elif lr == 'PENDING':
-                    lr_html = '<span class="status-pending">PENDING</span>'
-                else:
-                    lr_html = '—'
+                for p in positions:
+                    s_ = p['strategy']
+                    sig_dt = p['signal_date']
+                    ent_dt = p['entry_date']
+                    ent_pr = p['entry_price']
+                    result = p['result']
+                    rp_raw = p['result_pct']
+                    tp_hit = p['tp_hit_date']
+                    max_pr = p['max_price']
+                    max_pr_dt = p['max_price_date']
+                    max_ach_raw = p['max_ach']
 
-                # 진행중 강조
-                active_html = f'<span class="status-open">{s["active"]}</span>' if s['active'] > 0 else '<span class="cell-none">—</span>'
+                    ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '<span class="price-none">—</span>'
 
-                html += f'<tr>'
-                html += f'<td style="font-weight:700;font-size:1.05em">{tk}</td>'
-                html += f'<td>{badges}</td>'
-                html += f'<td>{s["last_signal"]}</td>'
-                html += f'<td>{s["total"]}</td>'
-                html += f'<td class="cell-win">{s["wins"] if s["wins"] > 0 else "—"}</td>'
-                html += f'<td class="{"status-loss" if s["losses"] > 0 else "cell-none"}">{s["losses"] if s["losses"] > 0 else "—"}</td>'
-                html += f'<td class="{"status-expired" if s["expired"] > 0 else "cell-none"}">{s["expired"] if s["expired"] > 0 else "—"}</td>'
-                html += f'<td>{active_html}</td>'
-                html += f'<td>{wr_html}</td>'
-                html += f'<td>{best_html}</td>'
-                html += f'<td>{worst_html}</td>'
-                html += f'<td>{ma_html}</td>'
-                html += f'<td>{mp_html}</td>'
-                html += f'<td>{mpd_html}</td>'
-                html += f'<td>{lr_html}</td>'
-                html += f'</tr>'
+                    # 결과 뱃지
+                    if result == 'WIN':
+                        res_html = '<span class="status-win">WIN</span>'
+                    elif result == 'LOSS':
+                        res_html = '<span class="status-loss">LOSS</span>'
+                    elif result == 'EXPIRED':
+                        res_html = '<span class="status-expired">EXPIRED</span>'
+                    elif result == 'OPEN':
+                        res_html = '<span class="status-open">OPEN</span>'
+                    elif result == 'PENDING':
+                        res_html = '<span class="status-pending">PENDING</span>'
+                    else:
+                        res_html = result
 
-            html += '</tbody></table>'
+                    # 수익률
+                    rp_val = safe_float(rp_raw)
+                    rp_cls = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
+                    rp_html = f'<span class="{rp_cls}">{rp_val:+.1f}%</span>' if rp_raw != '—' else '<span class="price-none">—</span>'
+
+                    # TP 달성일
+                    if tp_hit != '—':
+                        tp_html = f'<span class="cell-win">{tp_hit}</span>'
+                    else:
+                        tp_html = '<span class="price-none">미달성</span>'
+
+                    # 최고가 — TP 미달성 시 주황 강조
+                    if max_pr != '—':
+                        if tp_hit == '—':
+                            mp_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
+                            mpd_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
+                        else:
+                            mp_html = f'${max_pr}'
+                            mpd_html = max_pr_dt
+                    else:
+                        mp_html = '<span class="price-none">—</span>'
+                        mpd_html = '<span class="price-none">—</span>'
+
+                    # TP 달성률 — 프로그레스바
+                    ach_val = safe_float(max_ach_raw)
+                    if max_ach_raw != '—' and ach_val > 0:
+                        ac = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
+                        ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
+                            <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
+                                <div style="width:{min(ach_val,100):.0f}%;background:{ac};height:100%;border-radius:4px"></div>
+                            </div>
+                            <span style="font-size:0.82em;font-weight:700;color:{ac}">{ach_val:.0f}%</span>
+                        </div>'''
+                    else:
+                        ach_html = '<span class="price-none">—</span>'
+
+                    html += f'<tr>'
+                    html += f'<td>{strat_badge(s_)}</td>'
+                    html += f'<td>{sig_dt}</td>'
+                    html += f'<td>{ent_dt if ent_dt != "—" else "<span class=price-none>—</span>"}</td>'
+                    html += f'<td>{ent_pr_html}</td>'
+                    html += f'<td>{res_html}</td>'
+                    html += f'<td>{rp_html}</td>'
+                    html += f'<td>{tp_html}</td>'
+                    html += f'<td>{mp_html}</td>'
+                    html += f'<td>{mpd_html}</td>'
+                    html += f'<td>{ach_html}</td>'
+                    html += f'</tr>'
+
+                html += '</tbody></table>'
+
             st.markdown(html, unsafe_allow_html=True)
-            st.markdown('''<p style="color:#888;font-size:0.8em;margin-top:8px">
-                최대TP달성 = 해당 티커의 전체 이력 중 TP 목표에 가장 가까이 접근한 비율 |
-                최고가/최고가일 = 해당 최대달성률 기록 당시의 가격과 날짜 |
-                같은 종목이 여러 전략에 잡힌 경우 전략 뱃지가 복수 표시됨
+            st.markdown('''<p style="color:#888;font-size:0.8em;margin-top:12px">
+                각 종목의 전체 포지션 이력을 시간순으로 표시 |
+                TP달성일 = 일중 고가가 익절가 도달한 최초 날짜 |
+                <span style="color:#ff9100">주황색 최고가</span> = TP 미달성 시 가장 가까이 접근한 가격과 날짜 |
+                TP달성률 바 = 목표 대비 최대 도달 비율
             </p>''', unsafe_allow_html=True)
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
