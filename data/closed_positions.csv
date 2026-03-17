@@ -1,0 +1,2 @@
+strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,close_date,close_price,result_pct,result_status,tp_hit_date,max_achievement_pct
+A,SMX,2026-03-16,11.78,2026-03-16,14.0,14.7,11.2,0.05,5,OPEN,11.78,14.65,2026-03-16,11.68,2026-03-16,-15.86,93.6,1,2026-03-17,2026-03-16,11.78,-15.86,WIN,,92.9
