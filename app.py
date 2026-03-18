@@ -9,7 +9,10 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# 한국 표준시 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Surge Scanner",
@@ -128,7 +131,7 @@ def load_latest_scan():
     return None
 @st.cache_data(ttl=300)
 def load_today_signals():
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(KST).strftime('%Y-%m-%d')
     path = f"data/signal_{today}.csv"
     if os.path.exists(path):
         df = pd.read_csv(path)
@@ -165,9 +168,9 @@ if scan_info:
     )
 if tracker_info:
     header_parts.append(
-        f"추적: OPEN {tracker_info.get('open_count', 0)}건 | "
-        f"WIN {tracker_info.get('win_count', 0)}건 | "
-        f"LOSS {tracker_info.get('loss_count', 0)}건"
+        f"추적: 진행중 {tracker_info.get('open_count', 0)}건 | "
+        f"익절 {tracker_info.get('win_count', 0)}건 | "
+        f"손절 {tracker_info.get('loss_count', 0)}건"
     )
 if header_parts:
     st.caption(" | ".join(header_parts))
@@ -220,11 +223,11 @@ with tab_a:
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI7", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중%", format="%.1f%%"),
-                "ret3d": st.column_config.NumberColumn("3일%", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속↓", format="%d일"),
-                "dist_low5": st.column_config.NumberColumn("Low5%", format="%.1f%%"),
+                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                "ret3d": st.column_config.NumberColumn("3일수익률", format="%.1f%%"),
+                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
+                "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.1f%%"),
                 "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
                 "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
             },
@@ -235,7 +238,7 @@ with tab_a:
     if not history.empty and 'strategy' in history.columns:
         hist_a = history[history['strategy'] == 'A']
         if not hist_a.empty:
-            cutoff = datetime.now() - timedelta(days=30)
+            cutoff = datetime.now(KST) - timedelta(days=30)
             recent_a = hist_a[hist_a['date'] >= cutoff]
             if not recent_a.empty:
                 st.divider()
@@ -276,11 +279,11 @@ with tab_b:
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI7", format="%.1f"),
-                "rsi14": st.column_config.NumberColumn("RSI14", format="%.1f"),
-                "atr_ratio": st.column_config.NumberColumn("ATR배율", format="%.2f"),
-                "intra_pct": st.column_config.NumberColumn("일중%", format="%.1f%%"),
-                "ma20_pos": st.column_config.NumberColumn("MA20%", format="%.1f%%"),
+                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
+                "atr_ratio": st.column_config.NumberColumn("변동성배율", format="%.2f"),
+                "intra_pct": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                "ma20_pos": st.column_config.NumberColumn("20일이평괴리", format="%.1f%%"),
                 "rev_growth": st.column_config.NumberColumn("매출성장", format="%.1f%%"),
                 "tp_price": st.column_config.NumberColumn("매도가", format="$%.2f"),
                 "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
@@ -292,7 +295,7 @@ with tab_b:
     if not history.empty and 'strategy' in history.columns:
         hist_b = history[history['strategy'] == 'B']
         if not hist_b.empty:
-            cutoff = datetime.now() - timedelta(days=30)
+            cutoff = datetime.now(KST) - timedelta(days=30)
             recent_b = hist_b[hist_b['date'] >= cutoff]
             if not recent_b.empty:
                 st.divider()
@@ -334,11 +337,11 @@ with tab_c:
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI7", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중%", format="%.1f%%"),
-                "ret1d": st.column_config.NumberColumn("1일%", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속↓", format="%d일"),
-                "dist_low5": st.column_config.NumberColumn("Low5%", format="%.2f%%"),
+                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                "ret1d": st.column_config.NumberColumn("당일수익률", format="%.1f%%"),
+                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
+                "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.2f%%"),
                 "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
                 "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
             },
@@ -349,7 +352,7 @@ with tab_c:
     if not history.empty and 'strategy' in history.columns:
         hist_c = history[history['strategy'] == 'C']
         if not hist_c.empty:
-            cutoff = datetime.now() - timedelta(days=30)
+            cutoff = datetime.now(KST) - timedelta(days=30)
             recent_c = hist_c[hist_c['date'] >= cutoff]
             if not recent_c.empty:
                 st.divider()
@@ -389,9 +392,9 @@ with tab_d:
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi14": st.column_config.NumberColumn("RSI14", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중%", format="%.1f%%"),
-                "ret5d": st.column_config.NumberColumn("5일%", format="%.1f%%"),
+                "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
+                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
                 "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
                 "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
             },
@@ -402,7 +405,7 @@ with tab_d:
     if not history.empty and 'strategy' in history.columns:
         hist_d = history[history['strategy'] == 'D']
         if not hist_d.empty:
-            cutoff = datetime.now() - timedelta(days=30)
+            cutoff = datetime.now(KST) - timedelta(days=30)
             recent_d = hist_d[hist_d['date'] >= cutoff]
             if not recent_d.empty:
                 st.divider()
@@ -449,9 +452,9 @@ with tab_e:
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "ret5d": st.column_config.NumberColumn("5일%", format="%.1f%%"),
-                "intraday": st.column_config.NumberColumn("일중%", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속↓", format="%d일"),
+                "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
+                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
                 "vol_avg": st.column_config.NumberColumn("평균거래량", format="%d"),
                 "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
                 "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
@@ -463,7 +466,7 @@ with tab_e:
     if not history.empty and 'strategy' in history.columns:
         hist_e = history[history['strategy'] == 'E']
         if not hist_e.empty:
-            cutoff = datetime.now() - timedelta(days=30)
+            cutoff = datetime.now(KST) - timedelta(days=30)
             recent_e = hist_e[hist_e['date'] >= cutoff]
             if not recent_e.empty:
                 st.divider()
@@ -790,7 +793,8 @@ with tab_history:
                 html += f'<td>{ach_html}</td>'
                 html += f'<td>{tp_remain_html}</td>'
                 html += f'<td>{days_html}</td>'
-                html += f'<td class="{status_class}">{status}</td>'
+                status_kr = '진행중' if status == 'OPEN' else '대기중' if status == 'PENDING' else status
+                html += f'<td class="{status_class}">{status_kr}</td>'
                 html += f'</tr>'
 
             html += '</tbody></table>'
@@ -832,11 +836,11 @@ with tab_history:
 
                 # 결과 색상
                 if result == 'WIN':
-                    result_html = '<span class="status-win">WIN</span>'
+                    result_html = '<span class="status-win">익절 성공</span>'
                 elif result == 'LOSS':
-                    result_html = '<span class="status-loss">LOSS</span>'
+                    result_html = '<span class="status-loss">손절</span>'
                 elif result == 'EXPIRED':
-                    result_html = '<span class="status-expired">EXPIRED</span>'
+                    result_html = '<span class="status-expired">기간초과</span>'
                 else:
                     result_html = result
 
@@ -989,11 +993,11 @@ with tab_history:
                 # 요약 바
                 summary_parts = []
                 if n_win > 0:
-                    summary_parts.append(f'<span class="status-win">{n_win}W</span>')
+                    summary_parts.append(f'<span class="status-win">{n_win}익절</span>')
                 if n_loss > 0:
-                    summary_parts.append(f'<span class="status-loss">{n_loss}L</span>')
+                    summary_parts.append(f'<span class="status-loss">{n_loss}손절</span>')
                 if n_exp > 0:
-                    summary_parts.append(f'<span class="status-expired">{n_exp}E</span>')
+                    summary_parts.append(f'<span class="status-expired">{n_exp}만기</span>')
                 if n_active > 0:
                     summary_parts.append(f'<span class="status-open">{n_active} 진행</span>')
                 summary_str = ' / '.join(summary_parts) if summary_parts else '—'
@@ -1035,15 +1039,15 @@ with tab_history:
 
                     # 결과 뱃지
                     if result == 'WIN':
-                        res_html = '<span class="status-win">WIN</span>'
+                        res_html = '<span class="status-win">익절 성공</span>'
                     elif result == 'LOSS':
-                        res_html = '<span class="status-loss">LOSS</span>'
+                        res_html = '<span class="status-loss">손절</span>'
                     elif result == 'EXPIRED':
-                        res_html = '<span class="status-expired">EXPIRED</span>'
+                        res_html = '<span class="status-expired">기간초과</span>'
                     elif result == 'OPEN':
-                        res_html = '<span class="status-open">OPEN</span>'
+                        res_html = '<span class="status-open">진행중</span>'
                     elif result == 'PENDING':
-                        res_html = '<span class="status-pending">PENDING</span>'
+                        res_html = '<span class="status-pending">대기중</span>'
                     else:
                         res_html = result
 
