@@ -243,8 +243,22 @@ with tab_a:
             if not recent_a.empty:
                 st.divider()
                 st.subheader("최근 30일 신호")
-                st.dataframe(recent_a.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+                show_a = recent_a.sort_values('date', ascending=False).reset_index(drop=True)
+                show_a['date'] = show_a['date'].dt.strftime('%Y-%m-%d')
+                display_cols = [c for c in ['date','ticker','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'] if c in show_a.columns]
+                st.dataframe(show_a[display_cols], use_container_width=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("신호일"),
+                        "ticker": st.column_config.TextColumn("종목"),
+                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                        "ret3d": st.column_config.NumberColumn("3일수익률", format="%.1f%%"),
+                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
+                        "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.1f%%"),
+                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
+                    })
 # ─── Tab: Strategy B ─────────────────────────────────────────────────────────
 with tab_b:
     st.subheader("🔵 전략 B — 고수익 폭락 반등 (+15% / 10일)")
@@ -300,8 +314,23 @@ with tab_b:
             if not recent_b.empty:
                 st.divider()
                 st.subheader("최근 30일 신호")
-                st.dataframe(recent_b.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+                show_b = recent_b.sort_values('date', ascending=False).reset_index(drop=True)
+                show_b['date'] = show_b['date'].dt.strftime('%Y-%m-%d')
+                display_cols = [c for c in ['date','ticker','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'] if c in show_b.columns]
+                st.dataframe(show_b[display_cols], use_container_width=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("신호일"),
+                        "ticker": st.column_config.TextColumn("종목"),
+                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                        "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
+                        "atr_ratio": st.column_config.NumberColumn("변동성배율", format="%.2f"),
+                        "intra_pct": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                        "ma20_pos": st.column_config.NumberColumn("20일이평괴리", format="%.1f%%"),
+                        "rev_growth": st.column_config.NumberColumn("매출성장", format="%.1f%%"),
+                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
+                    })
 # ─── Tab: Strategy C ─────────────────────────────────────────────────────────
 with tab_c:
     st.subheader("🟠 전략 C — 과매도 급락 반등 (+5% / 5일)")
@@ -357,8 +386,22 @@ with tab_c:
             if not recent_c.empty:
                 st.divider()
                 st.subheader("최근 30일 신호")
-                st.dataframe(recent_c.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+                show_c = recent_c.sort_values('date', ascending=False).reset_index(drop=True)
+                show_c['date'] = show_c['date'].dt.strftime('%Y-%m-%d')
+                display_cols = [c for c in ['date','ticker','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'] if c in show_c.columns]
+                st.dataframe(show_c[display_cols], use_container_width=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("신호일"),
+                        "ticker": st.column_config.TextColumn("종목"),
+                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
+                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                        "ret1d": st.column_config.NumberColumn("당일수익률", format="%.1f%%"),
+                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
+                        "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.2f%%"),
+                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
+                    })
 # ─── Tab: Strategy D ─────────────────────────────────────────────────────────
 with tab_d:
     st.subheader("🔴 전략 D — 초저가 폭락 반등 (+20% / 30일)")
@@ -410,8 +453,20 @@ with tab_d:
             if not recent_d.empty:
                 st.divider()
                 st.subheader("최근 30일 신호")
-                st.dataframe(recent_d.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+                show_d = recent_d.sort_values('date', ascending=False).reset_index(drop=True)
+                show_d['date'] = show_d['date'].dt.strftime('%Y-%m-%d')
+                display_cols = [c for c in ['date','ticker','price','rsi14','intraday','ret5d','tp_price','hold_days'] if c in show_d.columns]
+                st.dataframe(show_d[display_cols], use_container_width=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("신호일"),
+                        "ticker": st.column_config.TextColumn("종목"),
+                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                        "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
+                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                        "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
+                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                        "hold_days": st.column_config.NumberColumn("최대보유일", format="%d일"),
+                    })
 # ─── Tab: Strategy E ─────────────────────────────────────────────────────────
 with tab_e:
     st.subheader("🟣 전략 E — 급락 속반등 (+10% / 최대 30일)")
@@ -471,8 +526,21 @@ with tab_e:
             if not recent_e.empty:
                 st.divider()
                 st.subheader("최근 30일 신호")
-                st.dataframe(recent_e.sort_values('date', ascending=False).reset_index(drop=True),
-                           use_container_width=True)
+                show_e = recent_e.sort_values('date', ascending=False).reset_index(drop=True)
+                show_e['date'] = show_e['date'].dt.strftime('%Y-%m-%d')
+                display_cols = [c for c in ['date','ticker','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'] if c in show_e.columns]
+                st.dataframe(show_e[display_cols], use_container_width=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("신호일"),
+                        "ticker": st.column_config.TextColumn("종목"),
+                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
+                        "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
+                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
+                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
+                        "vol_avg": st.column_config.NumberColumn("평균거래량", format="%d"),
+                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
+                        "hold_days": st.column_config.NumberColumn("최대보유일", format="%d일"),
+                    })
 # ─── Data Loading: Positions ─────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_open_positions():
