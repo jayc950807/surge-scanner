@@ -47,9 +47,12 @@ import warnings
 import os
 import json
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 warnings.filterwarnings('ignore')
+
+# 한국 표준시 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -391,7 +394,7 @@ def phase2_check_all(candidates, strat_str):
                             signals_a.append({
                                 'strategy': 'A',
                                 'ticker': tk,
-                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -444,7 +447,7 @@ def phase2_check_all(candidates, strat_str):
                                             signals_b.append({
                                                 'strategy': 'B',
                                                 'ticker': tk,
-                                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
                                                 'price': round(c_last, 2),
                                                 'rsi7': round(rsi7_val, 1),
                                                 'rsi14': round(rsi14_val, 1),
@@ -479,7 +482,7 @@ def phase2_check_all(candidates, strat_str):
                             signals_c.append({
                                 'strategy': 'C',
                                 'ticker': tk,
-                                'date': datetime.now().strftime('%Y-%m-%d'),
+                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -507,7 +510,7 @@ def phase2_check_all(candidates, strat_str):
                                 signals_d.append({
                                     'strategy': 'D',
                                     'ticker': tk,
-                                    'date': datetime.now().strftime('%Y-%m-%d'),
+                                    'date': datetime.now(KST).strftime('%Y-%m-%d'),
                                     'price': round(c_last, 2),
                                     'rsi14': round(rsi14_val, 1),
                                     'intraday': round(intra * 100, 1),
@@ -540,7 +543,7 @@ def phase2_check_all(candidates, strat_str):
                                     signals_e.append({
                                         'strategy': 'E',
                                         'ticker': tk,
-                                        'date': datetime.now().strftime('%Y-%m-%d'),
+                                        'date': datetime.now(KST).strftime('%Y-%m-%d'),
                                         'price': round(c_last, 2),
                                         'ret5d': round(ret5d_e * 100, 1),
                                         'intraday': round(intra * 100, 1),
@@ -571,7 +574,7 @@ def phase2_check_all(candidates, strat_str):
 
 def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """결과 출력"""
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    date_str = datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy A
     print(f"\n{'='*90}")
@@ -681,7 +684,7 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
 def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    date_str = datetime.now(KST).strftime('%Y-%m-%d')
     all_signals = signals_a + signals_b + signals_c + signals_d + signals_e
 
     # 오늘자 신호 파일
@@ -711,7 +714,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     # JSON summary (Streamlit용)
     summary = {
         'scan_date': date_str,
-        'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'scan_time': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'),
         'strategy_a_count': len(signals_a),
         'strategy_b_count': len(signals_b),
         'strategy_c_count': len(signals_c),
@@ -734,7 +737,7 @@ def main():
     args = parser.parse_args()
 
     t0 = time.time()
-    date_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    date_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M')
     strat_str = args.strategy
 
     print("=" * 80)
