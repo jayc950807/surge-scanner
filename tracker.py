@@ -24,7 +24,10 @@ import os
 import json
 import argparse
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# 한국 표준시 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -170,7 +173,7 @@ def fetch_current_prices(tickers):
 
 def register_new_signals():
     """오늘자 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가"""
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(KST).strftime('%Y-%m-%d')
     signal_path = os.path.join(DATA_DIR, f'signal_{today}.csv')
 
     if not os.path.exists(signal_path):
@@ -259,7 +262,7 @@ def activate_pending_positions():
         print("  대기 중인 PENDING 포지션 없음")
         return
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(KST).strftime('%Y-%m-%d')
     updated = 0
 
     for idx, row in pending.iterrows():
@@ -319,7 +322,7 @@ def update_open_positions():
         print("  업데이트할 OPEN 포지션 없음")
         return
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(KST).strftime('%Y-%m-%d')
     tickers = active['ticker'].unique().tolist()
 
     print(f"  현재가 조회: {len(tickers)}개 티커")
@@ -477,7 +480,7 @@ def generate_tracker_summary():
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
     summary = {
-        'last_tracked': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'last_tracked': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'),
         'open_count': len(open_pos[open_pos['status'] == 'OPEN']) if not open_pos.empty else 0,
         'pending_count': len(open_pos[open_pos['status'] == 'PENDING']) if not open_pos.empty else 0,
         'closed_count': len(closed_pos) if not closed_pos.empty else 0,
@@ -549,7 +552,7 @@ def init_from_history():
         new_row['max_hold'] = str(config.get('max_hold', 5))
         new_row['status'] = 'PENDING'
         new_row['days_held'] = '0'
-        new_row['last_updated'] = datetime.now().strftime('%Y-%m-%d')
+        new_row['last_updated'] = datetime.now(KST).strftime('%Y-%m-%d')
 
         open_pos = pd.concat([open_pos, pd.DataFrame([new_row])], ignore_index=True)
         new_count += 1
@@ -568,7 +571,7 @@ def main():
     t0 = time.time()
     print("=" * 70)
     print("  Position Tracker — Update")
-    print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Time: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
     if args.init:
