@@ -238,7 +238,7 @@ with tab_a:
     if not history.empty and 'strategy' in history.columns:
         hist_a = history[history['strategy'] == 'A']
         if not hist_a.empty:
-            cutoff = datetime.now(KST) - timedelta(days=30)
+            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
             recent_a = hist_a[hist_a['date'] >= cutoff]
             if not recent_a.empty:
                 st.divider()
@@ -295,7 +295,7 @@ with tab_b:
     if not history.empty and 'strategy' in history.columns:
         hist_b = history[history['strategy'] == 'B']
         if not hist_b.empty:
-            cutoff = datetime.now(KST) - timedelta(days=30)
+            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
             recent_b = hist_b[hist_b['date'] >= cutoff]
             if not recent_b.empty:
                 st.divider()
@@ -352,7 +352,7 @@ with tab_c:
     if not history.empty and 'strategy' in history.columns:
         hist_c = history[history['strategy'] == 'C']
         if not hist_c.empty:
-            cutoff = datetime.now(KST) - timedelta(days=30)
+            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
             recent_c = hist_c[hist_c['date'] >= cutoff]
             if not recent_c.empty:
                 st.divider()
@@ -405,7 +405,7 @@ with tab_d:
     if not history.empty and 'strategy' in history.columns:
         hist_d = history[history['strategy'] == 'D']
         if not hist_d.empty:
-            cutoff = datetime.now(KST) - timedelta(days=30)
+            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
             recent_d = hist_d[hist_d['date'] >= cutoff]
             if not recent_d.empty:
                 st.divider()
@@ -466,7 +466,7 @@ with tab_e:
     if not history.empty and 'strategy' in history.columns:
         hist_e = history[history['strategy'] == 'E']
         if not hist_e.empty:
-            cutoff = datetime.now(KST) - timedelta(days=30)
+            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
             recent_e = hist_e[hist_e['date'] >= cutoff]
             if not recent_e.empty:
                 st.divider()
