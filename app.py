@@ -21,38 +21,39 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main .block-container { padding-top: 1rem; max-width: 1400px; }
-    .stMetric > div { background: #f8f9fa; border-radius: 8px; padding: 12px; }
+    .stMetric > div { background: #1e1e2e; border-radius: 8px; padding: 12px; }
     .no-signal {
         text-align: center; padding: 40px; color: #888;
-        font-size: 1.1em; background: #f8f9fa; border-radius: 12px;
+        font-size: 1.1em; background: #1a1a2e; border-radius: 12px;
     }
     /* ── 히스토리 매트릭스 테이블 ── */
     .matrix-table {
         width: 100%; border-collapse: collapse; font-size: 0.88em;
-        background: #ffffff; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        background: #0e1117; border-radius: 8px; overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
     .matrix-table th {
         background: #1a1a2e; color: #e0e0e0; padding: 10px 14px;
         text-align: center; font-weight: 600; font-size: 0.85em;
-        border-bottom: 2px solid #16213e;
+        border-bottom: 2px solid #2a2a4e;
     }
     .matrix-table th.strat-col {
         background: #16213e; text-align: left; width: 80px;
     }
     .matrix-table td {
-        padding: 10px 14px; text-align: center; border-bottom: 1px solid #f0f0f0;
+        padding: 10px 14px; text-align: center; border-bottom: 1px solid #1e2030;
         font-weight: 500; font-variant-numeric: tabular-nums;
+        color: #d0d0d0;
     }
-    .matrix-table tr:hover td { background: #f8f9ff; }
+    .matrix-table tr:hover td { background: #1a1a30; }
     .matrix-table .strat-label {
-        font-weight: 700; text-align: left; background: #fafbfc;
+        font-weight: 700; text-align: left; background: #12121e; color: #e0e0e0;
     }
     /* 셀 색상 */
-    .cell-win { color: #00a86b; font-weight: 700; }
-    .cell-none { color: #ccc; }
-    .cell-partial { color: #e67e22; font-weight: 600; }
-    .cell-zero { color: #bbb; }
+    .cell-win { color: #00e676; font-weight: 700; }
+    .cell-none { color: #555; }
+    .cell-partial { color: #ffab40; font-weight: 600; }
+    .cell-zero { color: #666; }
     /* 전략 뱃지 */
     .strat-badge {
         display: inline-block; padding: 2px 10px; border-radius: 12px;
@@ -65,33 +66,55 @@ st.markdown("""
     .summary-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         border-radius: 12px; padding: 20px; color: #fff; text-align: center;
+        border: 1px solid #2a2a4e;
     }
     .summary-card .value { font-size: 2em; font-weight: 800; line-height: 1.2; }
     .summary-card .label { font-size: 0.82em; color: #a0a0c0; margin-top: 4px; }
     /* 포지션 테이블 */
     .pos-table {
         width: 100%; border-collapse: collapse; font-size: 0.88em;
-        background: #ffffff; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        background: #0e1117; border-radius: 8px; overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
     .pos-table th {
         background: #1a1a2e; color: #e0e0e0; padding: 10px 12px;
         text-align: left; font-weight: 600; font-size: 0.82em;
     }
     .pos-table td {
-        padding: 10px 12px; border-bottom: 1px solid #f0f0f0;
-        font-weight: 500;
+        padding: 10px 12px; border-bottom: 1px solid #1e2030;
+        font-weight: 500; color: #d0d0d0;
     }
-    .pos-table tr:hover td { background: #f8f9ff; }
+    .pos-table tr:hover td { background: #1a1a30; }
     .status-pending { color: #9e9e9e; font-weight: 600; }
-    .status-open { color: #2979ff; font-weight: 700; }
-    .status-win { color: #00c853; font-weight: 700; }
-    .status-loss { color: #ff1744; font-weight: 700; }
-    .status-expired { color: #ff9100; font-weight: 700; }
-    .price-none { color: #ccc; font-style: italic; }
+    .status-open { color: #42a5f5; font-weight: 700; }
+    .status-win { color: #00e676; font-weight: 700; }
+    .status-loss { color: #ff5252; font-weight: 700; }
+    .status-expired { color: #ffab40; font-weight: 700; }
+    .price-none { color: #555; font-style: italic; }
+    /* 티커별 카드 */
+    .ticker-card {
+        background: #12121e; border: 1px solid #2a2a4e; border-radius: 10px;
+        padding: 16px; margin-bottom: 12px;
+    }
+    .ticker-card-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #1e2030;
+    }
+    .ticker-name { font-size: 1.2em; font-weight: 800; color: #ffffff; }
+    .ticker-summary { font-size: 0.85em; color: #a0a0c0; }
+    /* 진행바 (달성률) */
+    .achievement-bar {
+        height: 10px; border-radius: 5px; background: #1e2030; overflow: hidden;
+        display: inline-block; width: 80px; vertical-align: middle;
+    }
+    .achievement-fill { height: 100%; border-radius: 5px; }
+    .achievement-text { font-size: 0.82em; font-weight: 700; margin-left: 6px; }
+    /* 히스토리 설명 텍스트 */
+    .history-desc { color: #a0a0c0; font-size: 0.85em; margin-bottom: 12px; }
     @media (max-width: 768px) {
         .main .block-container { padding: 0.5rem; }
         .matrix-table th, .matrix-table td { padding: 6px 8px; font-size: 0.8em; }
+        .pos-table th, .pos-table td { padding: 6px 8px; font-size: 0.8em; }
     }
 </style>
 """, unsafe_allow_html=True)
