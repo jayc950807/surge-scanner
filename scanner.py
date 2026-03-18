@@ -54,6 +54,63 @@ warnings.filterwarnings('ignore')
 # 한국 표준시 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
 
+# ─── yfinance 데이터 갱신 대기 ────────────────────────────────────────────────
+
+def wait_for_market_data(max_retries=3, retry_interval=120):
+    """
+    yfinance 종가 데이터가 당일 거래일로 업데이트될 때까지 대기.
+    SPY를 기준으로 최신 거래일 확인 후, 오늘 날짜와 일치하면 진행.
+    최대 3회 × 2분 = 6분 대기. (애프터/프리마켓 대응을 위해 최대한 빠르게)
+    주말/휴일이면 즉시 진행 (기대 거래일 자체가 과거).
+    """
+    print(f"\n{'='*80}")
+    print(f"  [사전 검증] yfinance 종가 데이터 갱신 확인")
+    print(f"{'='*80}")
+
+    today_utc = datetime.now(timezone.utc).date()
+    weekday = today_utc.weekday()  # 0=Mon ... 6=Sun
+
+    # 오늘이 주말이면 마지막 금요일이 기대 거래일
+    if weekday == 5:  # 토요일
+        expected_date = today_utc - timedelta(days=1)
+    elif weekday == 6:  # 일요일
+        expected_date = today_utc - timedelta(days=2)
+    else:
+        expected_date = today_utc
+
+    print(f"  UTC 날짜: {today_utc} ({['월','화','수','목','금','토','일'][weekday]})")
+    print(f"  기대 거래일: {expected_date}")
+
+    for attempt in range(max_retries):
+        try:
+            spy = yf.download('SPY', period='5d', progress=False)
+            if spy is not None and not spy.empty:
+                # MultiIndex 처리
+                if isinstance(spy.columns, pd.MultiIndex):
+                    spy = spy.droplevel('Ticker', axis=1)
+                latest_date = spy.index[-1].date()
+
+                if latest_date >= expected_date:
+                    print(f"  ✓ 최신 종가 확인 완료 (SPY 최신 거래일: {latest_date})")
+                    return latest_date
+
+                if attempt < max_retries - 1:
+                    wait_min = retry_interval // 60
+                    print(f"  ⏳ [{attempt+1}/{max_retries}] SPY 최신: {latest_date} → "
+                          f"기대: {expected_date} | {wait_min}분 후 재확인...")
+                    time.sleep(retry_interval)
+                else:
+                    print(f"  ⚠ {max_retries}회 재시도 후에도 미갱신.")
+                    print(f"    최신 데이터({latest_date})로 진행합니다.")
+                    return latest_date
+        except Exception as e:
+            print(f"  ⚠ SPY 데이터 확인 실패: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_interval)
+
+    print(f"  ⚠ 데이터 확인 불가. 스캔을 진행합니다.")
+    return None
+
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 # === Strategy A thresholds (+5%) ===
@@ -358,6 +415,7 @@ def phase2_check_all(candidates, strat_str):
                 h_last = float(high.iloc[-1])
                 l_last = float(low.iloc[-1])
                 o_last = float(opn.iloc[-1])
+                trade_date = df.index[-1].strftime('%Y-%m-%d')  # 실제 미국 거래일
 
                 if o_last <= 0 or c_last < MIN_PRICE:
                     continue
@@ -394,7 +452,7 @@ def phase2_check_all(candidates, strat_str):
                             signals_a.append({
                                 'strategy': 'A',
                                 'ticker': tk,
-                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
+                                'date': trade_date,
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -447,7 +505,7 @@ def phase2_check_all(candidates, strat_str):
                                             signals_b.append({
                                                 'strategy': 'B',
                                                 'ticker': tk,
-                                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
+                                                'date': trade_date,
                                                 'price': round(c_last, 2),
                                                 'rsi7': round(rsi7_val, 1),
                                                 'rsi14': round(rsi14_val, 1),
@@ -482,7 +540,7 @@ def phase2_check_all(candidates, strat_str):
                             signals_c.append({
                                 'strategy': 'C',
                                 'ticker': tk,
-                                'date': datetime.now(KST).strftime('%Y-%m-%d'),
+                                'date': trade_date,
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -510,7 +568,7 @@ def phase2_check_all(candidates, strat_str):
                                 signals_d.append({
                                     'strategy': 'D',
                                     'ticker': tk,
-                                    'date': datetime.now(KST).strftime('%Y-%m-%d'),
+                                    'date': trade_date,
                                     'price': round(c_last, 2),
                                     'rsi14': round(rsi14_val, 1),
                                     'intraday': round(intra * 100, 1),
@@ -543,7 +601,7 @@ def phase2_check_all(candidates, strat_str):
                                     signals_e.append({
                                         'strategy': 'E',
                                         'ticker': tk,
-                                        'date': datetime.now(KST).strftime('%Y-%m-%d'),
+                                        'date': trade_date,
                                         'price': round(c_last, 2),
                                         'ret5d': round(ret5d_e * 100, 1),
                                         'intraday': round(intra * 100, 1),
@@ -574,7 +632,8 @@ def phase2_check_all(candidates, strat_str):
 
 def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """결과 출력"""
-    date_str = datetime.now(KST).strftime('%Y-%m-%d')
+    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e
+    date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy A
     print(f"\n{'='*90}")
@@ -684,8 +743,13 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
 def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
-    date_str = datetime.now(KST).strftime('%Y-%m-%d')
     all_signals = signals_a + signals_b + signals_c + signals_d + signals_e
+
+    # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
+    if all_signals:
+        date_str = all_signals[0]['date']
+    else:
+        date_str = datetime.now(KST).strftime('%Y-%m-%d')
 
     # 오늘자 신호 파일
     daily_path = f"data/signal_{date_str}.csv"
@@ -714,7 +778,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
     # JSON summary (Streamlit용)
     summary = {
         'scan_date': date_str,
-        'scan_time': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'),
+        'scan_time': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S KST'),
         'strategy_a_count': len(signals_a),
         'strategy_b_count': len(signals_b),
         'strategy_c_count': len(signals_c),
@@ -745,6 +809,11 @@ def main():
     print(f"  Strategy: {strat_str}")
     print(f"  Scan Time: {date_str}")
     print("=" * 80)
+
+    # [0] yfinance 데이터 갱신 대기
+    confirmed_date = wait_for_market_data(max_retries=3, retry_interval=120)
+    if confirmed_date:
+        print(f"\n  확인된 거래일: {confirmed_date}")
 
     # [1] 종목 수집
     print("\n[1] 종목 수집 중...")
