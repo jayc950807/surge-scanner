@@ -1,3 +1,4 @@
-strategy,ticker,date,price,rsi14,intraday,ret5d,tp_price,hold_days,consec_down,vol_avg
-D,ALDX,2026-03-18,1.24,17.6,39.3,-75.2,1.49,30,,
-E,NCI,2026-03-18,5.19,,23.9,-56.7,5.71,30,5.0,2031447.0
+strategy,ticker,date,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg
+A,SMX,2026-03-18,8.86,11.9,21.8,-38.9,10.0,3.8,9.31,7.09,,,,
+D,ALDX,2026-03-18,1.38,,33.6,,,,1.66,,19.8,-72.0,30.0,
+E,SMX,2026-03-18,8.86,,21.8,,10.0,,9.75,,,-60.2,30.0,293781.0
