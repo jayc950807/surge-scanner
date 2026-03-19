@@ -131,10 +131,11 @@ def load_latest_scan():
     return None
 @st.cache_data(ttl=300)
 def load_today_signals():
-    today = datetime.now(KST).strftime('%Y-%m-%d')
-    path = f"data/signal_{today}.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path)
+    # 가장 최근 signal 파일 찾기 (거래일 기준 파일명)
+    import glob
+    files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
+    if files:
+        df = pd.read_csv(files[0])
         return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
 @st.cache_data(ttl=300)
@@ -214,7 +215,7 @@ with tab_a:
         sig_a = pd.DataFrame()
     if not sig_a.empty:
         st.success(f"오늘 신호: {len(sig_a)}건")
-        display_cols_a = ['ticker', 'price', 'rsi7', 'intraday', 'ret3d',
+        display_cols_a = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'intraday', 'ret3d',
                          'consec_down', 'dist_low5', 'tp_price', 'sl_price']
         available_cols = [c for c in display_cols_a if c in sig_a.columns]
         st.dataframe(
@@ -222,6 +223,8 @@ with tab_a:
             use_container_width=True,
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
+                "date": st.column_config.TextColumn("거래일"),
+                "scan_time": st.column_config.TextColumn("스캔시각"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                 "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
                 "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
@@ -245,10 +248,11 @@ with tab_a:
                 st.subheader("최근 30일 신호")
                 show_a = recent_a.sort_values('date', ascending=False).reset_index(drop=True)
                 show_a['date'] = show_a['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','ticker','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'] if c in show_a.columns]
+                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'] if c in show_a.columns]
                 st.dataframe(show_a[display_cols], use_container_width=True,
                     column_config={
-                        "date": st.column_config.TextColumn("신호일"),
+                        "date": st.column_config.TextColumn("거래일"),
+                        "scan_time": st.column_config.TextColumn("스캔시각"),
                         "ticker": st.column_config.TextColumn("종목"),
                         "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                         "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
@@ -284,7 +288,7 @@ with tab_b:
         sig_b = pd.DataFrame()
     if not sig_b.empty:
         st.success(f"오늘 신호: {len(sig_b)}건")
-        display_cols_b = ['ticker', 'price', 'rsi7', 'rsi14', 'atr_ratio',
+        display_cols_b = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'rsi14', 'atr_ratio',
                          'intra_pct', 'ma20_pos', 'rev_growth', 'tp_price', 'sl_price']
         available_cols = [c for c in display_cols_b if c in sig_b.columns]
         st.dataframe(
@@ -292,6 +296,8 @@ with tab_b:
             use_container_width=True,
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
+                "date": st.column_config.TextColumn("거래일"),
+                "scan_time": st.column_config.TextColumn("스캔시각"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                 "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
                 "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
@@ -316,10 +322,11 @@ with tab_b:
                 st.subheader("최근 30일 신호")
                 show_b = recent_b.sort_values('date', ascending=False).reset_index(drop=True)
                 show_b['date'] = show_b['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','ticker','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'] if c in show_b.columns]
+                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'] if c in show_b.columns]
                 st.dataframe(show_b[display_cols], use_container_width=True,
                     column_config={
-                        "date": st.column_config.TextColumn("신호일"),
+                        "date": st.column_config.TextColumn("거래일"),
+                        "scan_time": st.column_config.TextColumn("스캔시각"),
                         "ticker": st.column_config.TextColumn("종목"),
                         "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                         "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
@@ -357,7 +364,7 @@ with tab_c:
         sig_c = pd.DataFrame()
     if not sig_c.empty:
         st.success(f"오늘 신호: {len(sig_c)}건")
-        display_cols_c = ['ticker', 'price', 'rsi7', 'intraday', 'ret1d',
+        display_cols_c = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'intraday', 'ret1d',
                          'consec_down', 'dist_low5', 'tp_price', 'sl_price']
         available_cols = [c for c in display_cols_c if c in sig_c.columns]
         st.dataframe(
@@ -365,6 +372,8 @@ with tab_c:
             use_container_width=True,
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
+                "date": st.column_config.TextColumn("거래일"),
+                "scan_time": st.column_config.TextColumn("스캔시각"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                 "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
                 "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
@@ -388,10 +397,11 @@ with tab_c:
                 st.subheader("최근 30일 신호")
                 show_c = recent_c.sort_values('date', ascending=False).reset_index(drop=True)
                 show_c['date'] = show_c['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','ticker','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'] if c in show_c.columns]
+                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'] if c in show_c.columns]
                 st.dataframe(show_c[display_cols], use_container_width=True,
                     column_config={
-                        "date": st.column_config.TextColumn("신호일"),
+                        "date": st.column_config.TextColumn("거래일"),
+                        "scan_time": st.column_config.TextColumn("스캔시각"),
                         "ticker": st.column_config.TextColumn("종목"),
                         "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                         "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
@@ -426,7 +436,7 @@ with tab_d:
         sig_d = pd.DataFrame()
     if not sig_d.empty:
         st.success(f"오늘 신호: {len(sig_d)}건")
-        display_cols_d = ['ticker', 'price', 'rsi14', 'intraday', 'ret5d',
+        display_cols_d = ['ticker', 'date', 'scan_time', 'price', 'rsi14', 'intraday', 'ret5d',
                          'tp_price', 'hold_days']
         available_cols = [c for c in display_cols_d if c in sig_d.columns]
         st.dataframe(
@@ -434,6 +444,8 @@ with tab_d:
             use_container_width=True,
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
+                "date": st.column_config.TextColumn("거래일"),
+                "scan_time": st.column_config.TextColumn("스캔시각"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                 "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
                 "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
@@ -455,10 +467,11 @@ with tab_d:
                 st.subheader("최근 30일 신호")
                 show_d = recent_d.sort_values('date', ascending=False).reset_index(drop=True)
                 show_d['date'] = show_d['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','ticker','price','rsi14','intraday','ret5d','tp_price','hold_days'] if c in show_d.columns]
+                display_cols = [c for c in ['date','scan_time','ticker','price','rsi14','intraday','ret5d','tp_price','hold_days'] if c in show_d.columns]
                 st.dataframe(show_d[display_cols], use_container_width=True,
                     column_config={
-                        "date": st.column_config.TextColumn("신호일"),
+                        "date": st.column_config.TextColumn("거래일"),
+                        "scan_time": st.column_config.TextColumn("스캔시각"),
                         "ticker": st.column_config.TextColumn("종목"),
                         "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                         "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
@@ -498,7 +511,7 @@ with tab_e:
         sig_e = pd.DataFrame()
     if not sig_e.empty:
         st.success(f"오늘 신호: {len(sig_e)}건")
-        display_cols_e = ['ticker', 'price', 'ret5d', 'intraday', 'consec_down',
+        display_cols_e = ['ticker', 'date', 'scan_time', 'price', 'ret5d', 'intraday', 'consec_down',
                          'vol_avg', 'tp_price', 'hold_days']
         available_cols = [c for c in display_cols_e if c in sig_e.columns]
         st.dataframe(
@@ -506,6 +519,8 @@ with tab_e:
             use_container_width=True,
             column_config={
                 "ticker": st.column_config.TextColumn("종목", width="small"),
+                "date": st.column_config.TextColumn("거래일"),
+                "scan_time": st.column_config.TextColumn("스캔시각"),
                 "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                 "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
                 "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
@@ -528,10 +543,11 @@ with tab_e:
                 st.subheader("최근 30일 신호")
                 show_e = recent_e.sort_values('date', ascending=False).reset_index(drop=True)
                 show_e['date'] = show_e['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','ticker','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'] if c in show_e.columns]
+                display_cols = [c for c in ['date','scan_time','ticker','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'] if c in show_e.columns]
                 st.dataframe(show_e[display_cols], use_container_width=True,
                     column_config={
-                        "date": st.column_config.TextColumn("신호일"),
+                        "date": st.column_config.TextColumn("거래일"),
+                        "scan_time": st.column_config.TextColumn("스캔시각"),
                         "ticker": st.column_config.TextColumn("종목"),
                         "price": st.column_config.NumberColumn("종가", format="$%.2f"),
                         "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
