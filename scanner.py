@@ -371,6 +371,8 @@ def phase2_check_all(candidates, strat_str):
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
 
+    scan_time_kst = datetime.now(KST).strftime('%H:%M KST')
+
     signals_a = []
     signals_b = []
     signals_c = []
@@ -453,6 +455,7 @@ def phase2_check_all(candidates, strat_str):
                                 'strategy': 'A',
                                 'ticker': tk,
                                 'date': trade_date,
+                                'scan_time': scan_time_kst,
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -506,6 +509,7 @@ def phase2_check_all(candidates, strat_str):
                                                 'strategy': 'B',
                                                 'ticker': tk,
                                                 'date': trade_date,
+                                                'scan_time': scan_time_kst,
                                                 'price': round(c_last, 2),
                                                 'rsi7': round(rsi7_val, 1),
                                                 'rsi14': round(rsi14_val, 1),
@@ -541,6 +545,7 @@ def phase2_check_all(candidates, strat_str):
                                 'strategy': 'C',
                                 'ticker': tk,
                                 'date': trade_date,
+                                'scan_time': scan_time_kst,
                                 'price': round(c_last, 2),
                                 'rsi7': round(rsi7_val, 1),
                                 'intraday': round(intra * 100, 1),
@@ -569,6 +574,7 @@ def phase2_check_all(candidates, strat_str):
                                     'strategy': 'D',
                                     'ticker': tk,
                                     'date': trade_date,
+                                    'scan_time': scan_time_kst,
                                     'price': round(c_last, 2),
                                     'rsi14': round(rsi14_val, 1),
                                     'intraday': round(intra * 100, 1),
@@ -602,6 +608,7 @@ def phase2_check_all(candidates, strat_str):
                                         'strategy': 'E',
                                         'ticker': tk,
                                         'date': trade_date,
+                                        'scan_time': scan_time_kst,
                                         'price': round(c_last, 2),
                                         'ret5d': round(ret5d_e * 100, 1),
                                         'intraday': round(intra * 100, 1),
