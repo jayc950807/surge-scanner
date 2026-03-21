@@ -94,6 +94,7 @@ st.markdown("""
     .status-loss { color: #ff5252; font-weight: 700; }
     .status-expired { color: #ffab40; font-weight: 700; }
     .price-none { color: #555; font-style: italic; }
+    .pending-fill { color: #7a7a8a; font-style: italic; }
     /* 티커별 카드 */
     .ticker-card {
         background: #12121e; border: 1px solid #2a2a4e; border-radius: 10px;
@@ -577,6 +578,7 @@ def load_closed_positions():
 STRAT_NAMES = {'A': '급락반등 +5%', 'B': '고수익 +15%', 'C': '과매도 +5%', 'D': '초저가 +20%', 'E': '속반등 +10%'}
 STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%'}
 STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%'}
+STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30}
 
 def safe_str(val, fallback='—'):
     if val is None or str(val).strip() in ('', 'nan', 'None', 'NaN'):
@@ -664,8 +666,8 @@ with tab_history:
     st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
 
     # ── 서브 탭 ──
-    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker = st.tabs([
-        "📅 일별 성적", "📆 월별 성적", "🏆 전략별 승률", "🟡 진행중 포지션", "📋 청산 내역", "🔍 티커별"
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl = st.tabs([
+        "📅 일별 성적", "📆 월별 성적", "🏆 전략별 승률", "🟡 진행중 포지션", "📋 청산 내역", "🔍 티커별", "📈 누적 손익"
     ])
 
     # ══════════════════════════════════════════════════════════════════
@@ -810,7 +812,15 @@ with tab_history:
                 s = safe_str(row.get('strategy'))
                 tk = safe_str(row.get('ticker'))
                 sig_dt = safe_str(row.get('signal_date'))
-                ent_dt = safe_str(row.get('entry_date'))
+                status = safe_str(row.get('status'))
+                is_pending = (status == 'PENDING')
+
+                # signal_price: PENDING 상태의 참조가격
+                sig_pr_raw = safe_str(row.get('signal_price'))
+                sig_pr_f = safe_float(sig_pr_raw)
+
+                # 기본값 읽기
+                ent_dt_raw = safe_str(row.get('entry_date'))
                 ent_pr_raw = safe_str(row.get('entry_price'))
                 cur_pr_raw = safe_str(row.get('current_price'))
                 tp_pr_raw = safe_str(row.get('tp_price'))
@@ -819,49 +829,81 @@ with tab_history:
                 ach_pct_raw = safe_str(row.get('achievement_pct'))
                 chg_pct_raw = safe_str(row.get('change_pct'))
                 days_held = safe_str(row.get('days_held'))
-                mh = safe_str(row.get('max_hold'))
-                status = safe_str(row.get('status'))
+                mh_raw = safe_str(row.get('max_hold'))
+                mh = mh_raw if mh_raw != '—' else str(STRAT_MAX_HOLD.get(s, ''))
 
-                ent_dt_html = f'<span class="price-none">{ent_dt}</span>' if ent_dt == '—' else ent_dt
-                ent_pr_html = f'<span class="price-none">—</span>' if ent_pr_raw == '—' else f'${ent_pr_raw}'
-                cur_pr_html = f'<span class="price-none">—</span>' if cur_pr_raw == '—' else f'${cur_pr_raw}'
-                tp_pr_html = f'${tp_pr_raw}' if tp_pr_raw != '—' else '—'
-                max_pr_html = f'${max_pr_raw}' if max_pr_raw != '—' else '—'
                 status_class = 'status-open' if status == 'OPEN' else 'status-pending'
 
-                # 수익률 색상
-                chg_pct_val = safe_float(chg_pct_raw)
-                chg_class = 'cell-win' if chg_pct_val > 0 else 'status-loss' if chg_pct_val < 0 else 'cell-none'
-                chg_html = f'<span class="{chg_class}">{chg_pct_val:+.1f}%</span>' if chg_pct_raw != '—' else '—'
-
-                # TP 달성률 프로그레스
-                ach_val = safe_float(ach_pct_raw)
-                ach_color = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
-                if ach_pct_raw != '—' and ach_val > 0:
-                    ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
-                        <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
-                            <div style="width:{min(ach_val,100):.0f}%;background:{ach_color};height:100%;border-radius:4px"></div>
-                        </div>
-                        <span style="font-size:0.82em;font-weight:700;color:{ach_color}">{ach_val:.0f}%</span>
-                    </div>'''
-                else:
-                    ach_html = '<span class="price-none">—</span>'
-
-                # TP 잔여거리 계산
-                tp_remain_html = '—'
-                cur_f = safe_float(cur_pr_raw)
-                tp_f = safe_float(tp_pr_raw)
-                if cur_f > 0 and tp_f > 0:
-                    remain_pct = (tp_f - cur_f) / cur_f * 100
-                    if remain_pct > 0:
-                        tp_remain_html = f'<span style="color:#2979ff;font-weight:600">+{remain_pct:.1f}%</span>'
+                if is_pending:
+                    # ── PENDING: 아직 매수 전 → 참조값으로 채우기 ──
+                    ent_dt_html = '<span class="pending-fill">D+1 매수예정</span>'
+                    ent_pr_html = f'<span class="pending-fill">신호가 ${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="pending-fill">신호가 확인중</span>'
+                    # 현재가: signal_price 를 참조값으로 표시
+                    cur_pr_html = f'<span class="pending-fill">${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="price-none">—</span>'
+                    chg_html = '<span class="pending-fill">매수 전</span>'
+                    tp_pr_html = f'${tp_pr_raw}' if tp_pr_raw != '—' else '—'
+                    max_pr_html = '<span class="pending-fill">매수 전</span>'
+                    max_pr_dt_html = '<span class="pending-fill">—</span>'
+                    ach_html = '<span class="pending-fill">매수 전</span>'
+                    # TP 잔여거리: signal_price 기준으로 계산
+                    tp_f = safe_float(tp_pr_raw)
+                    if sig_pr_f > 0 and tp_f > 0:
+                        remain_pct = (tp_f - sig_pr_f) / sig_pr_f * 100
+                        tp_remain_html = f'<span class="pending-fill">~+{remain_pct:.1f}%</span>'
                     else:
-                        tp_remain_html = f'<span class="cell-win">달성</span>'
+                        tp_remain_html = '<span class="pending-fill">—</span>'
+                    days_html = f'<span class="pending-fill">0/{mh}일</span>'
+                else:
+                    # ── OPEN: 기존 로직 + 빈값 방어 ──
+                    # entry_price 빈값 방어: signal_price 로 대체
+                    if ent_pr_raw == '—' and sig_pr_f > 0:
+                        ent_pr_raw = f'{sig_pr_f:.2f}'
+                    ent_dt_html = f'<span class="price-none">{ent_dt_raw}</span>' if ent_dt_raw == '—' else ent_dt_raw
+                    ent_pr_html = f'<span class="price-none">—</span>' if ent_pr_raw == '—' else f'${ent_pr_raw}'
+                    # current_price 빈값 방어: entry_price → signal_price
+                    if cur_pr_raw == '—':
+                        fallback = safe_float(ent_pr_raw) if ent_pr_raw != '—' else sig_pr_f
+                        cur_pr_html = f'<span class="pending-fill">${fallback:.2f}</span>' if fallback > 0 else '<span class="price-none">—</span>'
+                        cur_pr_raw = str(fallback) if fallback > 0 else '—'
+                    else:
+                        cur_pr_html = f'${cur_pr_raw}'
+                    tp_pr_html = f'${tp_pr_raw}' if tp_pr_raw != '—' else '—'
+                    max_pr_html = f'${max_pr_raw}' if max_pr_raw != '—' else '<span class="pending-fill">갱신중</span>'
+                    max_pr_dt_html = max_pr_dt if max_pr_dt != '—' else '<span class="pending-fill">—</span>'
 
-                # 보유일 / 최대보유
-                days_html = f'{days_held}' if days_held != '—' else '—'
-                if days_held != '—' and mh != '—':
-                    days_html = f'{days_held}/{mh}일'
+                    # 수익률 색상
+                    chg_pct_val = safe_float(chg_pct_raw)
+                    chg_class = 'cell-win' if chg_pct_val > 0 else 'status-loss' if chg_pct_val < 0 else 'cell-none'
+                    chg_html = f'<span class="{chg_class}">{chg_pct_val:+.1f}%</span>' if chg_pct_raw != '—' else '<span class="pending-fill">갱신중</span>'
+
+                    # TP 달성률 프로그레스
+                    ach_val = safe_float(ach_pct_raw)
+                    ach_color = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
+                    if ach_pct_raw != '—' and ach_val > 0:
+                        ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
+                            <div style="flex:1;background:#333;border-radius:4px;height:8px;min-width:40px">
+                                <div style="width:{min(ach_val,100):.0f}%;background:{ach_color};height:100%;border-radius:4px"></div>
+                            </div>
+                            <span style="font-size:0.82em;font-weight:700;color:{ach_color}">{ach_val:.0f}%</span>
+                        </div>'''
+                    else:
+                        ach_html = '<span class="pending-fill">갱신중</span>'
+
+                    # TP 잔여거리 계산
+                    tp_remain_html = '—'
+                    cur_f = safe_float(cur_pr_raw)
+                    tp_f = safe_float(tp_pr_raw)
+                    if cur_f > 0 and tp_f > 0:
+                        remain_pct = (tp_f - cur_f) / cur_f * 100
+                        if remain_pct > 0:
+                            tp_remain_html = f'<span style="color:#2979ff;font-weight:600">+{remain_pct:.1f}%</span>'
+                        else:
+                            tp_remain_html = f'<span class="cell-win">달성</span>'
+
+                    # 보유일 / 최대보유
+                    days_html = f'{days_held}' if days_held != '—' else '—'
+                    if days_held != '—' and mh != '—':
+                        days_html = f'{days_held}/{mh}일'
 
                 html += f'<tr>'
                 html += f'<td>{strat_badge(s)}</td>'
@@ -873,7 +915,7 @@ with tab_history:
                 html += f'<td>{chg_html}</td>'
                 html += f'<td>{tp_pr_html}</td>'
                 html += f'<td style="font-weight:600">{max_pr_html}</td>'
-                html += f'<td>{max_pr_dt}</td>'
+                html += f'<td>{max_pr_dt_html}</td>'
                 html += f'<td>{ach_html}</td>'
                 html += f'<td>{tp_remain_html}</td>'
                 html += f'<td>{days_html}</td>'
@@ -1025,6 +1067,7 @@ with tab_history:
                     'signal_date': safe_str(row.get('signal_date')),
                     'entry_date': safe_str(row.get('entry_date')),
                     'entry_price': safe_str(row.get('entry_price')),
+                    'signal_price': safe_str(row.get('signal_price')),
                     'tp_price': safe_str(row.get('tp_price')),
                     'current_price': safe_str(row.get('current_price')),
                     'max_price': safe_str(row.get('max_price')),
@@ -1118,8 +1161,9 @@ with tab_history:
                     max_pr = p['max_price']
                     max_pr_dt = p['max_price_date']
                     max_ach_raw = p['max_ach']
-
-                    ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '<span class="price-none">—</span>'
+                    sig_pr = p.get('signal_price', '—')
+                    sig_pr_f = safe_float(sig_pr)
+                    is_pending = (result == 'PENDING')
 
                     # 결과 뱃지
                     if result == 'WIN':
@@ -1135,46 +1179,63 @@ with tab_history:
                     else:
                         res_html = result
 
-                    # 수익률
-                    rp_val = safe_float(rp_raw)
-                    rp_cls = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
-                    rp_html = f'<span class="{rp_cls}">{rp_val:+.1f}%</span>' if rp_raw != '—' else '<span class="price-none">—</span>'
-
-                    # TP 달성일
-                    if tp_hit != '—':
-                        tp_html = f'<span class="cell-win">{tp_hit}</span>'
+                    if is_pending:
+                        # ── PENDING: 참조값으로 빈칸 채우기 ──
+                        ent_dt_html = '<span class="pending-fill">D+1 매수예정</span>'
+                        ent_pr_html = f'<span class="pending-fill">신호가 ${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="pending-fill">확인중</span>'
+                        rp_html = '<span class="pending-fill">매수 전</span>'
+                        tp_html = '<span class="pending-fill">—</span>'
+                        mp_html = '<span class="pending-fill">매수 전</span>'
+                        mpd_html = '<span class="pending-fill">—</span>'
+                        ach_html = '<span class="pending-fill">매수 전</span>'
                     else:
-                        tp_html = '<span class="price-none">미달성</span>'
+                        # ── OPEN / CLOSED: 기존 로직 + 빈값 방어 ──
+                        # entry_price 빈값 방어
+                        if ent_pr == '—' and sig_pr_f > 0:
+                            ent_pr = f'{sig_pr_f:.2f}'
+                        ent_dt_html = ent_dt if ent_dt != '—' else '<span class="price-none">—</span>'
+                        ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '<span class="price-none">—</span>'
 
-                    # 최고가 — TP 미달성 시 주황 강조
-                    if max_pr != '—':
-                        if tp_hit == '—':
-                            mp_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
-                            mpd_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
+                        # 수익률
+                        rp_val = safe_float(rp_raw)
+                        rp_cls = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
+                        rp_html = f'<span class="{rp_cls}">{rp_val:+.1f}%</span>' if rp_raw != '—' else '<span class="pending-fill">갱신중</span>'
+
+                        # TP 달성일
+                        if tp_hit != '—':
+                            tp_html = f'<span class="cell-win">{tp_hit}</span>'
                         else:
-                            mp_html = f'${max_pr}'
-                            mpd_html = max_pr_dt
-                    else:
-                        mp_html = '<span class="price-none">—</span>'
-                        mpd_html = '<span class="price-none">—</span>'
+                            tp_html = '<span class="price-none">미달성</span>'
 
-                    # TP 달성률 — 프로그레스바
-                    ach_val = safe_float(max_ach_raw)
-                    if max_ach_raw != '—' and ach_val > 0:
-                        ac = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
-                        ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
-                            <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
-                                <div style="width:{min(ach_val,100):.0f}%;background:{ac};height:100%;border-radius:4px"></div>
-                            </div>
-                            <span style="font-size:0.82em;font-weight:700;color:{ac}">{ach_val:.0f}%</span>
-                        </div>'''
-                    else:
-                        ach_html = '<span class="price-none">—</span>'
+                        # 최고가 — TP 미달성 시 주황 강조
+                        if max_pr != '—':
+                            if tp_hit == '—':
+                                mp_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
+                                mpd_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
+                            else:
+                                mp_html = f'${max_pr}'
+                                mpd_html = max_pr_dt
+                        else:
+                            mp_html = '<span class="pending-fill">갱신중</span>'
+                            mpd_html = '<span class="pending-fill">—</span>'
+
+                        # TP 달성률 — 프로그레스바
+                        ach_val = safe_float(max_ach_raw)
+                        if max_ach_raw != '—' and ach_val > 0:
+                            ac = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
+                            ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
+                                <div style="flex:1;background:#333;border-radius:4px;height:8px;min-width:40px">
+                                    <div style="width:{min(ach_val,100):.0f}%;background:{ac};height:100%;border-radius:4px"></div>
+                                </div>
+                                <span style="font-size:0.82em;font-weight:700;color:{ac}">{ach_val:.0f}%</span>
+                            </div>'''
+                        else:
+                            ach_html = '<span class="pending-fill">갱신중</span>'
 
                     html += f'<tr>'
                     html += f'<td>{strat_badge(s_)}</td>'
                     html += f'<td>{sig_dt}</td>'
-                    html += f'<td>{ent_dt if ent_dt != "—" else "<span class=price-none>—</span>"}</td>'
+                    html += f'<td>{ent_dt_html}</td>'
                     html += f'<td>{ent_pr_html}</td>'
                     html += f'<td>{res_html}</td>'
                     html += f'<td>{rp_html}</td>'
@@ -1193,6 +1254,189 @@ with tab_history:
                 <span style="color:#ff9100">주황색 최고가</span> = TP 미달성 시 가장 가까이 접근한 가격과 날짜 |
                 TP달성률 바 = 목표 대비 최대 도달 비율
             </p>''', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════
+    # 7) 누적 손익 차트
+    # ══════════════════════════════════════════════════════════════════
+    with h_pnl:
+        if closed_pos.empty or 'close_date' not in closed_pos.columns or 'result_pct' not in closed_pos.columns:
+            st.markdown('<div class="no-signal">청산된 포지션이 없어 누적 손익을 표시할 수 없습니다.</div>', unsafe_allow_html=True)
+        else:
+            pnl_df = closed_pos[['strategy', 'close_date', 'result_pct']].copy()
+            pnl_df['result_pct'] = pd.to_numeric(pnl_df['result_pct'], errors='coerce')
+            pnl_df = pnl_df.dropna(subset=['result_pct', 'close_date'])
+            pnl_df['close_date'] = pd.to_datetime(pnl_df['close_date'], errors='coerce')
+            pnl_df = pnl_df.dropna(subset=['close_date'])
+            pnl_df = pnl_df.sort_values('close_date')
+
+            if pnl_df.empty:
+                st.markdown('<div class="no-signal">유효한 청산 데이터가 없습니다.</div>', unsafe_allow_html=True)
+            else:
+                strategies_in_data = sorted(pnl_df['strategy'].unique())
+                strat_colors = {'A': '#00c853', 'B': '#2979ff', 'C': '#ff9100', 'D': '#e53935', 'E': '#ab47bc'}
+
+                # 전략별 누적 수익률 계산
+                chart_data = pd.DataFrame()
+                for strat in strategies_in_data:
+                    s_df = pnl_df[pnl_df['strategy'] == strat].copy()
+                    s_df = s_df.sort_values('close_date')
+                    s_df[f'{strat}'] = s_df['result_pct'].cumsum()
+                    s_daily = s_df.groupby('close_date')[f'{strat}'].last()
+                    if chart_data.empty:
+                        chart_data = s_daily.to_frame()
+                    else:
+                        chart_data = chart_data.join(s_daily, how='outer')
+
+                # 전체 합산 누적 수익률
+                total_df = pnl_df.sort_values('close_date').copy()
+                total_df['전체'] = total_df['result_pct'].cumsum()
+                total_daily = total_df.groupby('close_date')['전체'].last()
+                chart_data = chart_data.join(total_daily, how='outer')
+
+                # ffill로 빈 날짜 채우기, 시작점 0 추가
+                chart_data = chart_data.sort_index().ffill().fillna(0)
+
+                # ── MDD 계산 함수 ──
+                def calc_mdd(cumulative_series):
+                    """누적 수익률 시리즈에서 MDD와 구간 계산"""
+                    peak = cumulative_series.cummax()
+                    drawdown = cumulative_series - peak
+                    mdd_val = drawdown.min()
+                    if mdd_val == 0:
+                        return 0, None, None, pd.Series(0, index=cumulative_series.index)
+                    mdd_end_idx = drawdown.idxmin()
+                    mdd_start_idx = cumulative_series.loc[:mdd_end_idx].idxmax()
+                    return mdd_val, mdd_start_idx, mdd_end_idx, drawdown
+
+                # 전체 합산 MDD
+                total_cum = chart_data['전체'] if '전체' in chart_data.columns else pd.Series(dtype=float)
+                total_mdd, mdd_start, mdd_end, total_dd = calc_mdd(total_cum) if not total_cum.empty else (0, None, None, pd.Series(dtype=float))
+
+                # 전략별 MDD
+                strat_mdd_info = {}
+                for strat in strategies_in_data:
+                    if strat in chart_data.columns:
+                        s_cum = chart_data[strat]
+                        s_mdd, s_start, s_end, s_dd = calc_mdd(s_cum)
+                        strat_mdd_info[strat] = {'mdd': s_mdd, 'start': s_start, 'end': s_end, 'dd': s_dd}
+
+                # 요약 통계 카드
+                total_pnl = pnl_df['result_pct'].sum()
+                avg_pnl = pnl_df['result_pct'].mean()
+                n_trades = len(pnl_df)
+                n_wins = len(pnl_df[pnl_df['result_pct'] > 0])
+                win_rate = (n_wins / n_trades * 100) if n_trades > 0 else 0
+                total_color = '#00c853' if total_pnl > 0 else '#e53935' if total_pnl < 0 else '#888'
+                mdd_color = '#e53935' if total_mdd < -5 else '#ff9100' if total_mdd < 0 else '#888'
+
+                st.markdown(f'''<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+                    <div style="background:#1a1a2e;border-radius:10px;padding:14px 20px;flex:1;min-width:120px;text-align:center">
+                        <div style="color:#888;font-size:0.82em">누적 총 수익률</div>
+                        <div style="color:{total_color};font-size:1.6em;font-weight:800">{total_pnl:+.1f}%</div>
+                    </div>
+                    <div style="background:#1a1a2e;border-radius:10px;padding:14px 20px;flex:1;min-width:120px;text-align:center">
+                        <div style="color:#888;font-size:0.82em">건당 평균</div>
+                        <div style="color:{total_color};font-size:1.6em;font-weight:800">{avg_pnl:+.2f}%</div>
+                    </div>
+                    <div style="background:#1a1a2e;border-radius:10px;padding:14px 20px;flex:1;min-width:120px;text-align:center">
+                        <div style="color:#888;font-size:0.82em">청산 건수</div>
+                        <div style="color:#d0d0d0;font-size:1.6em;font-weight:800">{n_trades}건</div>
+                    </div>
+                    <div style="background:#1a1a2e;border-radius:10px;padding:14px 20px;flex:1;min-width:120px;text-align:center">
+                        <div style="color:#888;font-size:0.82em">실전 승률</div>
+                        <div style="color:{"#00c853" if win_rate >= 80 else "#ff9100" if win_rate > 0 else "#888"};font-size:1.6em;font-weight:800">{win_rate:.0f}%</div>
+                    </div>
+                    <div style="background:#1a1a2e;border:1px solid #e5393544;border-radius:10px;padding:14px 20px;flex:1;min-width:120px;text-align:center">
+                        <div style="color:#888;font-size:0.82em">최대 낙폭 (MDD)</div>
+                        <div style="color:{mdd_color};font-size:1.6em;font-weight:800">{total_mdd:.1f}%</div>
+                    </div>
+                </div>''', unsafe_allow_html=True)
+
+                # MDD 구간 안내
+                if mdd_start is not None and mdd_end is not None:
+                    mdd_start_str = mdd_start.strftime('%Y-%m-%d') if hasattr(mdd_start, 'strftime') else str(mdd_start)
+                    mdd_end_str = mdd_end.strftime('%Y-%m-%d') if hasattr(mdd_end, 'strftime') else str(mdd_end)
+                    st.markdown(f'<p style="color:#e57373;font-size:0.82em;margin-bottom:12px">⚠ 최대 낙폭 구간: {mdd_start_str} → {mdd_end_str} ({total_mdd:.1f}%p 하락)</p>', unsafe_allow_html=True)
+
+                # ── 누적 수익률 차트 ──
+                st.markdown('<p style="color:#888;font-size:0.85em;margin-bottom:4px">청산일 기준 누적 수익률 추이 (전략별 + 전체 합산)</p>', unsafe_allow_html=True)
+
+                color_map = {}
+                for col in chart_data.columns:
+                    if col in strat_colors:
+                        color_map[col] = strat_colors[col]
+                    elif col == '전체':
+                        color_map[col] = '#ffffff'
+
+                st.line_chart(chart_data, color=color_map if color_map else None)
+
+                # ── 드로다운(Drawdown) 차트 ──
+                st.markdown('<p style="color:#888;font-size:0.85em;margin-top:16px;margin-bottom:4px">드로다운 추이 — 고점 대비 하락폭 (0% = 신고점, 음수 = 고점 대비 손실)</p>', unsafe_allow_html=True)
+
+                dd_chart = pd.DataFrame()
+                for strat in strategies_in_data:
+                    if strat in strat_mdd_info:
+                        dd_chart[strat] = strat_mdd_info[strat]['dd']
+                if not total_dd.empty:
+                    dd_chart['전체'] = total_dd
+                dd_chart = dd_chart.sort_index().ffill().fillna(0)
+
+                dd_color_map = {}
+                for col in dd_chart.columns:
+                    if col in strat_colors:
+                        dd_color_map[col] = strat_colors[col]
+                    elif col == '전체':
+                        dd_color_map[col] = '#ffffff'
+
+                st.area_chart(dd_chart, color=dd_color_map if dd_color_map else None)
+
+                # ── 전략별 리스크 요약 테이블 ──
+                st.markdown('<p style="color:#888;font-size:0.85em;margin-top:16px;margin-bottom:4px">전략별 손익 · 리스크 요약</p>', unsafe_allow_html=True)
+                summary_html = '<table class="matrix-table"><thead><tr>'
+                summary_html += '<th>전략</th><th>청산 건수</th><th>승률</th><th>누적 수익률</th><th>건당 평균</th>'
+                summary_html += '<th>최대 수익</th><th>최대 손실</th><th style="color:#e57373">MDD</th><th>MDD 구간</th>'
+                summary_html += '</tr></thead><tbody>'
+
+                for strat in strategies_in_data:
+                    s_pnl = pnl_df[pnl_df['strategy'] == strat]['result_pct']
+                    s_n = len(s_pnl)
+                    s_wins = len(s_pnl[s_pnl > 0])
+                    s_wr = (s_wins / s_n * 100) if s_n > 0 else 0
+                    s_total = s_pnl.sum()
+                    s_avg = s_pnl.mean()
+                    s_max = s_pnl.max()
+                    s_min = s_pnl.min()
+                    s_total_c = '#00c853' if s_total > 0 else '#e53935' if s_total < 0 else '#888'
+                    s_wr_c = '#00c853' if s_wr >= 80 else '#ff9100' if s_wr > 0 else '#888'
+
+                    # 전략별 MDD
+                    s_info = strat_mdd_info.get(strat, {})
+                    s_mdd = s_info.get('mdd', 0)
+                    s_mdd_start = s_info.get('start')
+                    s_mdd_end = s_info.get('end')
+                    s_mdd_c = '#e53935' if s_mdd < -5 else '#ff9100' if s_mdd < 0 else '#888'
+                    if s_mdd_start is not None and s_mdd_end is not None:
+                        s_start_str = s_mdd_start.strftime('%m/%d') if hasattr(s_mdd_start, 'strftime') else str(s_mdd_start)[:5]
+                        s_end_str = s_mdd_end.strftime('%m/%d') if hasattr(s_mdd_end, 'strftime') else str(s_mdd_end)[:5]
+                        mdd_range_html = f'{s_start_str}→{s_end_str}'
+                    else:
+                        mdd_range_html = '—'
+
+                    summary_html += f'<tr>'
+                    summary_html += f'<td>{strat_badge(strat)} {STRAT_NAMES.get(strat, "")}</td>'
+                    summary_html += f'<td>{s_n}건</td>'
+                    summary_html += f'<td style="color:{s_wr_c};font-weight:700">{s_wr:.0f}%</td>'
+                    summary_html += f'<td style="color:{s_total_c};font-weight:700">{s_total:+.1f}%</td>'
+                    summary_html += f'<td style="color:{s_total_c}">{s_avg:+.2f}%</td>'
+                    summary_html += f'<td class="cell-win">{s_max:+.1f}%</td>'
+                    summary_html += f'<td class="status-loss">{s_min:+.1f}%</td>'
+                    summary_html += f'<td style="color:{s_mdd_c};font-weight:700">{s_mdd:.1f}%</td>'
+                    summary_html += f'<td style="color:#888;font-size:0.85em">{mdd_range_html}</td>'
+                    summary_html += f'</tr>'
+
+                summary_html += '</tbody></table>'
+                st.markdown(summary_html, unsafe_allow_html=True)
+                st.markdown('<p style="color:#666;font-size:0.78em;margin-top:8px">MDD(Maximum Drawdown) = 누적 수익률 고점 대비 최대 하락폭. 낙폭이 클수록 리스크가 높은 전략</p>', unsafe_allow_html=True)
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
