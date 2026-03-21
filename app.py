@@ -800,6 +800,27 @@ with tab_history:
         if not open_pos.empty and 'status' in open_pos.columns:
             active = open_pos[open_pos['status'].isin(['PENDING', 'OPEN'])]
         if not active.empty:
+            # ── 필터/정렬 UI ──
+            fa_col1, fa_col2, fa_col3 = st.columns([2, 2, 6])
+            with fa_col1:
+                active_strats = sorted(active['strategy'].dropna().unique()) if 'strategy' in active.columns else []
+                fa_filter = st.selectbox('전략 필터', ['전체'] + active_strats, key='active_strat_filter')
+            with fa_col2:
+                fa_sort = st.selectbox('정렬 기준', ['신호일 최신순', '신호일 오래된순', '수익률 높은순', '수익률 낮은순', '달성률 높은순'], key='active_sort')
+            if fa_filter != '전체':
+                active = active[active['strategy'] == fa_filter]
+            # 정렬 적용
+            if fa_sort == '신호일 최신순':
+                active = active.sort_values('signal_date', ascending=False)
+            elif fa_sort == '신호일 오래된순':
+                active = active.sort_values('signal_date', ascending=True)
+            elif fa_sort in ('수익률 높은순', '수익률 낮은순'):
+                active['_chg_sort'] = pd.to_numeric(active.get('change_pct', 0), errors='coerce').fillna(0)
+                active = active.sort_values('_chg_sort', ascending=(fa_sort == '수익률 낮은순'))
+            elif fa_sort == '달성률 높은순':
+                active['_ach_sort'] = pd.to_numeric(active.get('achievement_pct', 0), errors='coerce').fillna(0)
+                active = active.sort_values('_ach_sort', ascending=False)
+
             html = '<table class="pos-table"><thead><tr>'
             html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th>'
             html += '<th>매수가</th><th>현재가</th><th>현재 손익률</th>'
@@ -926,6 +947,68 @@ with tab_history:
             html += '</tbody></table>'
             st.markdown(html, unsafe_allow_html=True)
             st.markdown('<p style="color:#888;font-size:0.8em;margin-top:8px">TP달성률 = (최고가-진입가) / (익절가-진입가) × 100 | TP잔여 = 현재가에서 익절가까지 남은 %</p>', unsafe_allow_html=True)
+
+            # ── 포지션 상세 펼치기 ──
+            st.markdown('<p style="color:#888;font-size:0.85em;margin-top:16px;margin-bottom:4px">종목별 상세 정보 (클릭하여 펼치기)</p>', unsafe_allow_html=True)
+            for _, row in active.iterrows():
+                tk = safe_str(row.get('ticker'))
+                s = safe_str(row.get('strategy'))
+                status = safe_str(row.get('status'))
+                status_kr = '진행중' if status == 'OPEN' else '대기중' if status == 'PENDING' else status
+                sig_pr_f = safe_float(safe_str(row.get('signal_price')))
+                ent_pr_f = safe_float(safe_str(row.get('entry_price')))
+                cur_pr_f = safe_float(safe_str(row.get('current_price')))
+                tp_pr_f = safe_float(safe_str(row.get('tp_price')))
+                sl_pr_f = safe_float(safe_str(row.get('sl_price')))
+                max_pr_f = safe_float(safe_str(row.get('max_price')))
+                min_pr_f = safe_float(safe_str(row.get('min_price')))
+                chg_val = safe_float(safe_str(row.get('change_pct')))
+                ach_val = safe_float(safe_str(row.get('achievement_pct')))
+                days_held = safe_str(row.get('days_held'))
+                mh_raw = safe_str(row.get('max_hold'))
+                mh = mh_raw if mh_raw != '—' else str(STRAT_MAX_HOLD.get(s, ''))
+
+                badge = f"[{s}]" if s != '—' else ''
+                with st.expander(f"{badge} {tk} — {status_kr}", expanded=False):
+                    d_col1, d_col2, d_col3 = st.columns(3)
+                    with d_col1:
+                        st.markdown(f'''**신호 정보**
+- 전략: {strat_badge(s)} {STRAT_NAMES.get(s, "")}
+- 신호일: {safe_str(row.get("signal_date"))}
+- 신호가: ${sig_pr_f:.2f}''' if sig_pr_f > 0 else f'''**신호 정보**
+- 전략: {strat_badge(s)} {STRAT_NAMES.get(s, "")}
+- 신호일: {safe_str(row.get("signal_date"))}
+- 신호가: —''', unsafe_allow_html=True)
+                    with d_col2:
+                        if status == 'PENDING':
+                            st.markdown(f'''**매수 정보**
+- 상태: 대기중 (D+1 매수예정)
+- 목표 익절가: ${tp_pr_f:.2f}
+- 손절가: ${sl_pr_f:.2f}''' if sl_pr_f > 0 else f'''**매수 정보**
+- 상태: 대기중 (D+1 매수예정)
+- 목표 익절가: ${tp_pr_f:.2f}
+- 손절가: —''', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'''**매수/현재**
+- 매수가: ${ent_pr_f:.2f}
+- 현재가: ${cur_pr_f:.2f}
+- 손익률: {chg_val:+.1f}%''' if ent_pr_f > 0 else f'''**매수/현재**
+- 매수가: —
+- 현재가: ${cur_pr_f:.2f}
+- 손익률: {chg_val:+.1f}%''', unsafe_allow_html=True)
+                    with d_col3:
+                        if status != 'PENDING':
+                            st.markdown(f'''**추적 정보**
+- 보유일: {days_held}/{mh}일
+- 최고가: ${max_pr_f:.2f}
+- 최저가: ${min_pr_f:.2f}
+- 달성률: {ach_val:.0f}%''', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'''**추적 정보**
+- 보유일: 0/{mh}일
+- 최대 보유: {mh}일
+- 익절 목표: {STRAT_TP.get(s, "")}''', unsafe_allow_html=True)
+
         else:
             st.markdown('<div class="no-signal">진행 중인 포지션이 없습니다</div>', unsafe_allow_html=True)
 
@@ -934,10 +1017,34 @@ with tab_history:
     # ══════════════════════════════════════════════════════════════════
     with h_closed_detail:
         if not closed_pos.empty and 'strategy' in closed_pos.columns:
-            # 최신순 정렬
             cp_sorted = closed_pos.copy()
+
+            # ── 필터/정렬 UI ──
+            fc_col1, fc_col2, fc_col3, fc_col4 = st.columns([2, 2, 2, 4])
+            with fc_col1:
+                closed_strats = sorted(cp_sorted['strategy'].dropna().unique())
+                fc_filter = st.selectbox('전략 필터', ['전체'] + list(closed_strats), key='closed_strat_filter')
+            with fc_col2:
+                rs_col = rs_col_name
+                result_options = ['전체']
+                if rs_col in cp_sorted.columns:
+                    result_options += sorted(cp_sorted[rs_col].dropna().unique())
+                fc_result = st.selectbox('결과 필터', result_options, key='closed_result_filter')
+            with fc_col3:
+                fc_sort = st.selectbox('정렬 기준', ['청산일 최신순', '청산일 오래된순', '수익률 높은순', '수익률 낮은순'], key='closed_sort')
+            if fc_filter != '전체':
+                cp_sorted = cp_sorted[cp_sorted['strategy'] == fc_filter]
+            if fc_result != '전체':
+                cp_sorted = cp_sorted[cp_sorted[rs_col_name] == fc_result]
+            # 정렬 적용
             cp_sorted['_close_dt'] = pd.to_datetime(cp_sorted.get('close_date', ''), errors='coerce')
-            cp_sorted = cp_sorted.sort_values('_close_dt', ascending=False)
+            if fc_sort == '청산일 최신순':
+                cp_sorted = cp_sorted.sort_values('_close_dt', ascending=False)
+            elif fc_sort == '청산일 오래된순':
+                cp_sorted = cp_sorted.sort_values('_close_dt', ascending=True)
+            elif fc_sort in ('수익률 높은순', '수익률 낮은순'):
+                cp_sorted['_rp_sort'] = pd.to_numeric(cp_sorted.get('result_pct', 0), errors='coerce').fillna(0)
+                cp_sorted = cp_sorted.sort_values('_rp_sort', ascending=(fc_sort == '수익률 낮은순'))
 
             html = '<table class="pos-table"><thead><tr>'
             html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
@@ -1086,18 +1193,46 @@ with tab_history:
         if not tk_rows:
             st.markdown('<div class="no-signal">아직 추적 중인 티커가 없습니다</div>', unsafe_allow_html=True)
         else:
+            # ── 필터/정렬 UI ──
+            ft_col1, ft_col2, ft_col3 = st.columns([2, 2, 6])
+            with ft_col1:
+                all_tk_strats = sorted(set(r['strategy'] for r in tk_rows if r['strategy'] != '—'))
+                ft_filter = st.selectbox('전략 필터', ['전체'] + all_tk_strats, key='ticker_strat_filter')
+            with ft_col2:
+                ft_sort = st.selectbox('정렬 기준', ['최신 신호일순', '종목명순', '포지션 많은순', '승률 높은순'], key='ticker_sort')
+
+            # 필터 적용
+            filtered_rows = tk_rows if ft_filter == '전체' else [r for r in tk_rows if r['strategy'] == ft_filter]
+
             # 티커별 그룹핑
             from collections import defaultdict
             ticker_groups = defaultdict(list)
-            for r in tk_rows:
+            for r in filtered_rows:
                 if r['ticker'] != '—':
                     ticker_groups[r['ticker']].append(r)
 
-            # 각 티커 내에서 signal_date 내림차순, 티커 간에는 최신 신호일 순
+            # 각 티커 내에서 signal_date 내림차순
             for tk in ticker_groups:
                 ticker_groups[tk].sort(key=lambda x: x['signal_date'], reverse=True)
-            sorted_tickers = sorted(ticker_groups.items(),
-                                    key=lambda x: x[1][0]['signal_date'] if x[1] else '', reverse=True)
+
+            # 정렬 적용
+            if ft_sort == '최신 신호일순':
+                sorted_tickers = sorted(ticker_groups.items(),
+                                        key=lambda x: x[1][0]['signal_date'] if x[1] else '', reverse=True)
+            elif ft_sort == '종목명순':
+                sorted_tickers = sorted(ticker_groups.items(), key=lambda x: x[0])
+            elif ft_sort == '포지션 많은순':
+                sorted_tickers = sorted(ticker_groups.items(), key=lambda x: len(x[1]), reverse=True)
+            elif ft_sort == '승률 높은순':
+                def _tk_wr(item):
+                    positions = item[1]
+                    wins = sum(1 for p in positions if p['result'] == 'WIN')
+                    closed = sum(1 for p in positions if p['result'] in ('WIN', 'LOSS', 'EXPIRED'))
+                    return (wins / closed * 100) if closed > 0 else 0
+                sorted_tickers = sorted(ticker_groups.items(), key=_tk_wr, reverse=True)
+            else:
+                sorted_tickers = sorted(ticker_groups.items(),
+                                        key=lambda x: x[1][0]['signal_date'] if x[1] else '', reverse=True)
 
             st.markdown(f'<p style="color:#888;font-size:0.85em;margin-bottom:8px">전체 {len(sorted_tickers)}개 종목 — 티커별 모든 포지션 상세</p>', unsafe_allow_html=True)
 
@@ -1467,3 +1602,17 @@ with st.sidebar:
     if st.button("🔄 새로고침"):
         st.cache_data.clear()
         st.rerun()
+
+    st.divider()
+    st.markdown("**자동 새로고침**")
+    auto_refresh = st.toggle("자동 새로고침 켜기", value=False, key='auto_refresh_toggle')
+    refresh_interval = st.select_slider("갱신 주기", options=[1, 2, 3, 5, 10, 15, 30], value=5, key='refresh_interval')
+    st.caption(f"{'✅ 활성' if auto_refresh else '⏸ 비활성'} — {refresh_interval}분 간격")
+    if auto_refresh:
+        import streamlit.components.v1 as components
+        components.html(
+            f"""<script>
+            setTimeout(function(){{ window.parent.location.reload(); }}, {refresh_interval * 60 * 1000});
+            </script>""",
+            height=0,
+        )
