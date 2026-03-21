@@ -36,10 +36,10 @@ def get_sp500_tickers():
 def get_extra_smallcap():
     """추가 소형/중형주 샘플"""
     return ['SOFI','PLTR','RIVN','LCID','NIO','SNAP','PINS','ROKU','CRWD','DDOG',
-            'NET','RBLX','HOOD','COIN','MARA','RIOT','UPST','AFRM','SKLZ','WISH',
-            'CLOV','BNGO','SENS','GSAT','BB','NOK','SNDL','TLRY','CGC','ACB',
-            'PLUG','FCEL','BLNK','CHPT','QS','GOEV','FSR','NKLA','HYLN','WKHS',
-            'SPCE','DKNG','PENN','MGNI','FUBO','TTCF','OPEN','LMND','ROOT','VROOM']
+            'NET','RBLX','HOOD','COIN','MARA','RIOT','UPST','AFRM','GSAT','BB',
+            'NOK','SNDL','TLRY','CGC','ACB','PLUG','FCEL','BLNK','CHPT','QS',
+            'NKLA','WKHS','DKNG','PENN','MGNI','FUBO','OPEN','LMND','ROOT',
+            'SMCI','IONQ','RGTI','QUBT','KULR','OKLO','LUNR','RKLB','ASTS','APLD']
 
 # ─── 지표 계산 ─────────────────────────────────────────────────────────────────
 
@@ -464,7 +464,7 @@ def main():
 
     # CSV 저장
     if summary_rows:
-        pd.DataFrame(summary_rows).to_csv('/sessions/sleepy-friendly-darwin/mnt/outputs/backtest_results.csv', index=False)
+        pd.DataFrame(summary_rows).to_csv('backtest_results.csv', index=False)
         print(f"\n결과 저장: backtest_results.csv")
 
 if __name__ == '__main__':
