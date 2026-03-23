@@ -9,7 +9,7 @@ permissions:
 jobs:
   optimize:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # 최대 2시간
+    timeout-minutes: 360  # 최대 6시간
 
     steps:
       - name: Checkout repository
