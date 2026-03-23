@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days
+C,SONM,2026-03-23,06:12 KST,2.9,16.9,21.0,-13.4,5.0,0.0,3.05,2.32,,,
+C,GLOO,2026-03-23,06:12 KST,4.83,20.4,21.6,-10.1,8.0,0.0,5.07,3.86,,,
+D,AHMA,2026-03-23,06:12 KST,2.24,,117.7,,,,2.69,,24.0,-55.7,30.0
