@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-전략 자동 탐색기 v3 (Grid Search Optimizer)
-- 유니버스: NASDAQ/NYSE/AMEX 전체 3000개+ (scanner.py와 동일)
-- 2단계: 전종목 다운로드 → 과매도 경험 종목만 필터 → 그리드 서치
-- 승률 90%+ & 평균수익률 50%+ 조합 자동 필터링
+전략 자동 탐색기 v4 (Grid Search Optimizer)
+- 유니버스: NASDAQ/NYSE/AMEX 전체 10,000개+
+- 목표: 승률 90% 이상 유지하면서 TP가 가장 높은 조합 찾기
+- TP 범위: 5% ~ 50% (세분화)
 - 최소 신호 10건 이상만 유효
 - GitHub Actions 6시간 타임아웃
 """
@@ -27,7 +27,7 @@ LEVERAGED_ETF = {
     'UNG','DGAZ','UGAZ','AGQ','ZSL','USLV','DSLV','GDXU','GDXD',
 }
 
-MIN_SIGNALS = 10
+MIN_SIGNALS = 100  # 최소 100건 (월 4건 × 2년 ≈ 96건)
 
 # ─── 유니버스 (scanner.py 동일) ──────────────────────────────────────────────
 
@@ -161,49 +161,40 @@ def extract_ticker_df(data, tk, batch_len):
 # ─── 파라미터 그리드 ─────────────────────────────────────────────────────────
 
 def generate_param_grid():
+    """승률 90% 유지하면서 최대 TP 찾기 — TP를 5%~50% 세분화"""
     combos = []
 
-    # ── 그룹 1: RSI7 과매도 반등 ──
-    for rsi7_th in [10, 15, 20, 25, 30]:
-        for intra_th in [10, 15, 20, 25]:
-            for ret_period, ret_vals in [('ret_1d', [-5, -8, -10, -15]),
-                                          ('ret_3d', [-10, -15, -20, -25]),
-                                          ('ret_5d', [-15, -20, -25, -30])]:
+    # TP 범위: 5%부터 50%까지 촘촘하게
+    tp_range = [0.05, 0.07, 0.10, 0.12, 0.15, 0.18, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50]
+
+    # ── 그룹 1: RSI7 과매도 반등 (기존 A/C 계열) ──
+    for rsi7_th in [15, 20, 25, 30]:
+        for intra_th in [10, 15, 20]:
+            for ret_period, ret_vals in [('ret_1d', [-5, -8, -10]),
+                                          ('ret_3d', [-10, -15, -20]),
+                                          ('ret_5d', [-15, -20, -25])]:
                 for ret_th in ret_vals:
                     for down_th in [0, 3, 5]:
-                        # TP/SL/보유일은 핵심 조합만
-                        for tp, sl, max_hold in [(0.30, -0.10, 15),
-                                                  (0.30, -0.10, 30),
-                                                  (0.40, -0.10, 20),
-                                                  (0.40, -0.15, 30),
-                                                  (0.50, -0.10, 20),
-                                                  (0.50, -0.15, 30),
-                                                  (0.50, -0.20, 30)]:
+                        for tp in tp_range:
                             combos.append({
                                 'type': 'RSI7_OVERSOLD',
                                 'rsi7_th': rsi7_th, 'intra_th': intra_th,
                                 'ret_field': ret_period, 'ret_th': ret_th,
                                 'down_th': down_th,
-                                'tp': tp, 'sl': sl, 'max_hold': max_hold,
+                                'tp': tp, 'sl': -0.20, 'max_hold': 30,
                             })
 
-    # ── 그룹 2: 저가주 폭락 반등 ──
+    # ── 그룹 2: 저가주 폭락 반등 (기존 D/E 계열) ──
     for price_max in [3, 5, 10]:
         for ret5d_th in [-25, -30, -35, -40, -50]:
             for intra_th in [15, 20, 25, 30]:
                 for rsi14_th in [15, 20, 25, 30]:
-                    for tp, sl, max_hold in [(0.30, -0.10, 15),
-                                              (0.30, -0.15, 30),
-                                              (0.40, -0.15, 20),
-                                              (0.40, -0.20, 30),
-                                              (0.50, -0.15, 20),
-                                              (0.50, -0.20, 30),
-                                              (0.60, -0.20, 30)]:
+                    for tp in tp_range:
                         combos.append({
                             'type': 'PENNY_CRASH',
                             'price_max': price_max, 'ret5d_th': ret5d_th,
                             'intra_th': intra_th, 'rsi14_th': rsi14_th,
-                            'tp': tp, 'sl': sl, 'max_hold': max_hold,
+                            'tp': tp, 'sl': -0.20, 'max_hold': 30,
                         })
 
     # ── 그룹 3: 거래량 폭증 + 과매도 ──
@@ -211,17 +202,12 @@ def generate_param_grid():
         for vol_mult in [3, 5, 8]:
             for ret1d_th in [-5, -8, -10]:
                 for intra_th in [10, 15, 20]:
-                    for tp, sl, max_hold in [(0.30, -0.10, 15),
-                                              (0.30, -0.10, 20),
-                                              (0.40, -0.10, 20),
-                                              (0.40, -0.15, 30),
-                                              (0.50, -0.15, 20),
-                                              (0.50, -0.15, 30)]:
+                    for tp in tp_range:
                         combos.append({
                             'type': 'VOLUME_SPIKE',
                             'rsi7_th': rsi7_th, 'vol_mult': vol_mult,
                             'ret1d_th': ret1d_th, 'intra_th': intra_th,
-                            'tp': tp, 'sl': sl, 'max_hold': max_hold,
+                            'tp': tp, 'sl': -0.20, 'max_hold': 30,
                         })
 
     print(f"  총 파라미터 조합 수: {len(combos):,}개")
@@ -450,13 +436,14 @@ def main():
                 'ret1d_th': combo['ret1d_th'], 'intra_th': combo['intra_th'],
             })
 
-        if win_rate >= 90 and avg_pct >= 50:
+        if win_rate >= 90:
             good_results.append(summary)
-            print(f"\n  ★★★ 최고조건! [{combo['type']}] "
-                  f"승률={win_rate:.0f}% 수익={avg_pct:+.1f}% "
-                  f"신호={n}건 종목={unique_tickers}개")
-            sys.stdout.flush()
-        elif win_rate >= 70 and avg_pct >= 30:
+            if combo['tp'] >= 0.20:  # TP 20% 이상이면 하이라이트
+                print(f"\n  ★★★ 승률90%+고TP! [{combo['type']}] "
+                      f"승률={win_rate:.0f}% TP={combo['tp']*100:.0f}% "
+                      f"평균={avg_pct:+.1f}% 신호={n}건 종목={unique_tickers}개")
+                sys.stdout.flush()
+        elif win_rate >= 80:
             decent_results.append(summary)
 
         all_summary.append(summary)
@@ -468,8 +455,8 @@ def main():
     print(f"{'='*80}")
     print(f"  전체 종목: {len(all_data)}개 → 필터 후: {len(filtered_data)}개")
     print(f"  총 조합 테스트: {total_combos:,}개")
-    print(f"  ★ 최고조건 (승률90%+ & 수익50%+): {len(good_results)}개")
-    print(f"  ◎ 괜찮은조건 (승률70%+ & 수익30%+): {len(decent_results)}개")
+    print(f"  ★ 승률 90%+ 조합: {len(good_results)}개")
+    print(f"  ◎ 승률 80%+ 조합: {len(decent_results)}개")
     print(f"  전체 유효 조합 (신호{MIN_SIGNALS}건+): {len(all_summary)}개")
 
     def print_detail(s):
@@ -487,19 +474,39 @@ def main():
                   f"1일수익<{s.get('ret1d_th')}% | 일중>{s.get('intra_th')}%")
 
     if good_results:
+        # TP 기준 내림차순 정렬 (승률 90%+ 중 TP 가장 높은 순)
         print(f"\n{'='*80}")
-        print(f"  ★★★ 최고 조건 TOP 20")
+        print(f"  ★★★ 승률 90%+ 조합 — TP 높은 순 TOP 30")
         print(f"{'='*80}")
-        for i, s in enumerate(sorted(good_results, key=lambda x: x['win_rate']*x['avg_pct'], reverse=True)[:20]):
-            print(f"\n  [{i+1}위] {s['type']}")
+        # 점수 = TP × 신호수 × 승률 (TP 높고, 신호 많고, 승률 높은 순)
+        good_sorted = sorted(good_results, key=lambda x: x['tp'] * x['signals'] * x['win_rate'], reverse=True)
+        for i, s in enumerate(good_sorted[:30]):
+            score = s['tp'] * s['signals'] * s['win_rate']
+            print(f"\n  [{i+1}위] {s['type']} | TP={s['tp']*100:.0f}% | 신호={s['signals']}건 | 점수={score:.0f}")
             print_detail(s)
+
+        # TP별 최고 승률 요약
+        print(f"\n{'='*80}")
+        print(f"  TP별 최고 승률 요약 (승률 90%+ 조합만)")
+        print(f"{'='*80}")
+        tp_groups = {}
+        for s in good_results:
+            tp_key = f"{s['tp']*100:.0f}%"
+            if tp_key not in tp_groups:
+                tp_groups[tp_key] = []
+            tp_groups[tp_key].append(s)
+        for tp_key in sorted(tp_groups.keys(), key=lambda x: float(x.replace('%','')), reverse=True):
+            items = tp_groups[tp_key]
+            best = max(items, key=lambda x: x['win_rate'])
+            print(f"  TP {tp_key}: {len(items)}개 조합 | 최고 승률 {best['win_rate']}% | "
+                  f"최다 신호 {max(s['signals'] for s in items)}건")
 
     if decent_results:
         print(f"\n{'='*80}")
-        print(f"  ◎ 괜찮은 조건 TOP 20 (승률70%+ & 수익30%+)")
+        print(f"  ◎ 승률 80%+ 조합 — TP 높은 순 TOP 20")
         print(f"{'='*80}")
-        for i, s in enumerate(sorted(decent_results, key=lambda x: x['win_rate']*x['avg_pct'], reverse=True)[:20]):
-            print(f"\n  [{i+1}위] {s['type']}")
+        for i, s in enumerate(sorted(decent_results, key=lambda x: (x['tp'], x['win_rate']), reverse=True)[:20]):
+            print(f"\n  [{i+1}위] {s['type']} | TP={s['tp']*100:.0f}%")
             print_detail(s)
 
     if not good_results and not decent_results and all_summary:
