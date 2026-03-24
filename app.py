@@ -1496,14 +1496,16 @@ with tab_history:
                 # ── 누적 수익률 차트 ──
                 st.markdown('<p style="color:#888;font-size:0.85em;margin-bottom:4px">청산일 기준 누적 수익률 추이 (전략별 + 전체 합산)</p>', unsafe_allow_html=True)
 
-                color_map = {}
+                color_list = []
                 for col in chart_data.columns:
                     if col in strat_colors:
-                        color_map[col] = strat_colors[col]
+                        color_list.append(strat_colors[col])
                     elif col == '전체':
-                        color_map[col] = '#ffffff'
+                        color_list.append('#ffffff')
+                    else:
+                        color_list.append('#888888')
 
-                st.line_chart(chart_data, color=color_map if color_map else None)
+                st.line_chart(chart_data, color=color_list if color_list else None)
 
                 # ── 드로다운(Drawdown) 차트 ──
                 st.markdown('<p style="color:#888;font-size:0.85em;margin-top:16px;margin-bottom:4px">드로다운 추이 — 고점 대비 하락폭 (0% = 신고점, 음수 = 고점 대비 손실)</p>', unsafe_allow_html=True)
@@ -1516,14 +1518,16 @@ with tab_history:
                     dd_chart['전체'] = total_dd
                 dd_chart = dd_chart.sort_index().ffill().fillna(0)
 
-                dd_color_map = {}
+                dd_color_list = []
                 for col in dd_chart.columns:
                     if col in strat_colors:
-                        dd_color_map[col] = strat_colors[col]
+                        dd_color_list.append(strat_colors[col])
                     elif col == '전체':
-                        dd_color_map[col] = '#ffffff'
+                        dd_color_list.append('#ffffff')
+                    else:
+                        dd_color_list.append('#888888')
 
-                st.area_chart(dd_chart, color=dd_color_map if dd_color_map else None)
+                st.area_chart(dd_chart, color=dd_color_list if dd_color_list else None)
 
                 # ── 전략별 리스크 요약 테이블 ──
                 st.markdown('<p style="color:#888;font-size:0.85em;margin-top:16px;margin-bottom:4px">전략별 손익 · 리스크 요약</p>', unsafe_allow_html=True)
