@@ -1,10 +1,10 @@
 {
-  "scan_date": "2026-03-23",
-  "scan_time": "2026-03-24 22:14:33 KST",
+  "scan_date": "2026-03-24",
+  "scan_time": "2026-03-25 06:19:40 KST",
   "strategy_a_count": 0,
   "strategy_b_count": 0,
-  "strategy_c_count": 2,
-  "strategy_d_count": 1,
+  "strategy_c_count": 0,
+  "strategy_d_count": 2,
   "strategy_e_count": 0,
-  "total_count": 3
+  "total_count": 2
 }
