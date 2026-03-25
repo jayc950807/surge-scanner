@@ -56,29 +56,36 @@ KST = timezone(timedelta(hours=9))
 
 # ─── yfinance 데이터 갱신 대기 ────────────────────────────────────────────────
 
-def wait_for_market_data(max_retries=3, retry_interval=120):
+def wait_for_market_data(max_retries=10, retry_interval=180):
     """
     yfinance 종가 데이터가 당일 거래일로 업데이트될 때까지 대기.
-    SPY를 기준으로 최신 거래일 확인 후, 오늘 날짜와 일치하면 진행.
-    최대 3회 × 2분 = 6분 대기. (애프터/프리마켓 대응을 위해 최대한 빠르게)
-    주말/휴일이면 즉시 진행 (기대 거래일 자체가 과거).
+    UTC 기준으로 마지막 거래일을 계산:
+    - UTC 20:30 이후 & 평일: 당일 미국 장마감 후 → 오늘이 기대 거래일
+    - 그 외: 가장 최근 평일 (어제 또는 지난 금요일)
+    최대 10회 × 3분 = 30분 대기. (yfinance 데이터 갱신 지연 대응)
     """
     print(f"\n{'='*80}")
     print(f"  [사전 검증] yfinance 종가 데이터 갱신 확인")
     print(f"{'='*80}")
 
-    today_utc = datetime.now(timezone.utc).date()
-    weekday = today_utc.weekday()  # 0=Mon ... 6=Sun
+    now_utc = datetime.now(timezone.utc)
+    today_utc = now_utc.date()
 
-    # 오늘이 주말이면 마지막 금요일이 기대 거래일
-    if weekday == 5:  # 토요일
-        expected_date = today_utc - timedelta(days=1)
-    elif weekday == 6:  # 일요일
-        expected_date = today_utc - timedelta(days=2)
-    else:
+    # 미국 장마감: EDT 16:00=UTC 20:00 / EST 16:00=UTC 21:00
+    # UTC 20:30 이후면 장마감 후 데이터 반영 시작 (EDT 기준 30분 여유)
+    market_closed = now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30)
+
+    if market_closed and today_utc.weekday() < 5:
+        # 장마감 후 + 평일 → 오늘이 거래일
         expected_date = today_utc
+    else:
+        # 아직 장중이거나 주말 → 가장 최근 평일 (전 거래일)
+        d = today_utc - timedelta(days=1)
+        while d.weekday() >= 5:  # 주말이면 더 뒤로
+            d -= timedelta(days=1)
+        expected_date = d
 
-    print(f"  UTC 날짜: {today_utc} ({['월','화','수','목','금','토','일'][weekday]})")
+    print(f"  UTC 시간: {now_utc.strftime('%Y-%m-%d %H:%M')} UTC")
     print(f"  기대 거래일: {expected_date}")
 
     for attempt in range(max_retries):
