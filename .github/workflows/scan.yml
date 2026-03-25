@@ -2,8 +2,8 @@ name: Daily Surge Scan
 
 on:
   schedule:
-    # UTC 20:15 = KST 05:15 (평일만)
-    - cron: '15 20 * * 1-5'
+    # UTC 21:00 = KST 06:00 (평일만, 장마감 후 1시간 여유)
+    - cron: '0 21 * * 1-5'
   workflow_dispatch:  # 수동 실행 가능
 
 permissions:
