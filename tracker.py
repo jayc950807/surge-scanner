@@ -24,10 +24,7 @@ import os
 import json
 import argparse
 import time
-from datetime import datetime, timedelta, timezone
-
-# 한국 표준시 (KST = UTC+9)
-KST = timezone(timedelta(hours=9))
+from datetime import datetime, timedelta
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -171,18 +168,43 @@ def fetch_current_prices(tickers):
 
 # ─── Step 1: Register new signals as PENDING ─────────────────────────────────
 
-def register_new_signals():
-    """오늘자 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가"""
-    today = datetime.now(KST).strftime('%Y-%m-%d')
-    signal_path = os.path.join(DATA_DIR, f'signal_{today}.csv')
+def find_latest_signal_files():
+    """data/ 폴더에서 아직 등록되지 않은 모든 signal_*.csv 파일을 찾아 반환"""
+    import glob
+    signal_files = sorted(glob.glob(os.path.join(DATA_DIR, 'signal_*.csv')))
+    return signal_files
 
-    if not os.path.exists(signal_path):
-        print(f"  오늘자 신호 파일 없음: {signal_path}")
+
+def register_new_signals():
+    """모든 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가.
+    기존: 오늘 날짜 파일만 찾음 → 날짜 불일치 시 누락 발생
+    수정: data/ 폴더의 모든 signal_*.csv를 스캔하여 미등록 신호 전부 등록
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    signal_files = find_latest_signal_files()
+
+    if not signal_files:
+        print(f"  signal 파일 없음 (data/signal_*.csv)")
         return
 
-    signals = pd.read_csv(signal_path)
+    # 모든 signal 파일을 합침
+    all_signals = []
+    for sf in signal_files:
+        try:
+            df = pd.read_csv(sf)
+            if not df.empty:
+                all_signals.append(df)
+                print(f"  signal 파일 로드: {os.path.basename(sf)} ({len(df)}건)")
+        except Exception as e:
+            print(f"  ⚠ {os.path.basename(sf)} 읽기 실패: {e}")
+
+    if not all_signals:
+        print("  등록 가능한 신호 없음")
+        return
+
+    signals = pd.concat(all_signals, ignore_index=True)
     if signals.empty:
-        print("  오늘 신호 없음")
+        print("  등록할 신호 없음")
         return
 
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
@@ -246,7 +268,7 @@ def register_new_signals():
         print(f"    + PENDING: [{strategy}] {ticker} @ ${signal_price:.2f}")
 
     save_csv(open_pos, OPEN_PATH)
-    print(f"  신규 등록: {new_count}건")
+    print(f"  신규 등록: {new_count}건 (총 signal 파일 {len(signal_files)}개 스캔)")
 
 
 # ─── Step 2: PENDING → OPEN (D+1 시가로 진입) ────────────────────────────────
@@ -262,7 +284,7 @@ def activate_pending_positions():
         print("  대기 중인 PENDING 포지션 없음")
         return
 
-    today = datetime.now(KST).strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     updated = 0
 
     for idx, row in pending.iterrows():
@@ -322,7 +344,7 @@ def update_open_positions():
         print("  업데이트할 OPEN 포지션 없음")
         return
 
-    today = datetime.now(KST).strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     tickers = active['ticker'].unique().tolist()
 
     print(f"  현재가 조회: {len(tickers)}개 티커")
@@ -480,7 +502,7 @@ def generate_tracker_summary():
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
     summary = {
-        'last_tracked': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'),
+        'last_tracked': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'open_count': len(open_pos[open_pos['status'] == 'OPEN']) if not open_pos.empty else 0,
         'pending_count': len(open_pos[open_pos['status'] == 'PENDING']) if not open_pos.empty else 0,
         'closed_count': len(closed_pos) if not closed_pos.empty else 0,
@@ -552,7 +574,7 @@ def init_from_history():
         new_row['max_hold'] = str(config.get('max_hold', 5))
         new_row['status'] = 'PENDING'
         new_row['days_held'] = '0'
-        new_row['last_updated'] = datetime.now(KST).strftime('%Y-%m-%d')
+        new_row['last_updated'] = datetime.now().strftime('%Y-%m-%d')
 
         open_pos = pd.concat([open_pos, pd.DataFrame([new_row])], ignore_index=True)
         new_count += 1
@@ -571,7 +593,7 @@ def main():
     t0 = time.time()
     print("=" * 70)
     print("  Position Tracker — Update")
-    print(f"  Time: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
     if args.init:
