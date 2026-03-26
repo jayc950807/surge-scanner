@@ -201,7 +201,7 @@ with tab_a:
     현재가가 5일 최저가와 거의 같은 바닥권 종목
 
     💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
+    매수: 신호 당일 종가 매수 (애프터마켓) ─
     익절: +5% 도달 시 즉시 매도 ─
     손절: -20% ─
     트레일링: 고점 대비 -3% 하락 시 매도 ─
@@ -236,7 +236,7 @@ with tab_a:
                 "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
             },
         )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 수익 시 -3% 트레일링 → 목표 +5% 또는 5일 타임아웃")
+        st.info("※ 신호 당일 종가 매수 (애프터마켓) → -20% 손절 주문 → 수익 시 -3% 트레일링 → 목표 +5% 또는 5일 타임아웃")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy A 신호 없음</div>', unsafe_allow_html=True)
     if not history.empty and 'strategy' in history.columns:
@@ -275,7 +275,7 @@ with tab_b:
     매출은 여전히 성장 중인 펀더멘탈 있는 종목
 
     💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
+    매수: 신호 당일 종가 매수 (애프터마켓) ─
     익절: +15% 지정가 매도 ─
     손절: -20% ─
     보유: 최대 10일, 미체결 시 종가 청산
@@ -351,7 +351,7 @@ with tab_c:
     현재가가 5일 최저가와 거의 같은 바닥권 종목
 
     💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
+    매수: 신호 당일 종가 매수 (애프터마켓) ─
     익절: +5% 도달 시 즉시 매도 ─
     손절: -20% ─
     보유: 최대 5일, 미도달 시 종가 청산
@@ -385,7 +385,7 @@ with tab_c:
                 "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
             },
         )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 목표 +5% 또는 5일 타임아웃")
+        st.info("※ 신호 당일 종가 매수 (애프터마켓) → -20% 손절 주문 → 목표 +5% 또는 5일 타임아웃")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy C 신호 없음</div>', unsafe_allow_html=True)
     if not history.empty and 'strategy' in history.columns:
@@ -423,7 +423,7 @@ with tab_d:
     RSI(14)가 25 이하로 완전히 바닥을 찍은 종목
 
     💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
+    매수: 신호 당일 종가 매수 (애프터마켓) ─
     익절: +20% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
     손절: 없음 ─
     보유: 최대 30일, 미도달 시 종가 청산
@@ -455,7 +455,7 @@ with tab_d:
                 "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
             },
         )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +20% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
+        st.info("※ 신호 당일 종가 매수 (애프터마켓) → +20% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy D 신호 없음</div>', unsafe_allow_html=True)
     if not history.empty and 'strategy' in history.columns:
@@ -492,7 +492,7 @@ with tab_e:
     평균 거래량 20만주 이상으로 유동성이 확보된 종목
 
     💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
+    매수: 신호 당일 종가 매수 (애프터마켓) ─
     익절: +10% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
     손절: 없음 ─
     보유: 최대 30일, 미도달 시 종가 청산
@@ -531,7 +531,7 @@ with tab_e:
                 "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
             },
         )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +10% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
+        st.info("※ 신호 당일 종가 매수 (애프터마켓) → +10% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
     else:
         st.markdown('<div class="no-signal">오늘 Strategy E 신호 없음</div>', unsafe_allow_html=True)
     if not history.empty and 'strategy' in history.columns:
@@ -822,7 +822,7 @@ with tab_history:
                 active = active.sort_values('_ach_sort', ascending=False)
 
             html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th>'
+            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일</th>'
             html += '<th>매수가</th><th>현재가</th><th>현재 손익률</th>'
             html += '<th>목표 익절가</th><th>보유중 최고가</th><th>최고가 도달일</th>'
             html += '<th>익절목표 달성률</th><th>익절까지 남은%</th>'
@@ -857,7 +857,7 @@ with tab_history:
 
                 if is_pending:
                     # ── PENDING: 아직 매수 전 → 참조값으로 채우기 ──
-                    ent_dt_html = '<span class="pending-fill">D+1 매수예정</span>'
+                    ent_dt_html = '<span class="pending-fill">종가 매수예정</span>'
                     ent_pr_html = f'<span class="pending-fill">신호가 ${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="pending-fill">신호가 확인중</span>'
                     # 현재가: signal_price 를 참조값으로 표시
                     cur_pr_html = f'<span class="pending-fill">${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="price-none">—</span>'
@@ -982,10 +982,10 @@ with tab_history:
                     with d_col2:
                         if status == 'PENDING':
                             st.markdown(f'''**매수 정보**
-- 상태: 대기중 (D+1 매수예정)
+- 상태: 대기중 (종가 매수예정)
 - 목표 익절가: ${tp_pr_f:.2f}
 - 손절가: ${sl_pr_f:.2f}''' if sl_pr_f > 0 else f'''**매수 정보**
-- 상태: 대기중 (D+1 매수예정)
+- 상태: 대기중 (종가 매수예정)
 - 목표 익절가: ${tp_pr_f:.2f}
 - 손절가: —''', unsafe_allow_html=True)
                         else:
@@ -1047,7 +1047,7 @@ with tab_history:
                 cp_sorted = cp_sorted.sort_values('_rp_sort', ascending=(fc_sort == '수익률 낮은순'))
 
             html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
+            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일</th><th>매수가</th>'
             html += '<th>청산 결과</th><th>청산일</th><th>청산가</th><th>최종 손익률</th>'
             html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
             html += '</tr></thead><tbody>'
@@ -1280,7 +1280,7 @@ with tab_history:
 
                 # ── 해당 티커의 개별 포지션 테이블 ──
                 html += '<table class="pos-table" style="margin-bottom:0"><thead><tr>'
-                html += '<th>전략</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
+                html += '<th>전략</th><th>신호 발생일</th><th>매수일</th><th>매수가</th>'
                 html += '<th>청산 결과</th><th>최종 손익률</th>'
                 html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
                 html += '</tr></thead><tbody>'
@@ -1316,7 +1316,7 @@ with tab_history:
 
                     if is_pending:
                         # ── PENDING: 참조값으로 빈칸 채우기 ──
-                        ent_dt_html = '<span class="pending-fill">D+1 매수예정</span>'
+                        ent_dt_html = '<span class="pending-fill">종가 매수예정</span>'
                         ent_pr_html = f'<span class="pending-fill">신호가 ${sig_pr_f:.2f}</span>' if sig_pr_f > 0 else '<span class="pending-fill">확인중</span>'
                         rp_html = '<span class="pending-fill">매수 전</span>'
                         tp_html = '<span class="pending-fill">—</span>'
