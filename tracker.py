@@ -7,7 +7,7 @@
 
   기능:
     1. 새 신호 → open_positions.csv에 PENDING으로 등록
-    2. PENDING → D+1 시가로 OPEN 전환 (entry_price 기록)
+    2. PENDING → 신호가(종가)로 즉시 OPEN 전환 (애프터마켓 매수)
     3. OPEN → 매일 현재가 조회하여 max_price, current_price, achievement_pct 업데이트
     4. 익절/손절/만기 도달 시 → closed_positions.csv로 이동
 
@@ -168,23 +168,13 @@ def fetch_current_prices(tickers):
 
 # ─── Step 1: Register new signals as PENDING ─────────────────────────────────
 
-def find_latest_signal_files():
-    """data/ 폴더에서 아직 등록되지 않은 모든 signal_*.csv 파일을 찾아 반환"""
+def register_new_signals():
+    """data/ 폴더의 모든 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가"""
     import glob
     signal_files = sorted(glob.glob(os.path.join(DATA_DIR, 'signal_*.csv')))
-    return signal_files
-
-
-def register_new_signals():
-    """모든 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가.
-    기존: 오늘 날짜 파일만 찾음 → 날짜 불일치 시 누락 발생
-    수정: data/ 폴더의 모든 signal_*.csv를 스캔하여 미등록 신호 전부 등록
-    """
-    today = datetime.now().strftime('%Y-%m-%d')
-    signal_files = find_latest_signal_files()
 
     if not signal_files:
-        print(f"  signal 파일 없음 (data/signal_*.csv)")
+        print("  신호 파일 없음")
         return
 
     # 모든 signal 파일을 합침
@@ -194,18 +184,15 @@ def register_new_signals():
             df = pd.read_csv(sf)
             if not df.empty:
                 all_signals.append(df)
-                print(f"  signal 파일 로드: {os.path.basename(sf)} ({len(df)}건)")
-        except Exception as e:
-            print(f"  ⚠ {os.path.basename(sf)} 읽기 실패: {e}")
+        except Exception:
+            continue
 
     if not all_signals:
-        print("  등록 가능한 신호 없음")
+        print("  등록할 신호 없음")
         return
 
     signals = pd.concat(all_signals, ignore_index=True)
-    if signals.empty:
-        print("  등록할 신호 없음")
-        return
+    print(f"  signal 파일 {len(signal_files)}개에서 총 {len(signals)}건 로드")
 
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
@@ -268,13 +255,13 @@ def register_new_signals():
         print(f"    + PENDING: [{strategy}] {ticker} @ ${signal_price:.2f}")
 
     save_csv(open_pos, OPEN_PATH)
-    print(f"  신규 등록: {new_count}건 (총 signal 파일 {len(signal_files)}개 스캔)")
+    print(f"  신규 등록: {new_count}건")
 
 
-# ─── Step 2: PENDING → OPEN (D+1 시가로 진입) ────────────────────────────────
+# ─── Step 2: PENDING → OPEN (신호가=종가로 즉시 진입, 애프터마켓 매수) ────────
 
 def activate_pending_positions():
-    """PENDING 상태인 포지션의 D+1 시가를 조회하여 OPEN으로 전환"""
+    """PENDING → 신호가(종가)로 즉시 OPEN 전환 (애프터마켓 매수 기준)"""
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
     if open_pos.empty:
         return
@@ -290,39 +277,37 @@ def activate_pending_positions():
     for idx, row in pending.iterrows():
         ticker = row['ticker']
         signal_date = row['signal_date']
+        signal_price = float(row['signal_price']) if row['signal_price'] else 0
 
-        # signal_date 다음 거래일의 시가 조회
-        try:
-            next_day = pd.to_datetime(signal_date) + timedelta(days=1)
-            hist = fetch_price_data(ticker, next_day.strftime('%Y-%m-%d'))
+        if signal_price <= 0:
+            print(f"    ⚠ {ticker} signal_price 없음 — 스킵")
+            continue
 
-            if hist is not None and len(hist) > 0:
-                entry_date = hist.index[0].strftime('%Y-%m-%d')
-                entry_price = float(hist['Open'].iloc[0])
+        # 매수가 = 신호가(종가) — 애프터마켓에서 종가 근처로 매수
+        entry_price = signal_price
+        entry_date = signal_date
 
-                config = STRATEGY_CONFIG.get(row['strategy'], {})
-                tp_pct = config.get('tp_pct', 0)
-                sl_pct = config.get('sl_pct', None)
+        config = STRATEGY_CONFIG.get(row['strategy'], {})
+        tp_pct = config.get('tp_pct', 0)
+        sl_pct = config.get('sl_pct', None)
 
-                tp_price = round(entry_price * (1 + tp_pct), 2)
-                sl_price = round(entry_price * (1 + sl_pct), 2) if sl_pct else ''
+        tp_price = round(entry_price * (1 + tp_pct), 2)
+        sl_price = round(entry_price * (1 + sl_pct), 2) if sl_pct else ''
 
-                open_pos.at[idx, 'entry_date'] = entry_date
-                open_pos.at[idx, 'entry_price'] = str(round(entry_price, 2))
-                open_pos.at[idx, 'tp_price'] = str(tp_price)
-                open_pos.at[idx, 'sl_price'] = str(sl_price)
-                open_pos.at[idx, 'status'] = 'OPEN'
-                open_pos.at[idx, 'current_price'] = str(round(entry_price, 2))
-                open_pos.at[idx, 'max_price'] = str(round(entry_price, 2))
-                open_pos.at[idx, 'max_price_date'] = entry_date
-                open_pos.at[idx, 'min_price'] = str(round(entry_price, 2))
-                open_pos.at[idx, 'min_price_date'] = entry_date
-                open_pos.at[idx, 'last_updated'] = today
+        open_pos.at[idx, 'entry_date'] = entry_date
+        open_pos.at[idx, 'entry_price'] = str(round(entry_price, 2))
+        open_pos.at[idx, 'tp_price'] = str(tp_price)
+        open_pos.at[idx, 'sl_price'] = str(sl_price)
+        open_pos.at[idx, 'status'] = 'OPEN'
+        open_pos.at[idx, 'current_price'] = str(round(entry_price, 2))
+        open_pos.at[idx, 'max_price'] = str(round(entry_price, 2))
+        open_pos.at[idx, 'max_price_date'] = entry_date
+        open_pos.at[idx, 'min_price'] = str(round(entry_price, 2))
+        open_pos.at[idx, 'min_price_date'] = entry_date
+        open_pos.at[idx, 'last_updated'] = today
 
-                updated += 1
-                print(f"    ✓ OPEN: [{row['strategy']}] {ticker} entry @ ${entry_price:.2f} on {entry_date}")
-        except Exception as e:
-            print(f"    Warning: {ticker} activation failed: {e}")
+        updated += 1
+        print(f"    ✓ OPEN: [{row['strategy']}] {ticker} entry @ ${entry_price:.2f} on {entry_date} (신호가 매수)")
 
     save_csv(open_pos, OPEN_PATH)
     print(f"  활성화: {updated}건 PENDING → OPEN")
@@ -405,11 +390,13 @@ def update_open_positions():
             open_pos.at[idx, 'days_held'] = str(days_held)
             open_pos.at[idx, 'last_updated'] = today
 
-            # ── 익절 체크: 일중 고가가 TP에 도달했는지 ──
+            # ── 익절 체크: 진입일 다음날부터 일중 고가가 TP에 도달했는지 ──
             tp_price = float(row['tp_price']) if row['tp_price'] else 0
             if tp_price > 0:
-                # 날짜별로 TP 도달 확인
+                # 날짜별로 TP 도달 확인 (진입일 제외 — 종가 매수이므로)
                 for hist_date, hist_row in hist.iterrows():
+                    if hist_date.strftime('%Y-%m-%d') == entry_date:
+                        continue  # 진입일(종가 매수일)은 제외
                     if float(hist_row['High']) >= tp_price:
                         tp_hit_date = hist_date.strftime('%Y-%m-%d')
                         to_close.append((idx, 'WIN', tp_price, tp_hit_date, tp_hit_date))
