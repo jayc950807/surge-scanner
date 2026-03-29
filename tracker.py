@@ -201,7 +201,7 @@ def register_new_signals():
     for _, sig in signals.iterrows():
         strategy = str(sig.get('strategy', ''))
         ticker = str(sig.get('ticker', ''))
-        date = str(sig.get('date', today))
+        date = str(sig.get('date', ''))
 
         # 이미 등록된 건 스킵
         already_open = not open_pos.empty and (
