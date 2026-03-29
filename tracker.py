@@ -497,12 +497,16 @@ def update_open_positions():
         max_achievement = min((max_price - entry_price) / entry_price / tp_pct * 100, 999) if tp_pct > 0 and entry_price > 0 else 0
 
         closed_row = row.to_dict()
+        closed_row['status'] = reason  # OPEN → WIN/LOSS/EXPIRED
         closed_row['close_date'] = close_date
         closed_row['close_price'] = str(round(close_price, 2))
         closed_row['result_pct'] = str(round(result_pct, 2))
         closed_row['result_status'] = reason
         closed_row['tp_hit_date'] = tp_hit_date if tp_hit_date else ''
         closed_row['max_achievement_pct'] = str(round(max_achievement, 1))
+        # days_held을 close_date 기준으로 재계산
+        entry_date_str = row['entry_date'] if row['entry_date'] else row['signal_date']
+        closed_row['days_held'] = str(get_trading_days_between(entry_date_str, close_date))
 
         closed_pos = pd.concat([closed_pos, pd.DataFrame([closed_row])], ignore_index=True)
 
