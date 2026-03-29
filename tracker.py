@@ -197,6 +197,7 @@ def register_new_signals():
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
+    today = datetime.now().strftime('%Y-%m-%d')
     new_count = 0
     for _, sig in signals.iterrows():
         strategy = str(sig.get('strategy', ''))
