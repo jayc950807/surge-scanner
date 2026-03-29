@@ -56,6 +56,8 @@ st.markdown("""
     .cell-win { color: #00e676; font-weight: 700; }
     .cell-none { color: #555; }
     .cell-partial { color: #ffab40; font-weight: 600; }
+    .cell-loss { color: #e57373; font-weight: 600; }
+    .cell-pending { color: #aaa; font-style: italic; }
     .cell-zero { color: #666; }
     /* 전략 뱃지 */
     .strat-badge {
@@ -595,13 +597,20 @@ def safe_float(val, fallback=0):
 def strat_badge(s):
     return f'<span class="strat-badge strat-{s}">{s}</span>'
 
-def cell_html(ach, det):
+def cell_html(ach, det, loss=0, in_progress=0):
+    """ach=WIN, det=전체, loss=LOSS+EXPIRED, in_progress=OPEN/PENDING"""
     if det == 0:
         return '<span class="cell-none">—</span>'
     if ach == det:
         return f'<span class="cell-win">{ach}/{det}</span>'
+    if in_progress > 0 and loss == 0 and ach == 0:
+        # 전부 진행중
+        return f'<span class="cell-pending">⏳{det}</span>'
+    if in_progress > 0:
+        # 일부 진행중 + 일부 완료
+        return f'<span class="cell-partial">{ach}/{det-in_progress} <small style="color:#aaa">+⏳{in_progress}</small></span>'
     if ach == 0:
-        return f'<span class="cell-partial">0/{det}</span>'
+        return f'<span class="cell-loss">0/{det}</span>'
     return f'<span class="cell-partial">{ach}/{det}</span>'
 
 def render_summary_card(value, label, color='#fff'):
@@ -685,13 +694,23 @@ with tab_history:
             det_g = recent.groupby(['strategy', 'date_str']).size().unstack(fill_value=0)
             wins_r = recent[recent['result'] == 'WIN']
             ach_g = wins_r.groupby(['strategy', 'date_str']).size().unstack(fill_value=0) if not wins_r.empty else pd.DataFrame(0, index=strategies, columns=date_order)
+            # LOSS + EXPIRED 집계
+            loss_r = recent[recent['result'].isin(['LOSS', 'EXPIRED'])]
+            loss_g = loss_r.groupby(['strategy', 'date_str']).size().unstack(fill_value=0) if not loss_r.empty else pd.DataFrame(0, index=strategies, columns=date_order)
+            # 진행중 (OPEN, PENDING) 집계
+            prog_r = recent[recent['result'].isin(['OPEN', 'PENDING'])]
+            prog_g = prog_r.groupby(['strategy', 'date_str']).size().unstack(fill_value=0) if not prog_r.empty else pd.DataFrame(0, index=strategies, columns=date_order)
 
             for s in strategies:
                 if s not in det_g.index: det_g.loc[s] = 0
                 if s not in ach_g.index: ach_g.loc[s] = 0
+                if s not in loss_g.index: loss_g.loc[s] = 0
+                if s not in prog_g.index: prog_g.loc[s] = 0
             for d in date_order:
                 if d not in det_g.columns: det_g[d] = 0
                 if d not in ach_g.columns: ach_g[d] = 0
+                if d not in loss_g.columns: loss_g[d] = 0
+                if d not in prog_g.columns: prog_g[d] = 0
 
             # HTML 테이블 생성
             html = '<table class="matrix-table"><thead><tr><th class="strat-col">전략</th>'
@@ -704,11 +723,13 @@ with tab_history:
                 for d in date_order:
                     det_v = int(det_g.loc[s, d]) if d in det_g.columns else 0
                     ach_v = int(ach_g.loc[s, d]) if d in ach_g.columns else 0
-                    html += f'<td>{cell_html(ach_v, det_v)}</td>'
+                    loss_v = int(loss_g.loc[s, d]) if d in loss_g.columns else 0
+                    prog_v = int(prog_g.loc[s, d]) if d in prog_g.columns else 0
+                    html += f'<td>{cell_html(ach_v, det_v, loss_v, prog_v)}</td>'
                 html += '</tr>'
 
             html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">최근 30일 — 셀: <b>익절 성공건수 / 총 탐지건수</b> (초록=전부달성, 주황=일부달성, 회색=미탐지)</p>{html}', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">최근 30일 — <span class="cell-win">초록=전부 익절</span> · <span class="cell-loss">빨강=결과 나옴(익절 실패)</span> · <span class="cell-partial">주황=일부 익절</span> · <span class="cell-pending">⏳=진행중</span> · <span class="cell-none">—=미탐지</span></p>{html}', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
     # 2) 월별 매트릭스
@@ -721,13 +742,21 @@ with tab_history:
             m_det_g = all_records.groupby(['strategy', 'month_str']).size().unstack(fill_value=0)
             m_wins = all_records[all_records['result'] == 'WIN']
             m_ach_g = m_wins.groupby(['strategy', 'month_str']).size().unstack(fill_value=0) if not m_wins.empty else pd.DataFrame(0, index=strategies, columns=month_order)
+            m_loss = all_records[all_records['result'].isin(['LOSS', 'EXPIRED'])]
+            m_loss_g = m_loss.groupby(['strategy', 'month_str']).size().unstack(fill_value=0) if not m_loss.empty else pd.DataFrame(0, index=strategies, columns=month_order)
+            m_prog = all_records[all_records['result'].isin(['OPEN', 'PENDING'])]
+            m_prog_g = m_prog.groupby(['strategy', 'month_str']).size().unstack(fill_value=0) if not m_prog.empty else pd.DataFrame(0, index=strategies, columns=month_order)
 
             for s in strategies:
                 if s not in m_det_g.index: m_det_g.loc[s] = 0
                 if s not in m_ach_g.index: m_ach_g.loc[s] = 0
+                if s not in m_loss_g.index: m_loss_g.loc[s] = 0
+                if s not in m_prog_g.index: m_prog_g.loc[s] = 0
             for m in month_order:
                 if m not in m_det_g.columns: m_det_g[m] = 0
                 if m not in m_ach_g.columns: m_ach_g[m] = 0
+                if m not in m_loss_g.columns: m_loss_g[m] = 0
+                if m not in m_prog_g.columns: m_prog_g[m] = 0
 
             # 달성/탐지 합산 테이블
             html = '<table class="matrix-table"><thead><tr><th class="strat-col">전략</th>'
@@ -739,10 +768,12 @@ with tab_history:
                 for m in month_order:
                     det_v = int(m_det_g.loc[s, m]) if m in m_det_g.columns else 0
                     ach_v = int(m_ach_g.loc[s, m]) if m in m_ach_g.columns else 0
-                    html += f'<td>{cell_html(ach_v, det_v)}</td>'
+                    loss_v = int(m_loss_g.loc[s, m]) if m in m_loss_g.columns else 0
+                    prog_v = int(m_prog_g.loc[s, m]) if m in m_prog_g.columns else 0
+                    html += f'<td>{cell_html(ach_v, det_v, loss_v, prog_v)}</td>'
                 html += '</tr>'
             html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">월별 종합 — 셀: <b>익절 성공건수 / 총 탐지건수</b></p>{html}', unsafe_allow_html=True)
+            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">월별 종합 — <span class="cell-win">초록=전부 익절</span> · <span class="cell-loss">빨강=결과 나옴(익절 실패)</span> · <span class="cell-partial">주황=일부 익절</span> · <span class="cell-pending">⏳=진행중</span></p>{html}', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════
     # 3) 전략별 승률
