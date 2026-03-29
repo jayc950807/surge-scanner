@@ -330,6 +330,31 @@ def update_open_positions():
         print("  업데이트할 OPEN 포지션 없음")
         return
 
+    # ── 보정: entry_price가 signal_price와 다른 구 데이터 수정 ──
+    corrected = 0
+    for idx, row in active.iterrows():
+        sig_price = float(row['signal_price']) if row['signal_price'] else 0
+        ent_price = float(row['entry_price']) if row['entry_price'] else 0
+        if sig_price > 0 and abs(ent_price - sig_price) > 0.01:
+            config = STRATEGY_CONFIG.get(row['strategy'], {})
+            tp_pct = config.get('tp_pct', 0)
+            sl_pct = config.get('sl_pct', None)
+            new_tp = round(sig_price * (1 + tp_pct), 2)
+            new_sl = round(sig_price * (1 + sl_pct), 2) if sl_pct else ''
+
+            open_pos.at[idx, 'entry_price'] = str(round(sig_price, 2))
+            open_pos.at[idx, 'entry_date'] = row['signal_date']
+            open_pos.at[idx, 'tp_price'] = str(new_tp)
+            open_pos.at[idx, 'sl_price'] = str(new_sl)
+            corrected += 1
+            print(f"    🔧 보정: [{row['strategy']}] {row['ticker']} entry ${ent_price:.2f} → ${sig_price:.2f} (signal_price)")
+    if corrected > 0:
+        save_csv(open_pos, OPEN_PATH)
+        # 보정된 데이터로 다시 로드
+        open_pos = load_csv(OPEN_PATH, OPEN_COLS)
+        active = open_pos[open_pos['status'] == 'OPEN']
+        print(f"  보정 완료: {corrected}건")
+
     today = datetime.now().strftime('%Y-%m-%d')
     tickers = active['ticker'].unique().tolist()
 
@@ -352,13 +377,22 @@ def update_open_positions():
         hist = fetch_price_data(ticker, entry_date)
 
         if hist is not None and len(hist) > 0:
-            # 진입일 이후의 데이터만 (진입일 포함)
-            max_high = float(hist['High'].max())
-            min_low = float(hist['Low'].min())
-            max_high_date = hist['High'].idxmax().strftime('%Y-%m-%d')
-            min_low_date = hist['Low'].idxmin().strftime('%Y-%m-%d')
+            # 진입일 제외 — 종가 매수이므로 당일 장중 가격은 매수 전 데이터
+            hist_after_entry = hist[hist.index.strftime('%Y-%m-%d') > entry_date]
             current = float(hist['Close'].iloc[-1])
             current_date = hist.index[-1].strftime('%Y-%m-%d')
+
+            if len(hist_after_entry) > 0:
+                max_high = float(hist_after_entry['High'].max())
+                min_low = float(hist_after_entry['Low'].min())
+                max_high_date = hist_after_entry['High'].idxmax().strftime('%Y-%m-%d')
+                min_low_date = hist_after_entry['Low'].idxmin().strftime('%Y-%m-%d')
+            else:
+                # 진입일 다음 거래일 데이터가 아직 없음
+                max_high = entry_price
+                min_low = entry_price
+                max_high_date = entry_date
+                min_low_date = entry_date
 
             # 기존 max/min과 비교
             prev_max = float(row['max_price']) if row['max_price'] else 0
@@ -573,9 +607,36 @@ def init_from_history():
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+def reset_all_positions():
+    """모든 포지션 데이터를 초기화하고, signal 파일들로부터 처음부터 다시 처리"""
+    print("\n  ⚠ 전체 리셋: open_positions.csv, closed_positions.csv 초기화")
+
+    # 빈 CSV로 덮어쓰기
+    empty_open = pd.DataFrame(columns=OPEN_COLS)
+    empty_closed = pd.DataFrame(columns=CLOSED_COLS)
+    save_csv(empty_open, OPEN_PATH)
+    save_csv(empty_closed, CLOSED_PATH)
+    print("  ✓ 포지션 데이터 초기화 완료")
+
+    # 1. 모든 signal 파일에서 신호 등록
+    print("\n  [리셋 1/3] 전체 신호 재등록")
+    register_new_signals()
+
+    # 2. PENDING → OPEN 전환
+    print("\n  [리셋 2/3] PENDING → OPEN 전환")
+    activate_pending_positions()
+
+    # 3. OPEN 포지션 업데이트 (TP/SL/만기 체크)
+    print("\n  [리셋 3/3] OPEN 포지션 업데이트")
+    update_open_positions()
+
+    print("\n  ✓ 전체 리셋 완료")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Position Tracker')
     parser.add_argument('--init', action='store_true', help='Initialize from history.csv')
+    parser.add_argument('--reset', action='store_true', help='Reset all positions and reprocess from signal files')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -583,6 +644,14 @@ def main():
     print("  Position Tracker — Update")
     print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
+
+    if args.reset:
+        reset_all_positions()
+        print("\n[4] 요약 생성")
+        generate_tracker_summary()
+        elapsed = time.time() - t0
+        print(f"\n  Tracker 완료: {elapsed:.0f}초")
+        return
 
     if args.init:
         print("\n[0] 초기화: history.csv → open_positions.csv")
