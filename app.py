@@ -1509,11 +1509,9 @@ with tab_history:
             if wins.empty:
                 st.markdown('<div class="rr-empty">No WIN positions yet</div>', unsafe_allow_html=True)
             else:
+                # days_held_f is already trading days from tracker (close_date==tp_hit_date for WIN)
+                # Do NOT use (tp_hit_date - entry_date).dt.days — that gives calendar days (Fri→Mon=3, not 1)
                 wins['ttp_days'] = wins['days_held_f']
-                # For those with tp_hit_date, calculate more precisely
-                mask = wins['tp_hit_date_dt'].notna() & wins['entry_date_dt'].notna()
-                if mask.any():
-                    wins.loc[mask, 'ttp_days'] = (wins.loc[mask, 'tp_hit_date_dt'] - wins.loc[mask, 'entry_date_dt']).dt.days
 
                 html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
                 html += '<th>Strategy</th><th>Wins</th><th>Avg Days to TP</th><th>Median</th><th>Min</th><th>Max</th><th>1일 내 도달</th>'
@@ -1637,7 +1635,8 @@ with tab_history:
                     sl_data = ss['slip_pct']
                     avg_sl = sl_data.mean(); med_sl = sl_data.median()
                     # Max unfavorable = max positive slip (bought higher than signal)
-                    max_sl = sl_data.max(); std_sl = sl_data.std()
+                    max_sl = sl_data.max()
+                    std_sl = sl_data.std() if len(sl_data) > 1 else 0.0
                     sc_ = 'var(--green-bright)' if abs(avg_sl) < 1 else 'var(--amber)' if abs(avg_sl) < 3 else 'var(--red-bright)'
                     html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{len(ss)}</td>'
                     html += f'<td style="color:{sc_};font-weight:600">{avg_sl:+.2f}%</td>'
@@ -1647,6 +1646,9 @@ with tab_history:
                 html += '</tbody></table></div>'
                 st.markdown(html, unsafe_allow_html=True)
                 st.markdown('<div class="rr-legend">양수 = 시그널가보다 비싸게 매수 (불리) | 음수 = 시그널가보다 싸게 매수 (유리)</div>', unsafe_allow_html=True)
+                # Check if all slippage is 0 (system sets entry=signal by design)
+                if abs(slip['slip_pct'].sum()) < 0.01:
+                    st.markdown('<div class="rr-legend" style="color:var(--text-muted);font-style:italic">※ 현재 시스템은 시그널가 = 진입가 (애프터마켓 종가 매수). 실거래 시 슬리피지 발생 가능.</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
 
