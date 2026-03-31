@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price
+C,FBLG,2026-03-31,22:37 KST,1.7,8.8,20.6,-25.4,4,2.41,1.79,1.36
