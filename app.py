@@ -590,14 +590,24 @@ def stag(s):
     return f'<span class="stag stag-{s}">{STRAT_TAB.get(s, s)}</span>'
 
 def cell_html(ach, det, loss=0, prog=0):
+    """Render matrix cell: ach=wins, det=total, loss=loss+expired, prog=open+pending"""
     if det == 0: return '<span class="c-none">—</span>'
     if ach == det: return f'<span class="c-win">{ach}/{det}</span>'
-    if prog > 0 and loss == 0 and ach == 0:
+    # All still in progress (no closed results yet)
+    if prog > 0 and loss == 0 and ach == 0 and prog == det:
         return f'<span class="c-pending">{det}</span>'
-    if prog > 0:
-        return f'<span class="c-partial">{ach}/{det-prog}</span> <span class="c-pending">+{prog}</span>'
-    if ach == 0: return f'<span class="c-loss">0/{det}</span>'
-    return f'<span class="c-partial">{ach}/{det}</span>'
+    # Build composite: wins / losses / in-progress
+    parts = []
+    closed = ach + loss
+    if ach > 0: parts.append(f'<span class="c-win">{ach}</span>')
+    if loss > 0: parts.append(f'<span class="c-loss">{loss}</span>')
+    if prog > 0: parts.append(f'<span class="c-pending">{prog}</span>')
+    if not parts:
+        return f'<span class="c-partial">{ach}/{det}</span>'
+    # Format: green·red·gray / total
+    sep = '<span class="c-muted">·</span>'
+    color = 'c-win' if ach > 0 and loss == 0 else 'c-loss' if ach == 0 and loss > 0 else 'c-partial'
+    return f'{sep.join(parts)} <span class="c-muted">/</span> <span class="{color}">{det}</span>'
 
 def progress_bar(val, color):
     w = min(val, 100)
@@ -907,8 +917,8 @@ with tab_history:
     </div>''', unsafe_allow_html=True)
 
     # Sub tabs
-    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl = st.tabs([
-        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L"
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl, h_analytics = st.tabs([
+        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L", "Analytics"
     ])
 
     # ── 1) Daily Matrix ──
@@ -918,7 +928,9 @@ with tab_history:
         else:
             cutoff = all_records['signal_date'].max() - pd.Timedelta(days=30)
             recent = all_records[all_records['signal_date'] >= cutoff].copy()
-            date_order = sorted(recent['date_str'].unique(), key=lambda x: pd.to_datetime(x, format='%m/%d'))
+            # Sort by actual date, not by mm/dd string (avoids year-boundary bug)
+            _date_map = recent.drop_duplicates('date_str').set_index('date_str')['signal_date']
+            date_order = sorted(recent['date_str'].unique(), key=lambda x: _date_map.get(x, pd.Timestamp.min))
 
             det_g = recent.groupby(['strategy','date_str']).size().unstack(fill_value=0)
             wins_r = recent[recent['result']=='WIN']
@@ -1107,7 +1119,18 @@ with tab_history:
                         rp=(tf-cf)/cf*100
                         rem_h=f'<span style="color:var(--blue);font-weight:500">+{rp:.1f}%</span>' if rp>0 else '<span class="c-win">HIT</span>'
                     else: rem_h='—'
-                    days_h=f'{dh}/{mh}' if dh!='—' else '—'
+                    # Expiration warning: color days based on usage ratio
+                    dh_i = safe_float(dh); mh_i = safe_float(mh)
+                    if dh!='—' and mh_i > 0:
+                        usage = dh_i / mh_i
+                        if usage >= 0.8:
+                            days_h = f'<span style="color:var(--red-bright);font-weight:700">{dh}/{mh}</span>'
+                        elif usage >= 0.6:
+                            days_h = f'<span style="color:var(--amber);font-weight:600">{dh}/{mh}</span>'
+                        else:
+                            days_h = f'{dh}/{mh}'
+                    else:
+                        days_h = f'{dh}/{mh}' if dh!='—' else '—'
 
                 st_cls = 'st-open' if status=='OPEN' else 'st-pending'
                 st_txt = 'OPEN' if status=='OPEN' else 'WAIT'
@@ -1377,10 +1400,14 @@ with tab_history:
                 chart_data=chart_data.join(td,how='outer').sort_index().ffill().fillna(0)
 
                 def calc_mdd(cs):
-                    pk=cs.cummax(); dd=cs-pk; mv=dd.min()
+                    # Prepend 0 as starting point so initial losses count as drawdown
+                    start_idx = cs.index[0] - pd.Timedelta(days=1) if len(cs) > 0 else cs.index[0]
+                    cs0 = pd.concat([pd.Series([0.0], index=[start_idx]), cs])
+                    pk=cs0.cummax(); dd=cs0-pk; mv=dd.min()
                     if mv==0: return 0,None,None,pd.Series(0,index=cs.index)
-                    me=dd.idxmin(); ms=cs.loc[:me].idxmax()
-                    return mv,ms,me,dd
+                    me=dd.idxmin(); ms=cs0.loc[:me].idxmax()
+                    # Return dd aligned to original index (drop the prepended zero)
+                    return mv,ms,me,dd.iloc[1:]
 
                 tc=chart_data['Total'] if 'Total' in chart_data.columns else pd.Series(dtype=float)
                 tm,tms,tme,tdd = calc_mdd(tc) if not tc.empty else (0,None,None,pd.Series(dtype=float))
@@ -1392,8 +1419,8 @@ with tab_history:
                         smdd[s]={'mdd':sv,'start':ss,'end':se,'dd':sd}
 
                 tp=pnl_df['result_pct'].sum(); ap=pnl_df['result_pct'].mean()
-                nt=len(pnl_df); nw=len(pnl_df[pnl_df['result_pct']>0])
-                tw=(nw/nt*100) if nt>0 else 0
+                nt=len(pnl_df); nw_profit=len(pnl_df[pnl_df['result_pct']>0])
+                tw=(nw_profit/nt*100) if nt>0 else 0
                 tc_='var(--green-bright)' if tp>0 else 'var(--red-bright)' if tp<0 else 'var(--text-muted)'
                 mc_='var(--red-bright)' if tm<-5 else 'var(--amber)' if tm<0 else 'var(--text-muted)'
                 wc_='var(--green-bright)' if tw>=80 else 'var(--amber)' if tw>0 else 'var(--text-muted)'
@@ -1402,7 +1429,7 @@ with tab_history:
                     <div class="rr-stat"><div class="s-label">Cumulative P&L</div><div class="s-value" style="color:{tc_}">{tp:+.1f}%</div></div>
                     <div class="rr-stat"><div class="s-label">Avg per Trade</div><div class="s-value" style="color:{tc_}">{ap:+.2f}%</div></div>
                     <div class="rr-stat"><div class="s-label">Trades</div><div class="s-value" style="color:var(--text-secondary)">{nt}</div></div>
-                    <div class="rr-stat"><div class="s-label">Win Rate</div><div class="s-value" style="color:{wc_}">{tw:.0f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Profit Rate</div><div class="s-value" style="color:{wc_}">{tw:.0f}%</div></div>
                     <div class="rr-stat"><div class="s-label">Max Drawdown</div><div class="s-value" style="color:{mc_}">{tm:.1f}%</div></div>
                 </div>''', unsafe_allow_html=True)
 
@@ -1455,6 +1482,329 @@ with tab_history:
 
                 sh+='</tbody></table></div>'
                 st.markdown(sh, unsafe_allow_html=True)
+
+    # ── 8) Analytics ──
+    with h_analytics:
+        if closed_pos.empty or len(closed_pos) < 2:
+            st.markdown('<div class="rr-empty">Not enough closed positions for analytics</div>', unsafe_allow_html=True)
+        else:
+            an_cp = closed_pos.copy()
+            an_cp['signal_date_dt'] = pd.to_datetime(an_cp['signal_date'], errors='coerce')
+            an_cp['entry_date_dt'] = pd.to_datetime(an_cp.get('entry_date', ''), errors='coerce')
+            an_cp['close_date_dt'] = pd.to_datetime(an_cp.get('close_date', ''), errors='coerce')
+            an_cp['tp_hit_date_dt'] = pd.to_datetime(an_cp.get('tp_hit_date', ''), errors='coerce')
+            an_cp['result_pct_f'] = pd.to_numeric(an_cp.get('result_pct', 0), errors='coerce').fillna(0)
+            an_cp['days_held_f'] = pd.to_numeric(an_cp.get('days_held', 0), errors='coerce').fillna(0)
+            an_cp['signal_price_f'] = pd.to_numeric(an_cp.get('signal_price', 0), errors='coerce').fillna(0)
+            an_cp['entry_price_f'] = pd.to_numeric(an_cp.get('entry_price', 0), errors='coerce').fillna(0)
+            an_cp['max_ach_f'] = pd.to_numeric(an_cp.get('max_achievement_pct', 0), errors='coerce').fillna(0)
+            an_rs = rs_col
+
+            # ─────────────────────────────────────────
+            # 1) TIME-TO-TP — TP 도달 소요일 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">TP 도달 속도 (Time-to-TP)</div>', unsafe_allow_html=True)
+
+            wins = an_cp[an_cp[an_rs] == 'WIN'].copy()
+            if wins.empty:
+                st.markdown('<div class="rr-empty">No WIN positions yet</div>', unsafe_allow_html=True)
+            else:
+                wins['ttp_days'] = wins['days_held_f']
+                # For those with tp_hit_date, calculate more precisely
+                mask = wins['tp_hit_date_dt'].notna() & wins['entry_date_dt'].notna()
+                if mask.any():
+                    wins.loc[mask, 'ttp_days'] = (wins.loc[mask, 'tp_hit_date_dt'] - wins.loc[mask, 'entry_date_dt']).dt.days
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Wins</th><th>Avg Days to TP</th><th>Median</th><th>Min</th><th>Max</th><th>1일 내 도달</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    sw = wins[wins['strategy'] == s]
+                    if sw.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="5" class="c-muted">—</td></tr>'
+                        continue
+                    ttp = sw['ttp_days']
+                    avg_d = ttp.mean(); med_d = ttp.median(); min_d = ttp.min(); max_d = ttp.max()
+                    d1 = len(sw[ttp <= 1])
+                    d1_pct = (d1 / len(sw) * 100) if len(sw) > 0 else 0
+                    spd_color = 'var(--green-bright)' if avg_d <= 2 else 'var(--amber)' if avg_d <= 5 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td>{len(sw)}</td>'
+                    html += f'<td style="color:{spd_color};font-weight:700">{avg_d:.1f}일</td>'
+                    html += f'<td>{med_d:.0f}일</td><td>{min_d:.0f}일</td><td>{max_d:.0f}일</td>'
+                    html += f'<td style="color:var(--green-bright)">{d1} ({d1_pct:.0f}%)</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">빠를수록 자본 회전율이 높아져 복리 효과 극대화</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 2) EXPECTED VALUE — 전략별 기대값
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">기대값 (Expected Value per Trade)</div>', unsafe_allow_html=True)
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strategy</th><th>Win Rate</th><th>Avg Win</th><th>Avg Loss</th><th>EV</th><th>Profit Factor</th>'
+            html += '</tr></thead><tbody>'
+            for s in strategies:
+                sc_ = an_cp[an_cp['strategy'] == s]
+                if sc_.empty:
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="5" class="c-muted">—</td></tr>'
+                    continue
+                nw_ = len(sc_[sc_[an_rs] == 'WIN']); nl_ = len(sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])])
+                nc_ = nw_ + nl_
+                wr_ = (nw_ / nc_ * 100) if nc_ > 0 else 0
+                w_pnl = sc_[sc_[an_rs] == 'WIN']['result_pct_f']
+                l_pnl = sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])]['result_pct_f']
+                avg_w = w_pnl.mean() if len(w_pnl) > 0 else 0
+                avg_l = l_pnl.mean() if len(l_pnl) > 0 else 0
+                ev = (wr_ / 100) * avg_w + (1 - wr_ / 100) * avg_l
+                gross_w = w_pnl.sum() if len(w_pnl) > 0 else 0
+                gross_l = abs(l_pnl.sum()) if len(l_pnl) > 0 else 0
+                pf = (gross_w / gross_l) if gross_l > 0 else float('inf') if gross_w > 0 else 0
+                ev_c = 'var(--green-bright)' if ev > 0 else 'var(--red-bright)' if ev < 0 else 'var(--text-muted)'
+                pf_c = 'var(--green-bright)' if pf >= 2 else 'var(--amber)' if pf >= 1 else 'var(--red-bright)'
+                pf_s = f'{pf:.2f}' if pf != float('inf') else '∞'
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                html += f'<td>{wr_:.1f}%</td>'
+                html += f'<td class="c-win">{avg_w:+.2f}%</td>'
+                html += f'<td class="c-loss">{avg_l:+.2f}%</td>'
+                html += f'<td style="color:{ev_c};font-weight:700;font-size:1.1em">{ev:+.2f}%</td>'
+                html += f'<td style="color:{pf_c};font-weight:600">{pf_s}</td></tr>'
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+            st.markdown('<div class="rr-legend">EV = (승률 × 평균수익) + (패률 × 평균손실) | Profit Factor = 총이익 / 총손실 (≥2.0 우수)</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 3) DAY-OF-WEEK ANALYSIS — 요일별 성과
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">요일별 신호 성과 (Day-of-Week)</div>', unsafe_allow_html=True)
+
+            dow_names = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri'}
+            an_cp['dow'] = an_cp['signal_date_dt'].dt.dayofweek
+            dow_valid = an_cp.dropna(subset=['dow'])
+
+            if dow_valid.empty:
+                st.markdown('<div class="rr-empty">No data</div>', unsafe_allow_html=True)
+            else:
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Day</th><th>Signals</th><th>Win</th><th>Loss</th><th>Win Rate</th><th>Avg P&L</th>'
+                html += '</tr></thead><tbody>'
+                for d_i in range(5):
+                    d_data = dow_valid[dow_valid['dow'] == d_i]
+                    if d_data.empty:
+                        html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    dw = len(d_data[d_data[an_rs] == 'WIN'])
+                    dl = len(d_data[d_data[an_rs].isin(['LOSS', 'EXPIRED'])])
+                    dc = dw + dl
+                    dwr = (dw / dc * 100) if dc > 0 else 0
+                    davg = d_data['result_pct_f'].mean()
+                    wrc_ = 'c-win' if dwr >= 80 else 'c-partial' if dwr >= 50 else 'c-loss' if dc > 0 else 'c-none'
+                    ac_ = 'c-win' if davg > 0 else 'c-loss' if davg < 0 else 'c-none'
+                    html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td>'
+                    html += f'<td>{len(d_data)}</td>'
+                    html += f'<td class="c-win">{dw}</td><td class="c-loss">{dl}</td>'
+                    html += f'<td class="{wrc_}">{dwr:.0f}%</td>'
+                    html += f'<td class="{ac_}">{davg:+.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">특정 요일에 승률이 현저히 낮으면 해당 요일 신호를 스킵하는 필터 고려</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 4) SLIPPAGE — 시그널가 vs 진입가 괴리
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">슬리피지 (Signal vs Entry Price)</div>', unsafe_allow_html=True)
+
+            slip = an_cp[(an_cp['signal_price_f'] > 0) & (an_cp['entry_price_f'] > 0)].copy()
+            if slip.empty:
+                st.markdown('<div class="rr-empty">No slippage data</div>', unsafe_allow_html=True)
+            else:
+                slip['slip_pct'] = (slip['entry_price_f'] - slip['signal_price_f']) / slip['signal_price_f'] * 100
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Trades</th><th>Avg Slip</th><th>Median</th><th>Max (불리)</th><th>Std Dev</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    ss = slip[slip['strategy'] == s]
+                    if ss.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    sl_data = ss['slip_pct']
+                    avg_sl = sl_data.mean(); med_sl = sl_data.median()
+                    # Max unfavorable = max positive slip (bought higher than signal)
+                    max_sl = sl_data.max(); std_sl = sl_data.std()
+                    sc_ = 'var(--green-bright)' if abs(avg_sl) < 1 else 'var(--amber)' if abs(avg_sl) < 3 else 'var(--red-bright)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{len(ss)}</td>'
+                    html += f'<td style="color:{sc_};font-weight:600">{avg_sl:+.2f}%</td>'
+                    html += f'<td>{med_sl:+.2f}%</td>'
+                    html += f'<td class="c-loss">{max_sl:+.2f}%</td>'
+                    html += f'<td class="c-muted">{std_sl:.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">양수 = 시그널가보다 비싸게 매수 (불리) | 음수 = 시그널가보다 싸게 매수 (유리)</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 5) WIN/LOSS STREAK — 연승/연패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">연승·연패 분석 (Streak)</div>', unsafe_allow_html=True)
+
+            streak_df = an_cp.dropna(subset=['close_date_dt']).sort_values('close_date_dt').copy()
+            if len(streak_df) < 2:
+                st.markdown('<div class="rr-empty">Not enough data</div>', unsafe_allow_html=True)
+            else:
+                streak_df['is_win'] = (streak_df[an_rs] == 'WIN').astype(int)
+                # Calculate streaks
+                def calc_streaks(series):
+                    max_w = max_l = cur_w = cur_l = 0
+                    all_w = []; all_l = []
+                    for v in series:
+                        if v == 1:
+                            cur_w += 1; cur_l = 0
+                            max_w = max(max_w, cur_w)
+                        else:
+                            cur_l += 1; cur_w = 0
+                            max_l = max(max_l, cur_l)
+                        if cur_w > 0: all_w.append(cur_w)
+                        if cur_l > 0: all_l.append(cur_l)
+                    avg_w = sum(all_w) / len(all_w) if all_w else 0
+                    avg_l = sum(all_l) / len(all_l) if all_l else 0
+                    return max_w, max_l, avg_w, avg_l
+
+                # Overall
+                o_mw, o_ml, o_aw, o_al = calc_streaks(streak_df['is_win'])
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Max 연승</th><th>Max 연패</th><th>Avg 연승</th><th>Avg 연패</th>'
+                html += '</tr></thead><tbody>'
+
+                # Overall row
+                ml_c = 'var(--red-bright)' if o_ml >= 5 else 'var(--amber)' if o_ml >= 3 else 'var(--text-secondary)'
+                html += f'<tr style="border-top:2px solid var(--gold-dim)"><td style="color:var(--gold);font-weight:700">TOTAL</td>'
+                html += f'<td class="c-win" style="font-weight:700;font-size:1.1em">{o_mw}</td>'
+                html += f'<td style="color:{ml_c};font-weight:700;font-size:1.1em">{o_ml}</td>'
+                html += f'<td class="c-win">{o_aw:.1f}</td><td class="c-loss">{o_al:.1f}</td></tr>'
+
+                for s in strategies:
+                    s_streak = streak_df[streak_df['strategy'] == s]
+                    if len(s_streak) < 2:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    s_mw, s_ml, s_aw, s_al = calc_streaks(s_streak['is_win'])
+                    sml_c = 'var(--red-bright)' if s_ml >= 5 else 'var(--amber)' if s_ml >= 3 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td class="c-win">{s_mw}</td><td style="color:{sml_c};font-weight:600">{s_ml}</td>'
+                    html += f'<td class="c-win">{s_aw:.1f}</td><td class="c-loss">{s_al:.1f}</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">최대 연패가 크면 자금관리(켈리 기준 등) 재검토 필요 — 심리적 한계선 설정 참고</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 6) NEAR-MISS — TP 근접 후 실패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">아쉬운 실패 (Near-Miss Analysis)</div>', unsafe_allow_html=True)
+
+            non_wins = an_cp[an_cp[an_rs].isin(['LOSS', 'EXPIRED'])].copy()
+            if non_wins.empty:
+                st.markdown('<div class="rr-empty">No losses/expirations</div>', unsafe_allow_html=True)
+            else:
+                nm_80 = non_wins[non_wins['max_ach_f'] >= 80]
+                nm_50 = non_wins[(non_wins['max_ach_f'] >= 50) & (non_wins['max_ach_f'] < 80)]
+                nm_low = non_wins[non_wins['max_ach_f'] < 50]
+
+                total_nw = len(non_wins)
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Total Loss/Exp</div><div class="s-value" style="color:var(--red-bright)">{total_nw}</div></div>
+                    <div class="rr-stat"><div class="s-label">≥80% 도달 후 실패</div><div class="s-value" style="color:var(--amber)">{len(nm_80)}</div></div>
+                    <div class="rr-stat"><div class="s-label">50~80% 도달</div><div class="s-value" style="color:var(--text-secondary)">{len(nm_50)}</div></div>
+                    <div class="rr-stat"><div class="s-label">&lt;50% (완전 실패)</div><div class="s-value" style="color:var(--red-bright)">{len(nm_low)}</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if not nm_80.empty:
+                    nm_rate = len(nm_80) / total_nw * 100
+                    st.markdown(f'<div class="rr-legend" style="color:var(--amber)">Near-miss rate: {nm_rate:.0f}% — TP의 80% 이상 도달했지만 실패한 비율이 높으면 TP 하향 조정 검토</div>', unsafe_allow_html=True)
+
+                    # Show the near-miss details
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Result</th><th>Max Ach%</th><th>Result P&L</th><th>Peak</th>'
+                    html += '</tr></thead><tbody>'
+                    for _, row in nm_80.sort_values('max_ach_f', ascending=False).head(20).iterrows():
+                        s_ = safe_str(row.get('strategy')); tk_ = safe_str(row.get('ticker'))
+                        sd_ = safe_str(row.get('signal_date')); res_ = safe_str(row.get(an_rs))
+                        ma_ = row['max_ach_f']; rp_ = row['result_pct_f']
+                        mx_ = safe_str(row.get('max_price'))
+                        html += f'<tr><td>{stag(s_)}</td><td style="font-weight:600">{tk_}</td><td>{sd_}</td>'
+                        html += f'<td>{result_badge(res_)}</td>'
+                        html += f'<td style="color:var(--amber);font-weight:700">{ma_:.0f}%</td>'
+                        html += f'<td class="c-loss">{rp_:+.1f}%</td>'
+                        html += f'<td>${mx_}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 7) CONCURRENT POSITIONS — 동시 포지션 수
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">동시 포지션 수 (Concurrent Positions)</div>', unsafe_allow_html=True)
+
+            # Build timeline from all positions (open + closed)
+            pos_events = []
+            for df_src, is_closed in [(an_cp, True)]:
+                for _, row in df_src.iterrows():
+                    ed = row['entry_date_dt']
+                    cd = row['close_date_dt'] if is_closed else pd.NaT
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': cd if pd.notna(cd) else pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+            # Include currently open positions
+            if not open_pos.empty and 'entry_date' in open_pos.columns:
+                for _, row in open_pos.iterrows():
+                    ed = pd.to_datetime(row.get('entry_date', ''), errors='coerce')
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+
+            if not pos_events:
+                st.markdown('<div class="rr-empty">No position data</div>', unsafe_allow_html=True)
+            else:
+                # Generate daily concurrent count
+                all_dates = set()
+                for pe in pos_events:
+                    dr = pd.date_range(pe['open'], pe['close'], freq='B')  # business days
+                    all_dates.update(dr)
+                if all_dates:
+                    all_dates = sorted(all_dates)
+                    daily_counts = []
+                    for dt in all_dates:
+                        cnt = sum(1 for pe in pos_events if pe['open'] <= dt <= pe['close'])
+                        daily_counts.append({'date': dt, 'count': cnt})
+                    conc_df = pd.DataFrame(daily_counts).set_index('date')
+
+                    max_conc = conc_df['count'].max()
+                    avg_conc = conc_df['count'].mean()
+                    max_date = conc_df['count'].idxmax()
+                    max_date_s = max_date.strftime('%Y-%m-%d') if hasattr(max_date, 'strftime') else str(max_date)
+
+                    mc_c = 'var(--red-bright)' if max_conc >= 10 else 'var(--amber)' if max_conc >= 5 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Max Concurrent</div><div class="s-value" style="color:{mc_c}">{max_conc}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Concurrent</div><div class="s-value" style="color:var(--text-secondary)">{avg_conc:.1f}</div></div>
+                        <div class="rr-stat"><div class="s-label">Peak Date</div><div class="s-value" style="color:var(--text-secondary);font-size:0.8em">{max_date_s}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    st.markdown('<div class="rr-legend">동시 포지션 수 추이 — 자금 배분 및 리스크 노출 관리에 활용</div>', unsafe_allow_html=True)
+                    st.area_chart(conc_df, color=['#c9a96e'])
+                else:
+                    st.markdown('<div class="rr-empty">No date range data</div>', unsafe_allow_html=True)
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
