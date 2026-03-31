@@ -95,20 +95,38 @@ def get_trading_days_between(start_date, end_date):
     return len(days) - 1  # start_date 제외
 
 
-def fetch_price_data(ticker, start_date, end_date=None):
-    """yfinance로 특정 기간 가격 데이터 조회"""
-    try:
-        tk = yf.Ticker(ticker)
-        if end_date:
-            # end_date는 exclusive이므로 +1일
-            end_dt = pd.to_datetime(end_date) + timedelta(days=1)
-            df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'))
-        else:
-            df = tk.history(start=start_date)
-        return df if len(df) > 0 else None
-    except Exception as e:
-        print(f"    Warning: {ticker} price fetch failed: {e}")
+def fetch_price_data(ticker, start_date, end_date=None, timeout_sec=30):
+    """yfinance로 특정 기간 가격 데이터 조회 (timeout 포함)"""
+    import signal as sig_mod
+    import threading
+
+    result = [None]
+    error = [None]
+
+    def _fetch():
+        try:
+            tk = yf.Ticker(ticker)
+            if end_date:
+                end_dt = pd.to_datetime(end_date) + timedelta(days=1)
+                df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'))
+            else:
+                df = tk.history(start=start_date)
+            result[0] = df if len(df) > 0 else None
+        except Exception as e:
+            error[0] = e
+
+    thread = threading.Thread(target=_fetch)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=timeout_sec)
+
+    if thread.is_alive():
+        print(f"    ⏱ TIMEOUT: {ticker} — {timeout_sec}초 초과, 스킵")
         return None
+    if error[0]:
+        print(f"    Warning: {ticker} price fetch failed: {error[0]}")
+        return None
+    return result[0]
 
 
 def fetch_current_prices(tickers):
@@ -123,7 +141,7 @@ def fetch_current_prices(tickers):
         batch = tickers[i:i + batch_size]
         try:
             data = yf.download(' '.join(batch), period='5d',
-                             group_by='ticker', progress=False, threads=True, timeout=30)
+                             group_by='ticker', progress=False, threads=True, timeout=60)
             if data is None or data.empty:
                 continue
 
@@ -362,8 +380,11 @@ def update_open_positions():
     current_prices = fetch_current_prices(tickers)
 
     to_close = []  # (index, close_reason, close_price, close_date)
+    total_active = len(active)
+    processed = 0
 
     for idx, row in active.iterrows():
+        processed += 1
         ticker = row['ticker']
         entry_price = float(row['entry_price']) if row['entry_price'] else 0
         strategy = row['strategy']
@@ -372,9 +393,13 @@ def update_open_positions():
         if entry_price == 0:
             continue
 
+        if processed % 10 == 0:
+            print(f"  진행: {processed}/{total_active} ({processed/total_active*100:.0f}%)")
+
         # 진입일부터의 상세 가격 데이터 조회 (일중 고/저 체크를 위해)
         entry_date = row['entry_date']
-        hist = fetch_price_data(ticker, entry_date)
+        hist = fetch_price_data(ticker, entry_date, timeout_sec=30)
+        time.sleep(0.5)  # yfinance rate limit 방지
 
         if hist is not None and len(hist) > 0:
             # 진입일 제외 — 종가 매수이므로 당일 장중 가격은 매수 전 데이터
