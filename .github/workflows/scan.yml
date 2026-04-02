@@ -10,6 +10,10 @@ on:
         description: '포지션 전체 리셋 (YES 입력 시 초기화 후 재처리)'
         required: false
         default: ''
+      reverify:
+        description: '전체 히스토리 재검증 (YES 입력 시 모든 결과 재확인)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -37,7 +41,10 @@ jobs:
 
       - name: Run position tracker
         run: |
-          if [ "${{ github.event.inputs.reset_tracker }}" = "YES" ]; then
+          if [ "${{ github.event.inputs.reverify }}" = "YES" ]; then
+            echo "🔄 전체 히스토리 재검증 모드"
+            python tracker.py --reverify
+          elif [ "${{ github.event.inputs.reset_tracker }}" = "YES" ]; then
             echo "🔄 포지션 전체 리셋 모드"
             python tracker.py --reset
           else
