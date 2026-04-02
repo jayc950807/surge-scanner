@@ -96,7 +96,7 @@ def get_trading_days_between(start_date, end_date):
 
 
 def fetch_price_data(ticker, start_date, end_date=None):
-    """yfinance로 특정 기간 가격 데이터 조회"""
+    """yfinance로 특정 기간 가격 데이터 조회 (timezone 자동 처리)"""
     try:
         tk = yf.Ticker(ticker)
         if end_date:
@@ -104,7 +104,12 @@ def fetch_price_data(ticker, start_date, end_date=None):
             df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'))
         else:
             df = tk.history(start=start_date)
-        return df if len(df) > 0 else None
+        if df is not None and len(df) > 0:
+            # timezone 제거 (yfinance가 America/New_York 등 반환 → naive로 통일)
+            if df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
+            return df
+        return None
     except Exception as e:
         print(f"    Warning: {ticker} price fetch failed: {e}")
         return None
