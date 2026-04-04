@@ -25,7 +25,26 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run optimizer
-        run: python backtest_optimizer.py
+        run: python backtest_optimizer.py 2>&1 | tee optimizer_output.log
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Optimizer Results 🔬" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f optimizer_best.csv ]; then
+            echo "**Best strategies found:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -10 optimizer_best.csv >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f optimizer_output.log ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Log (last 15 lines):**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -15 optimizer_output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Commit results
         run: |
@@ -48,4 +67,5 @@ jobs:
             optimizer_best.csv
             optimizer_decent.csv
             optimizer_all_top100.csv
+            optimizer_output.log
           retention-days: 30
