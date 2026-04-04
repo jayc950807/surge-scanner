@@ -1,0 +1,75 @@
+name: Strategy Explorer
+
+on:
+  workflow_dispatch:  # 수동 실행
+
+permissions:
+  contents: write
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run explorer
+        run: python explorer.py 2>&1 | tee explorer_output.log
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Strategy Explorer Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/explorer_summary.json ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/explorer_summary.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f data/explorer_best.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Best (90%+ WR):**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -20 data/explorer_best.csv >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Log (last 30 lines):**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -30 explorer_output.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "explore: $(date +%Y-%m-%d) strategy discovery"
+            git push
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-${{ github.run_id }}
+          path: |
+            data/explorer_*.csv
+            data/explorer_summary.json
+            explorer_output.log
+          retention-days: 30
