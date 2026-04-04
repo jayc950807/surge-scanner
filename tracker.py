@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Scanner — Position Tracker (FIXED v2)
+  US Stock Surge Scanner — Position Tracker (FIXED v3)
 
   수정 사항:
     1. TP/SL 체크를 날짜순으로 하루씩 동시 확인 (기존: TP 전체→SL 전체 순서 버그)
@@ -9,6 +9,10 @@
     3. 진입일(entry_date) 포함 TP/SL 체크 통일
     4. --reverify 옵션: 전체 청산 내역 재검증
     5. trailing stop을 날짜순 루프 안에서 처리
+    6. Fix #1: 모든 bare except을 적절한 로깅과 함께 처리
+    7. Fix #7: datetime.now() 일관성 - signal 파일 자동 감지 + UTC timezone 사용
+    8. Fix #8: 미사용 fetch_current_prices 함수 제거
+    9. Fix #9: O(n²) pd.concat 최적화 - 리스트에 모으고 한 번에 concat
 
   Usage:
     python tracker.py                # 전체 업데이트
@@ -24,32 +28,20 @@ import os
 import json
 import argparse
 import time
-from datetime import datetime, timedelta
+import glob
+import logging
+from datetime import datetime, timedelta, timezone
 
-# ─── Configuration ────────────────────────────────────────────────────────────
+# ─── Logging Setup ────────────────────────────────────────────────────────────
+logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
-STRATEGY_CONFIG = {
-    'A': {'tp_pct': 0.05, 'sl_pct': -0.20, 'trailing_pct': -0.03, 'max_hold': 5},
-    'B': {'tp_pct': 0.15, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 10},
-    'C': {'tp_pct': 0.05, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 5},
-    'D': {'tp_pct': 0.20, 'sl_pct': None,   'trailing_pct': None,  'max_hold': 30},
-    'E': {'tp_pct': 0.10, 'sl_pct': None,   'trailing_pct': None,  'max_hold': 30},
-}
-
-STRATEGY_NAMES = {
-    'A': '급락 반등 +5%',
-    'B': '고수익 +15%',
-    'C': '과매도 반등 +5%',
-    'D': '초저가 폭락 +20%',
-    'E': '급락 속반등 +10%',
-}
-
-DATA_DIR = 'data'
-OPEN_PATH = os.path.join(DATA_DIR, 'open_positions.csv')
-CLOSED_PATH = os.path.join(DATA_DIR, 'closed_positions.csv')
+# ─── Import from shared_config ────────────────────────────────────────────────
+from shared_config import (
+    STRATEGY_CONFIG, STRATEGY_NAMES, DATA_DIR, KST,
+    download_batch, extract_ticker_df
+)
 
 # ─── Column definitions ──────────────────────────────────────────────────────
-
 OPEN_COLS = [
     'strategy', 'ticker', 'signal_date', 'signal_price',
     'entry_date', 'entry_price',
@@ -68,10 +60,14 @@ CLOSED_COLS = OPEN_COLS + [
     'max_achievement_pct',
 ]
 
+OPEN_PATH = os.path.join(DATA_DIR, 'open_positions.csv')
+CLOSED_PATH = os.path.join(DATA_DIR, 'closed_positions.csv')
+
 
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def load_csv(path, cols=None):
+    """Load CSV file with optional column validation."""
     if os.path.exists(path):
         df = pd.read_csv(path, dtype=str)
         if cols:
@@ -85,6 +81,7 @@ def load_csv(path, cols=None):
 
 
 def save_csv(df, path):
+    """Save DataFrame to CSV."""
     os.makedirs(DATA_DIR, exist_ok=True)
     df.to_csv(path, index=False)
 
@@ -96,7 +93,10 @@ def get_trading_days_between(start_date, end_date):
 
 
 def fetch_price_data(ticker, start_date, end_date=None):
-    """yfinance로 특정 기간 가격 데이터 조회 (timezone 자동 처리)"""
+    """
+    yfinance로 특정 기간 가격 데이터 조회 (timezone 자동 처리).
+    Fix #1: Proper exception handling with logging.
+    """
     try:
         tk = yf.Ticker(ticker)
         if end_date:
@@ -111,69 +111,15 @@ def fetch_price_data(ticker, start_date, end_date=None):
             return df
         return None
     except Exception as e:
-        print(f"    Warning: {ticker} price fetch failed: {e}")
+        logging.warning(f"{ticker} price fetch failed: {e}")
         return None
-
-
-def fetch_current_prices(tickers):
-    """여러 티커의 현재가를 배치로 조회"""
-    if not tickers:
-        return {}
-
-    prices = {}
-    batch_size = 50
-
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        try:
-            data = yf.download(' '.join(batch), period='5d',
-                             group_by='ticker', progress=False, threads=True, timeout=30)
-            if data is None or data.empty:
-                continue
-
-            for tk in batch:
-                try:
-                    if len(batch) == 1:
-                        if isinstance(data.columns, pd.MultiIndex):
-                            df = data.xs(tk, level=1, axis=1) if tk in data.columns.get_level_values(1) else data
-                        else:
-                            df = data
-                    else:
-                        if isinstance(data.columns, pd.MultiIndex):
-                            level_values = [set(data.columns.get_level_values(i)) for i in range(data.columns.nlevels)]
-                            ticker_level = None
-                            for lvl_i, vals in enumerate(level_values):
-                                if tk in vals:
-                                    ticker_level = lvl_i
-                                    break
-                            if ticker_level is not None:
-                                df = data.xs(tk, level=ticker_level, axis=1)
-                            else:
-                                continue
-                        else:
-                            continue
-
-                    df = df.dropna(how='all')
-                    if len(df) > 0:
-                        prices[tk] = {
-                            'close': float(df['Close'].iloc[-1]),
-                            'high': float(df['High'].iloc[-1]),
-                            'low': float(df['Low'].iloc[-1]),
-                            'date': df.index[-1].strftime('%Y-%m-%d'),
-                        }
-                except:
-                    continue
-        except:
-            continue
-        time.sleep(1)
-
-    return prices
 
 
 def get_entry_for_signal(ticker, signal_date):
     """
     signal_date 다음 거래일의 시가를 조회하여 entry_date와 entry_price를 반환.
     동일 티커/날짜 복수 전략 시 동일한 진입가를 보장함.
+    Fix #1: Proper exception handling with logging.
     """
     try:
         next_day = pd.to_datetime(signal_date) + timedelta(days=1)
@@ -182,8 +128,8 @@ def get_entry_for_signal(ticker, signal_date):
             entry_date = hist.index[0].strftime('%Y-%m-%d')
             entry_price = float(hist['Open'].iloc[0])
             return entry_date, entry_price
-    except:
-        pass
+    except Exception as e:
+        logging.warning(f"get_entry_for_signal({ticker}, {signal_date}) failed: {e}")
     return None, None
 
 
@@ -208,7 +154,8 @@ def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_ho
             h = float(row['High'])
             l = float(row['Low'])
             c = float(row['Close'])
-        except:
+        except Exception as e:
+            logging.warning(f"Failed to parse price data for {dt}: {e}")
             continue
 
         date_str = dt.strftime('%Y-%m-%d')
@@ -287,18 +234,60 @@ def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_ho
             min_price, min_price_date, 0, None, 0)
 
 
+def get_most_recent_signal_file_date():
+    """
+    Fix #7: Find the most recent signal_*.csv file and extract its date.
+    Used instead of relying on datetime.now() which is unreliable on GitHub Actions.
+    Returns date string in 'YYYY-MM-DD' format, or None if no signal files found.
+    """
+    try:
+        signal_files = glob.glob(os.path.join(DATA_DIR, 'signal_*.csv'))
+        if not signal_files:
+            return None
+        # Sort by filename and take the latest
+        signal_files.sort()
+        latest_file = signal_files[-1]
+        # Extract date from filename: signal_YYYY-MM-DD.csv
+        basename = os.path.basename(latest_file)
+        date_str = basename.replace('signal_', '').replace('.csv', '')
+        # Validate format
+        try:
+            pd.to_datetime(date_str, format='%Y-%m-%d')
+            return date_str
+        except (ValueError, TypeError):
+            logging.warning(f"Could not parse signal file date: {basename}")
+            return None
+    except Exception as e:
+        logging.warning(f"Error getting most recent signal file date: {e}")
+        return None
+
+
 # ─── Step 1: Register new signals as PENDING ─────────────────────────────────
 
 def register_new_signals():
-    """오늘자 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가"""
-    today = datetime.now().strftime('%Y-%m-%d')
-    signal_path = os.path.join(DATA_DIR, f'signal_{today}.csv')
+    """
+    오늘자 signal CSV에서 아직 등록 안 된 신호를 PENDING으로 추가.
+    Fix #7: Try to detect signal file from directory, fall back to current UTC date.
+    Fix #9: Collect rows and do one pd.concat at the end instead of concat in loop.
+    """
+    # Fix #7: Try to find the most recent signal file
+    signal_date = get_most_recent_signal_file_date()
+    if signal_date is None:
+        # Fallback to current UTC date
+        signal_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+    signal_path = os.path.join(DATA_DIR, f'signal_{signal_date}.csv')
 
     if not os.path.exists(signal_path):
         print(f"  오늘자 신호 파일 없음: {signal_path}")
         return
 
-    signals = pd.read_csv(signal_path)
+    try:
+        signals = pd.read_csv(signal_path)
+    except Exception as e:
+        logging.warning(f"Failed to read signal file {signal_path}: {e}")
+        return
+
     if signals.empty:
         print("  오늘 신호 없음")
         return
@@ -307,10 +296,12 @@ def register_new_signals():
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
     new_count = 0
+    new_rows = []  # Fix #9: Collect rows instead of concat in loop
+
     for _, sig in signals.iterrows():
         strategy = str(sig.get('strategy', ''))
         ticker = str(sig.get('ticker', ''))
-        date = str(sig.get('date', today))
+        date = str(sig.get('date', signal_date))
 
         # 이미 등록된 건 스킵
         already_open = not open_pos.empty and (
@@ -357,12 +348,16 @@ def register_new_signals():
             'change_pct': '',
             'achievement_pct': '',
             'days_held': '0',
-            'last_updated': today,
+            'last_updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
         }
 
-        open_pos = pd.concat([open_pos, pd.DataFrame([new_row])], ignore_index=True)
+        new_rows.append(new_row)
         new_count += 1
         print(f"    + PENDING: [{strategy}] {ticker} @ ${signal_price:.2f}")
+
+    # Fix #9: Do one concat at the end
+    if new_rows:
+        open_pos = pd.concat([open_pos, pd.DataFrame(new_rows)], ignore_index=True)
 
     save_csv(open_pos, OPEN_PATH)
     print(f"  신규 등록: {new_count}건")
@@ -384,7 +379,7 @@ def activate_pending_positions():
         print("  대기 중인 PENDING 포지션 없음")
         return
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     updated = 0
 
     # [수정] 동일 티커/날짜 → 동일 entry_price 보장을 위한 캐시
@@ -438,6 +433,8 @@ def update_open_positions():
     """
     OPEN 포지션의 현재가를 업데이트하고 익절/손절/만기 체크.
     [수정] track_position_daywise() 사용 — 날짜순 TP/SL 동시 체크.
+    Fix #1: Proper exception handling with logging.
+    Fix #9: Collect closed positions in list, concat once at the end.
     """
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
@@ -451,7 +448,7 @@ def update_open_positions():
         print("  업데이트할 OPEN 포지션 없음")
         return
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
     # 티커별 가격 데이터 캐시 (동일 티커 복수 전략 시 중복 조회 방지)
     hist_cache = {}
@@ -503,10 +500,13 @@ def update_open_positions():
 
         # 현재가/max/min 업데이트 (청산 안 됐더라도)
         if hist_tracking is not None and len(hist_tracking) > 0:
-            current = float(hist_tracking['Close'].iloc[-1])
-            open_pos.at[idx, 'current_price'] = str(round(current, 2))
-            change_pct = (current - entry_price) / entry_price * 100
-            open_pos.at[idx, 'change_pct'] = str(round(change_pct, 2))
+            try:
+                current = float(hist_tracking['Close'].iloc[-1])
+                open_pos.at[idx, 'current_price'] = str(round(current, 2))
+                change_pct = (current - entry_price) / entry_price * 100
+                open_pos.at[idx, 'change_pct'] = str(round(change_pct, 2))
+            except Exception as e:
+                logging.warning(f"Failed to update current price for {ticker}: {e}")
 
         open_pos.at[idx, 'max_price'] = str(round(max_pr, 2)) if max_pr else ''
         open_pos.at[idx, 'max_price_date'] = max_pr_date or ''
@@ -525,7 +525,10 @@ def update_open_positions():
                   f"@ ${close_price:.2f} ({result_pct:+.1f}%) on {close_date}")
 
     # ── 청산 처리 ──
+    # Fix #9: Collect closed rows instead of concat in loop
+    closed_rows = []
     closed_indices = set()
+
     for (idx, reason, close_price, close_date, tp_hit_date, result_pct, max_ach) in to_close:
         if idx in closed_indices:
             continue
@@ -540,7 +543,10 @@ def update_open_positions():
         closed_row['tp_hit_date'] = tp_hit_date
         closed_row['max_achievement_pct'] = str(round(max_ach, 1))
 
-        closed_pos = pd.concat([closed_pos, pd.DataFrame([closed_row])], ignore_index=True)
+        closed_rows.append(closed_row)
+
+    if closed_rows:
+        closed_pos = pd.concat([closed_pos, pd.DataFrame(closed_rows)], ignore_index=True)
 
     if closed_indices:
         open_pos = open_pos.drop(index=list(closed_indices)).reset_index(drop=True)
@@ -559,7 +565,7 @@ def generate_tracker_summary():
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
     summary = {
-        'last_tracked': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'last_tracked': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
         'open_count': len(open_pos[open_pos['status'] == 'OPEN']) if not open_pos.empty else 0,
         'pending_count': len(open_pos[open_pos['status'] == 'PENDING']) if not open_pos.empty else 0,
         'closed_count': len(closed_pos) if not closed_pos.empty else 0,
@@ -571,8 +577,11 @@ def generate_tracker_summary():
         summary['expired_count'] = len(closed_pos[closed_pos['result_status'] == 'EXPIRED'])
         summary['trailing_count'] = len(closed_pos[closed_pos['result_status'] == 'TRAILING'])
 
-    with open(os.path.join(DATA_DIR, 'tracker_summary.json'), 'w') as f:
-        json.dump(summary, f, indent=2)
+    try:
+        with open(os.path.join(DATA_DIR, 'tracker_summary.json'), 'w') as f:
+            json.dump(summary, f, indent=2)
+    except Exception as e:
+        logging.warning(f"Failed to write tracker summary: {e}")
 
     print(f"  요약: OPEN={summary.get('open_count', 0)} | "
           f"WIN={summary.get('win_count', 0)} | "
@@ -588,6 +597,8 @@ def reverify_all():
     [신규] 모든 청산 내역을 재검증.
     가격 데이터를 다시 조회하고, D+1 시가 기준으로 entry_price를 재설정한 뒤
     날짜순 TP/SL 동시 체크로 결과를 다시 판정.
+    Fix #1: Proper exception handling with logging.
+    Fix #9: Collect rows in lists, concat once at the end.
     """
     print("=" * 70)
     print("  RE-VERIFY: 전체 청산 + 진행중 내역 재검증")
@@ -729,11 +740,17 @@ def reverify_all():
             new_closed.append(pos)
         else:
             # 아직 진행중
-            current = float(hist_tracking['Close'].iloc[-1]) if len(hist_tracking) > 0 else entry_price
-            pos['current_price'] = str(round(current, 2))
-            pos['change_pct'] = str(round((current - entry_price) / entry_price * 100, 2))
+            try:
+                current = float(hist_tracking['Close'].iloc[-1]) if len(hist_tracking) > 0 else entry_price
+                pos['current_price'] = str(round(current, 2))
+                pos['change_pct'] = str(round((current - entry_price) / entry_price * 100, 2))
+            except Exception as e:
+                logging.warning(f"Failed to update current price in reverify: {e}")
+                pos['current_price'] = str(round(entry_price, 2))
+                pos['change_pct'] = '0'
+
             pos['status'] = 'OPEN'
-            pos['last_updated'] = datetime.now().strftime('%Y-%m-%d')
+            pos['last_updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
             if old_result:
                 print(f"    CHANGED: [{strategy}] {ticker} {signal_date}: {old_result} → STILL OPEN "
@@ -788,13 +805,22 @@ def reverify_all():
 # ─── Init: Backfill from history.csv ─────────────────────────────────────────
 
 def init_from_history():
-    """기존 history.csv에서 과거 신호를 포지션으로 초기 등록 (최초 1회)"""
+    """
+    기존 history.csv에서 과거 신호를 포지션으로 초기 등록 (최초 1회).
+    Fix #1: Proper exception handling with logging.
+    Fix #9: Collect rows in list, concat once at the end.
+    """
     hist_path = os.path.join(DATA_DIR, 'history.csv')
     if not os.path.exists(hist_path):
         print("  history.csv 없음 — 스킵")
         return
 
-    history = pd.read_csv(hist_path)
+    try:
+        history = pd.read_csv(hist_path)
+    except Exception as e:
+        logging.warning(f"Failed to read history.csv: {e}")
+        return
+
     if history.empty:
         print("  history.csv 비어있음 — 스킵")
         return
@@ -803,6 +829,8 @@ def init_from_history():
     closed_pos = load_csv(CLOSED_PATH, CLOSED_COLS)
 
     new_count = 0
+    new_rows = []  # Fix #9: Collect rows instead of concat in loop
+
     for _, sig in history.iterrows():
         strategy = str(sig.get('strategy', ''))
         ticker = str(sig.get('ticker', ''))
@@ -836,10 +864,14 @@ def init_from_history():
         new_row['max_hold'] = str(config.get('max_hold', 5))
         new_row['status'] = 'PENDING'
         new_row['days_held'] = '0'
-        new_row['last_updated'] = datetime.now().strftime('%Y-%m-%d')
+        new_row['last_updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
-        open_pos = pd.concat([open_pos, pd.DataFrame([new_row])], ignore_index=True)
+        new_rows.append(new_row)
         new_count += 1
+
+    # Fix #9: Do one concat at the end
+    if new_rows:
+        open_pos = pd.concat([open_pos, pd.DataFrame(new_rows)], ignore_index=True)
 
     save_csv(open_pos, OPEN_PATH)
     print(f"  초기화: {new_count}건 등록 (from history.csv)")
@@ -855,8 +887,8 @@ def main():
 
     t0 = time.time()
     print("=" * 70)
-    print("  Position Tracker v2 (Fixed) — Update")
-    print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("  Position Tracker v3 (Fixed) — Update")
+    print(f"  Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
     if args.reverify:
