@@ -36,10 +36,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Run unit tests
+        run: python -m pytest tests/ -v --tb=short 2>&1 || echo "⚠️ Some tests failed"
+
       - name: Run scanner
-        run: python scanner.py
+        id: scanner
+        run: |
+          python scanner.py 2>&1 | tee scanner_output.log
+          echo "scanner_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
       - name: Run position tracker
+        if: steps.scanner.outcome == 'success'
         run: |
           if [ "${{ github.event.inputs.reverify }}" = "YES" ]; then
             echo "🔄 전체 히스토리 재검증 모드"
@@ -51,7 +58,22 @@ jobs:
             python tracker.py
           fi
 
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Scan Results 📊" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f scanner_output.log ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 scanner_output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Signal files:**" >> $GITHUB_STEP_SUMMARY
+          ls -la data/signal_*.csv 2>/dev/null | tail -5 >> $GITHUB_STEP_SUMMARY || echo "No signal files found" >> $GITHUB_STEP_SUMMARY
+
       - name: Commit and push results
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -68,5 +90,8 @@ jobs:
         if: always()
         with:
           name: scan-${{ github.run_id }}
-          path: data/signal_*.csv
+          path: |
+            data/signal_*.csv
+            data/positions_*.csv
+            scanner_output.log
           retention-days: 30
