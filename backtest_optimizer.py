@@ -11,76 +11,34 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
 import time
 import warnings
 import sys
+import logging
 from datetime import datetime, timedelta
 
 warnings.filterwarnings('ignore')
 
-LEVERAGED_ETF = {
-    'TQQQ','SQQQ','UPRO','SPXU','UDOW','SDOW','QLD','QID','SSO','SDS',
-    'LABU','LABD','NUGT','DUST','JNUG','JDST','FNGU','FNGD','SOXL','SOXS',
-    'TNA','TZA','SPXS','SPXL','TECL','TECS','FAS','FAZ','ERX','ERY',
-    'CURE','UVXY','SVXY','VXX','VIXY','TVIX','UCO','SCO','BOIL','KOLD',
-    'UNG','DGAZ','UGAZ','AGQ','ZSL','USLV','DSLV','GDXU','GDXD',
-}
+# Configure logging
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ─── Shared Imports ──────────────────────────────────────────────────────────
+from shared_config import (
+    LEVERAGED_ETF,
+    calc_rsi_wilder,
+    get_all_tickers,
+    download_batch,
+    extract_ticker_df,
+)
 
 MIN_SIGNALS = 100  # 최소 100건 (월 4건 × 2년 ≈ 96건)
-
-# ─── 유니버스 (scanner.py 동일) ──────────────────────────────────────────────
-
-def get_all_tickers():
-    """NASDAQ/NYSE/AMEX 전체 상장 종목 수집"""
-    tickers = set()
-    urls = [
-        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt",
-        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
-        "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
-    ]
-    for url in urls:
-        try:
-            resp = requests.get(url, timeout=15)
-            if resp.status_code == 200:
-                for line in resp.text.strip().split('\n')[1:]:
-                    parts = line.split('|')
-                    if len(parts) >= 2:
-                        sym = parts[1].strip() if 'nasdaqtraded' in url else parts[0].strip()
-                        if sym and sym.isalpha() and 1 <= len(sym) <= 5 and sym != 'Symbol':
-                            tickers.add(sym)
-                print(f"  [{url.split('/')[-1]}] {len(tickers)} tickers")
-        except Exception as e:
-            print(f"  Warning: {url.split('/')[-1]}: {e}")
-
-    if len(tickers) < 1000:
-        try:
-            resp = requests.get("https://www.sec.gov/files/company_tickers.json",
-                              headers={"User-Agent": "SurgeScanner/2.0 scanner@example.com"}, timeout=15)
-            if resp.status_code == 200:
-                for item in resp.json().values():
-                    sym = item.get('ticker', '').strip()
-                    if sym and 1 <= len(sym) <= 5 and sym.isalpha():
-                        tickers.add(sym)
-                print(f"  [SEC fallback] {len(tickers)} tickers")
-        except:
-            pass
-
-    tickers -= LEVERAGED_ETF
-    tickers = {t for t in tickers if not t.endswith('W') and not any(c.isdigit() for c in t)}
-    print(f"  Total: {len(tickers)} tickers")
-    return sorted(tickers)
+MAX_RUNTIME_MINUTES = 330  # 5.5 hours (30min safety margin from 6-hour timeout)
 
 # ─── 지표 ────────────────────────────────────────────────────────────────────
-
-def calc_rsi(series, period):
-    delta = series.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = (-delta).where(delta < 0, 0)
-    avg_gain = gain.ewm(alpha=1/period, min_periods=period).mean()
-    avg_loss = loss.ewm(alpha=1/period, min_periods=period).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
 
 def consecutive_down_days(close):
     is_down = close < close.shift(1)
@@ -95,8 +53,8 @@ def precompute_indicators(df):
 
     ind = {
         'close': close, 'high': high, 'low': low, 'vol': vol,
-        'rsi7': calc_rsi(close, 7),
-        'rsi14': calc_rsi(close, 14),
+        'rsi7': calc_rsi_wilder(close, 7),
+        'rsi14': calc_rsi_wilder(close, 14),
         'ret_1d': close.pct_change(1) * 100,
         'ret_3d': close.pct_change(3) * 100,
         'ret_5d': close.pct_change(5) * 100,
@@ -129,34 +87,6 @@ def ticker_has_potential(ind):
     has_high_vol = np.any(intra[~np.isnan(intra)] >= 15)
 
     return has_low_rsi or has_low_price or has_big_drop or has_high_vol
-
-# ─── 배치 다운로드 ───────────────────────────────────────────────────────────
-
-def download_batch(tickers, period='2y'):
-    for attempt in range(3):
-        try:
-            data = yf.download(' '.join(tickers), period=period,
-                             group_by='ticker', progress=False, threads=True, timeout=60)
-            return data
-        except:
-            if attempt < 2:
-                time.sleep(3)
-    return None
-
-def extract_ticker_df(data, tk, batch_len):
-    """배치 데이터에서 개별 종목 DataFrame 추출"""
-    try:
-        if batch_len == 1:
-            return data
-        if isinstance(data.columns, pd.MultiIndex):
-            level_values = [set(data.columns.get_level_values(i))
-                            for i in range(data.columns.nlevels)]
-            for lvl_i, vals in enumerate(level_values):
-                if tk in vals:
-                    return data.xs(tk, level=lvl_i, axis=1)
-    except:
-        pass
-    return None
 
 # ─── 파라미터 그리드 ─────────────────────────────────────────────────────────
 
@@ -297,17 +227,26 @@ def main():
     start_time = time.time()
 
     print("=" * 80)
-    print("  전략 자동 탐색기 v3 (전종목 3000+ Grid Search)")
+    print("  전략 자동 탐색기 v4 (전종목 3000+ Grid Search)")
     print("  목표: 승률 90%+ & 평균수익률 50%+")
-    print("  기간: 최근 2년 | 최소 신호: 10건")
+    print("  기간: 최근 2년 | 최소 신호: 100건")
     print("=" * 80)
     sys.stdout.flush()
 
     # ── Step 1: 종목 수집 ──
     print("\n[Step 1/4] 종목 수집 중...")
-    tickers = get_all_tickers()
-    print(f"  → {len(tickers)}개 종목")
+    try:
+        tickers = get_all_tickers()
+        print(f"  → {len(tickers)}개 종목")
+    except Exception as e:
+        logger.warning(f"Failed to get tickers: {e}")
+        print("  → 종목 수집 실패, 기본 목록 사용")
+        tickers = []
     sys.stdout.flush()
+
+    if not tickers:
+        print("Error: No tickers available")
+        return
 
     # ── Step 2: 2년치 데이터 다운로드 + 지표 계산 ──
     print(f"\n[Step 2/4] 2년치 데이터 다운로드 중...")
@@ -326,8 +265,14 @@ def main():
                   f"{len(all_data)}종목 완료 | {elapsed:.1f}분 경과")
             sys.stdout.flush()
 
-        data = download_batch(batch, period='2y')
-        if data is None or data.empty:
+        try:
+            data = download_batch(batch, period='2y')
+            if data is None or data.empty:
+                failed += len(batch)
+                time.sleep(1)
+                continue
+        except Exception as e:
+            logger.warning(f"Batch download failed for batch {batch_num}: {e}")
             failed += len(batch)
             time.sleep(1)
             continue
@@ -342,7 +287,8 @@ def main():
                     continue
                 ind = precompute_indicators(df)
                 all_data[tk] = ind
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to precompute indicators for {tk}: {e}")
                 continue
 
         time.sleep(0.2)
@@ -378,9 +324,15 @@ def main():
     check_interval = max(total_combos // 20, 1)
 
     for c_idx, combo in enumerate(combos):
+        # Check time budget at start of each combo iteration
+        elapsed = (time.time() - start_time) / 60
+        if elapsed > MAX_RUNTIME_MINUTES:
+            print(f"\n  WARNING: Time budget exceeded ({elapsed:.1f}min > {MAX_RUNTIME_MINUTES}min)")
+            print(f"  Stopping grid search early, saving results...")
+            break
+
         if c_idx % check_interval == 0:
             pct = c_idx / total_combos * 100
-            elapsed = (time.time() - start_time) / 60
             print(f"  진행: {pct:.0f}% ({c_idx:,}/{total_combos:,}) | "
                   f"최고: {len(good_results)}개 | 괜찮은: {len(decent_results)}개 | "
                   f"{elapsed:.1f}분 경과")
@@ -454,7 +406,7 @@ def main():
     print(f"  그리드 서치 완료! (총 {total_elapsed:.1f}분)")
     print(f"{'='*80}")
     print(f"  전체 종목: {len(all_data)}개 → 필터 후: {len(filtered_data)}개")
-    print(f"  총 조합 테스트: {total_combos:,}개")
+    print(f"  총 조합 테스트: {len(combos):,}개 중 {c_idx+1:,}개 실행")
     print(f"  ★ 승률 90%+ 조합: {len(good_results)}개")
     print(f"  ◎ 승률 80%+ 조합: {len(decent_results)}개")
     print(f"  전체 유효 조합 (신호{MIN_SIGNALS}건+): {len(all_summary)}개")
@@ -519,16 +471,25 @@ def main():
 
     # ── CSV 저장 ──
     if good_results:
-        pd.DataFrame(good_results).to_csv('optimizer_best.csv', index=False)
-        print(f"\n★ 최고조건 저장: optimizer_best.csv")
+        try:
+            pd.DataFrame(good_results).to_csv('optimizer_best.csv', index=False)
+            print(f"\n★ 최고조건 저장: optimizer_best.csv")
+        except Exception as e:
+            logger.warning(f"Failed to save optimizer_best.csv: {e}")
     if decent_results:
-        pd.DataFrame(decent_results).to_csv('optimizer_decent.csv', index=False)
-        print(f"◎ 괜찮은조건 저장: optimizer_decent.csv")
+        try:
+            pd.DataFrame(decent_results).to_csv('optimizer_decent.csv', index=False)
+            print(f"◎ 괜찮은조건 저장: optimizer_decent.csv")
+        except Exception as e:
+            logger.warning(f"Failed to save optimizer_decent.csv: {e}")
     if all_summary:
-        df_all = pd.DataFrame(all_summary)
-        df_all = df_all.sort_values('win_rate', ascending=False).head(200)
-        df_all.to_csv('optimizer_all_top100.csv', index=False)
-        print(f"전체 상위200 저장: optimizer_all_top100.csv")
+        try:
+            df_all = pd.DataFrame(all_summary)
+            df_all = df_all.sort_values('win_rate', ascending=False).head(200)
+            df_all.to_csv('optimizer_all_top100.csv', index=False)
+            print(f"전체 상위200 저장: optimizer_all_top100.csv")
+        except Exception as e:
+            logger.warning(f"Failed to save optimizer_all_top100.csv: {e}")
 
     print(f"\n총 소요시간: {total_elapsed:.1f}분")
 
