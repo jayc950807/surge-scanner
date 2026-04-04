@@ -897,22 +897,28 @@ with tab_history:
     strategies = ['A', 'B', 'C', 'D', 'E']
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
-    # Aggregate
+    # Aggregate — 대소문자 무관 매칭
     total_det = len(all_records)
-    total_closed = len(closed_pos) if not closed_pos.empty else 0
-    total_win = len(closed_pos[closed_pos[rs_col] == 'WIN']) if total_closed > 0 else 0
-    total_loss = len(closed_pos[closed_pos[rs_col] == 'LOSS']) if total_closed > 0 else 0
-    total_exp = len(closed_pos[closed_pos[rs_col] == 'EXPIRED']) if total_closed > 0 else 0
-    total_open = len(open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
-    wr = (total_win / total_closed * 100) if total_closed > 0 else 0
+    if not closed_pos.empty and rs_col in closed_pos.columns:
+        _rs_upper = closed_pos[rs_col].astype(str).str.upper()
+        total_closed = len(closed_pos)
+        total_win = int((_rs_upper == 'WIN').sum())
+        total_loss = int((_rs_upper == 'LOSS').sum())
+        total_exp = int((_rs_upper == 'EXPIRED').sum())
+    else:
+        total_closed = total_win = total_loss = total_exp = 0
+    total_fail = total_loss + total_exp  # EXPIRED도 실패로 간주
+    total_open = len(open_pos[open_pos['status'].str.upper().isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
+    # 승률: Win / (Win + Loss + Expired) — EXPIRED는 실패로 간주
+    total_decided = total_win + total_fail
+    wr = (total_win / total_decided * 100) if total_decided > 0 else 0
 
-    # Summary cards
-    wr_color = 'var(--green-bright)' if wr >= 80 else 'var(--amber)' if wr >= 50 else 'var(--red-bright)'
+    # Summary cards — 합계 검증: Detected = Active + Win + Loss/Exp
     st.markdown(f'''<div class="rr-cards">
         <div class="rr-card"><div class="val" style="color:var(--text-secondary)">{total_det}</div><div class="lbl">Detected</div></div>
         <div class="rr-card"><div class="val" style="color:var(--blue)">{total_open}</div><div class="lbl">Active</div></div>
         <div class="rr-card"><div class="val" style="color:var(--green-bright)">{total_win}</div><div class="lbl">Wins</div></div>
-        <div class="rr-card"><div class="val" style="color:var(--red-bright)">{total_loss + total_exp}</div><div class="lbl">Loss / Exp</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--red-bright)">{total_fail}</div><div class="lbl">Loss / Exp</div></div>
         <div class="rr-card accent"><div class="val" style="color:var(--gold)">{wr:.1f}%</div><div class="lbl">Win Rate</div></div>
     </div>''', unsafe_allow_html=True)
 
@@ -1018,11 +1024,14 @@ with tab_history:
             s_op = open_pos[(open_pos['strategy']==s)&(open_pos['status'].isin(['OPEN','PENDING']))] if not open_pos.empty and 'strategy' in open_pos.columns and 'status' in open_pos.columns else pd.DataFrame()
 
             nd=len(s_all); nc=len(s_cl)
-            nw = len(s_cl[s_cl[rs_col]=='WIN']) if nc>0 else 0
-            nl = len(s_cl[s_cl[rs_col]=='LOSS']) if nc>0 else 0
-            ne = len(s_cl[s_cl[rs_col]=='EXPIRED']) if nc>0 else 0
+            _s_rs = s_cl[rs_col].astype(str).str.upper() if nc>0 else pd.Series(dtype=str)
+            nw = int((_s_rs=='WIN').sum()) if nc>0 else 0
+            nl = int((_s_rs=='LOSS').sum()) if nc>0 else 0
+            ne = int((_s_rs=='EXPIRED').sum()) if nc>0 else 0
             na = len(s_op)
-            sw = (nw/nc*100) if nc>0 else 0
+            # 승률: Win / (Win + Loss + Expired) — EXPIRED를 실패로 간주
+            s_decided = nw + nl + ne
+            sw = (nw/s_decided*100) if s_decided>0 else 0
             avg = 0
             if nc>0 and 'result_pct' in s_cl.columns:
                 avg = safe_float(pd.to_numeric(s_cl['result_pct'],errors='coerce').mean())
