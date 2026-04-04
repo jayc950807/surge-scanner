@@ -2,7 +2,7 @@
 """
 ================================================================================
   US Stock Surge Scanner — Streamlit Dashboard
-  Strategy A/B/C/D/E 대시보드
+  Rolls-Royce Inspired Design — Dark Luxury Edition
 ================================================================================
 """
 import streamlit as st
@@ -10,624 +10,883 @@ import pandas as pd
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from collections import defaultdict
 
-# 한국 표준시 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
+
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Surge Scanner",
-    page_icon="📈",
+    page_title="SURGE SCANNER",
+    page_icon="◆",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-# ─── Custom CSS ──────────────────────────────────────────────────────────────
+
+# ─── Rolls-Royce Design System ──────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main .block-container { padding-top: 1rem; max-width: 1400px; }
-    .stMetric > div { background: #1e1e2e; border-radius: 8px; padding: 12px; }
-    .no-signal {
-        text-align: center; padding: 40px; color: #888;
-        font-size: 1.1em; background: #1a1a2e; border-radius: 12px;
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Rolls-Royce Inspired
+   ════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+    --bg-deep:      #080b12;
+    --bg-surface:   #0d1117;
+    --bg-card:      #131920;
+    --bg-elevated:  #1a2230;
+    --bg-hover:     #1e2a3a;
+    --border-subtle:#1c2636;
+    --border-accent:#c9a96e22;
+    --gold:         #c9a96e;
+    --gold-dim:     #9a7d4e;
+    --gold-glow:    #c9a96e18;
+    --text-primary: #e8e4de;
+    --text-secondary:#8a9ab5;
+    --text-muted:   #4d5b72;
+    --green:        #4a9e7d;
+    --green-bright: #5cc49a;
+    --red:          #9e4a5a;
+    --red-bright:   #c46b7c;
+    --blue:         #4a7a9e;
+    --amber:        #b8954a;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body:    'Plus Jakarta Sans', -apple-system, sans-serif;
+    --font-mono:    'Space Mono', monospace;
+}
+
+/* ── Global Reset ── */
+.main .block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1400px;
+}
+.main { background: var(--bg-deep) !important; }
+[data-testid="stAppViewContainer"] { background: var(--bg-deep) !important; }
+[data-testid="stHeader"] { background: transparent !important; }
+[data-testid="stSidebar"] { background: var(--bg-surface) !important; }
+section[data-testid="stSidebar"] .block-container { padding-top: 2rem; }
+
+/* ── Streamlit element overrides ── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    font-size: 0.82em !important;
+    letter-spacing: 0.03em;
+    color: var(--text-muted) !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    background: transparent !important;
+    white-space: nowrap !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: var(--gold) !important;
+    background: var(--bg-elevated) !important;
+    border-bottom: none !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+/* Streamlit divider override */
+hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
+
+/* Selectbox/button styling */
+[data-testid="stSelectbox"] label { color: var(--text-secondary) !important; font-size: 0.82em !important; }
+.stSelectbox > div > div { background: var(--bg-card) !important; border-color: var(--border-subtle) !important; }
+.stButton > button {
+    background: var(--bg-elevated) !important;
+    color: var(--gold) !important;
+    border: 1px solid var(--gold-dim) !important;
+    border-radius: 6px !important;
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.03em;
+}
+.stButton > button:hover { background: var(--bg-hover) !important; }
+
+/* Expander styling */
+[data-testid="stExpander"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 8px !important;
+}
+[data-testid="stExpander"] summary { color: var(--text-primary) !important; font-family: var(--font-body) !important; }
+
+/* Toggle/slider */
+.stToggle label { color: var(--text-secondary) !important; }
+
+/* ════════════════════════════════════════════════════════════════
+   HEADER
+   ════════════════════════════════════════════════════════════════ */
+.rr-header {
+    text-align: center;
+    padding: 28px 0 20px 0;
+}
+.rr-header .brand {
+    font-family: var(--font-display);
+    font-size: 1.8em;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+}
+.rr-header .brand span { color: var(--gold); }
+.rr-header .sub {
+    font-family: var(--font-body);
+    font-size: 0.78em;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+.rr-divider {
+    width: 60px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 16px auto;
+}
+.rr-meta {
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    text-align: center;
+    letter-spacing: 0.04em;
+    margin-bottom: 24px;
+}
+.rr-meta span { margin: 0 12px; }
+.rr-meta .hl { color: var(--text-secondary); }
+
+/* ════════════════════════════════════════════════════════════════
+   SUMMARY CARDS
+   ════════════════════════════════════════════════════════════════ */
+.rr-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.rr-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 20px 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.rr-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--border-subtle);
+}
+.rr-card.accent::before {
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold), var(--gold-dim));
+}
+.rr-card .val {
+    font-family: var(--font-mono);
+    font-size: 1.8em;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+.rr-card .lbl {
+    font-family: var(--font-body);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MATRIX TABLE
+   ════════════════════════════════════════════════════════════════ */
+.rr-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-body);
+    font-size: 0.84em;
+    background: var(--bg-card);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+}
+.rr-table th {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    padding: 12px 14px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 0.82em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.rr-table th:first-child {
+    text-align: left;
+    padding-left: 20px;
+}
+.rr-table td {
+    padding: 12px 14px;
+    text-align: center;
+    border-bottom: 1px solid #0d131a;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+}
+.rr-table td:first-child {
+    text-align: left;
+    padding-left: 20px;
+    font-family: var(--font-body);
+}
+.rr-table tr:last-child td { border-bottom: none; }
+.rr-table tr:hover td { background: var(--bg-hover); }
+.rr-table tbody tr { transition: background 0.15s ease; }
+
+/* ── Strategy Tags ── */
+.stag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.74em;
+    letter-spacing: 0.02em;
+    border: 1px solid;
+    white-space: nowrap;
+}
+.stag-A { color: var(--green-bright); border-color: var(--green); background: #4a9e7d12; }
+.stag-B { color: var(--blue); border-color: #4a7a9e66; background: #4a7a9e0a; }
+.stag-C { color: var(--amber); border-color: #b8954a66; background: #b8954a0a; }
+.stag-D { color: var(--red-bright); border-color: var(--red); background: #9e4a5a0a; }
+.stag-E { color: #9a7abf; border-color: #7a5aaf66; background: #7a5aaf0a; }
+
+/* ── Cell States ── */
+.c-win { color: var(--green-bright); font-weight: 600; }
+.c-loss { color: var(--red-bright); font-weight: 600; }
+.c-partial { color: var(--amber); font-weight: 500; }
+.c-pending { color: var(--text-muted); font-style: italic; font-weight: 400; }
+.c-none { color: #2a3444; }
+.c-muted { color: var(--text-muted); }
+
+/* ── Status badges ── */
+.st-win { color: var(--green-bright); font-weight: 600; }
+.st-loss { color: var(--red-bright); font-weight: 600; }
+.st-expired { color: var(--amber); font-weight: 600; }
+.st-open { color: var(--blue); font-weight: 600; }
+.st-pending { color: var(--text-muted); font-weight: 500; }
+
+/* ── Progress bar ── */
+.rr-prog {
+    display: flex; align-items: center; gap: 6px;
+}
+.rr-prog-track {
+    flex: 1; background: #1a2230; border-radius: 3px; height: 6px; min-width: 40px; overflow: hidden;
+}
+.rr-prog-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.rr-prog-text { font-size: 0.78em; font-weight: 600; min-width: 32px; text-align: right; }
+
+/* ── Ticker Group Header ── */
+.tk-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    padding: 14px 20px;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.tk-header .tk-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15em;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+}
+.tk-header .tk-meta {
+    font-family: var(--font-body);
+    font-size: 0.82em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.tk-header + .rr-table { border-radius: 0 0 10px 10px; border-top: none; }
+
+/* ── Strategy Info Card (Strategy tabs) ── */
+.rr-strat-info {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+}
+.rr-strat-info::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+}
+.rr-strat-info.si-A::before { background: var(--green); }
+.rr-strat-info.si-B::before { background: var(--blue); }
+.rr-strat-info.si-C::before { background: var(--amber); }
+.rr-strat-info.si-D::before { background: var(--red); }
+.rr-strat-info.si-E::before { background: #7a5aaf; }
+.rr-strat-info h3 {
+    font-family: var(--font-display);
+    font-size: 1.15em;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+    font-weight: 600;
+}
+.rr-strat-info .si-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    font-size: 0.85em;
+}
+.rr-strat-info .si-section { color: var(--text-secondary); line-height: 1.7; }
+.rr-strat-info .si-label {
+    color: var(--text-muted);
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+.rr-strat-info .si-stat {
+    display: inline-flex; align-items: baseline; gap: 6px;
+}
+.rr-strat-info .si-stat .big {
+    font-family: var(--font-mono);
+    font-size: 1.6em;
+    font-weight: 700;
+}
+
+/* ── No Signal ── */
+.rr-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.9em;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+}
+
+/* ── PnL stat row ── */
+.rr-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.rr-stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+}
+.rr-stat .s-label {
+    font-family: var(--font-body);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.rr-stat .s-value {
+    font-family: var(--font-mono);
+    font-size: 1.5em;
+    font-weight: 700;
+}
+
+/* ── Legend ── */
+.rr-legend {
+    font-family: var(--font-body);
+    font-size: 0.76em;
+    color: var(--text-muted);
+    margin: 8px 0 12px 0;
+    letter-spacing: 0.02em;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE (<768px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .main .block-container { padding: 0.5rem 0.8rem; }
+    .rr-header .brand { font-size: 1.3em; }
+    .rr-header .sub { font-size: 0.68em; }
+    .rr-meta { font-size: 0.65em; }
+    .rr-meta span { margin: 0 6px; }
+
+    /* Cards: 2 columns on mobile */
+    .rr-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
     }
-    /* ── 히스토리 매트릭스 테이블 ── */
-    .matrix-table {
-        width: 100%; border-collapse: collapse; font-size: 0.88em;
-        background: #0e1117; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    .rr-card { padding: 14px 10px; }
+    .rr-card .val { font-size: 1.4em; }
+    .rr-card .lbl { font-size: 0.65em; }
+    /* 5th card spans full width */
+    .rr-cards .rr-card:nth-child(5) {
+        grid-column: 1 / -1;
     }
-    .matrix-table th {
-        background: #1a1a2e; color: #e0e0e0; padding: 10px 14px;
-        text-align: center; font-weight: 600; font-size: 0.85em;
-        border-bottom: 2px solid #2a2a4e;
+
+    /* Tables: horizontal scroll */
+    .rr-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -0.5rem;
+        padding: 0 0.5rem;
     }
-    .matrix-table th.strat-col {
-        background: #16213e; text-align: left; width: 80px;
+    .rr-table {
+        font-size: 0.76em;
+        min-width: 600px;
     }
-    .matrix-table td {
-        padding: 10px 14px; text-align: center; border-bottom: 1px solid #1e2030;
-        font-weight: 500; font-variant-numeric: tabular-nums;
-        color: #d0d0d0;
+    .rr-table th, .rr-table td {
+        padding: 10px 10px;
+        white-space: nowrap;
     }
-    .matrix-table tr:hover td { background: #1a1a30; }
-    .matrix-table .strat-label {
-        font-weight: 700; text-align: left; background: #12121e; color: #e0e0e0;
+
+    /* Strategy info: single column */
+    .rr-strat-info .si-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
     }
-    /* 셀 색상 */
-    .cell-win { color: #00e676; font-weight: 700; }
-    .cell-none { color: #555; }
-    .cell-partial { color: #ffab40; font-weight: 600; }
-    .cell-zero { color: #666; }
-    /* 전략 뱃지 */
-    .strat-badge {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-weight: 700; font-size: 0.82em; color: #fff; min-width: 50px; text-align: center;
+    .rr-strat-info { padding: 16px 18px; }
+
+    /* Tabs: smaller text */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 0.72em !important;
+        padding: 6px 10px !important;
     }
-    .strat-A { background: #00c853; } .strat-B { background: #2979ff; }
-    .strat-C { background: #ff9100; } .strat-D { background: #ff1744; }
-    .strat-E { background: #7c4dff; }
-    /* 요약 카드 */
-    .summary-card {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border-radius: 12px; padding: 20px; color: #fff; text-align: center;
-        border: 1px solid #2a2a4e;
+    .stTabs [data-baseweb="tab-list"] {
+        flex-wrap: wrap;
     }
-    .summary-card .value { font-size: 2em; font-weight: 800; line-height: 1.2; }
-    .summary-card .label { font-size: 0.82em; color: #a0a0c0; margin-top: 4px; }
-    /* 포지션 테이블 */
-    .pos-table {
-        width: 100%; border-collapse: collapse; font-size: 0.88em;
-        background: #0e1117; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+
+    /* Ticker header: stack */
+    .tk-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 12px 14px;
     }
-    .pos-table th {
-        background: #1a1a2e; color: #e0e0e0; padding: 10px 12px;
-        text-align: left; font-weight: 600; font-size: 0.82em;
+
+    /* PnL stats: 2-col */
+    .rr-stats {
+        flex-wrap: wrap;
     }
-    .pos-table td {
-        padding: 10px 12px; border-bottom: 1px solid #1e2030;
-        font-weight: 500; color: #d0d0d0;
+    .rr-stat {
+        min-width: calc(50% - 8px);
+        flex: unset;
+        padding: 12px 14px;
     }
-    .pos-table tr:hover td { background: #1a1a30; }
-    .status-pending { color: #9e9e9e; font-weight: 600; }
-    .status-open { color: #42a5f5; font-weight: 700; }
-    .status-win { color: #00e676; font-weight: 700; }
-    .status-loss { color: #ff5252; font-weight: 700; }
-    .status-expired { color: #ffab40; font-weight: 700; }
-    .status-trailing { color: #ce93d8; font-weight: 700; }
-    .price-none { color: #555; font-style: italic; }
-    /* 티커별 카드 */
-    .ticker-card {
-        background: #12121e; border: 1px solid #2a2a4e; border-radius: 10px;
-        padding: 16px; margin-bottom: 12px;
-    }
-    .ticker-card-header {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #1e2030;
-    }
-    .ticker-name { font-size: 1.2em; font-weight: 800; color: #ffffff; }
-    .ticker-summary { font-size: 0.85em; color: #a0a0c0; }
-    /* 진행바 (달성률) */
-    .achievement-bar {
-        height: 10px; border-radius: 5px; background: #1e2030; overflow: hidden;
-        display: inline-block; width: 80px; vertical-align: middle;
-    }
-    .achievement-fill { height: 100%; border-radius: 5px; }
-    .achievement-text { font-size: 0.82em; font-weight: 700; margin-left: 6px; }
-    /* 히스토리 설명 텍스트 */
-    .history-desc { color: #a0a0c0; font-size: 0.85em; margin-bottom: 12px; }
-    @media (max-width: 768px) {
-        .main .block-container { padding: 0.5rem; }
-        .matrix-table th, .matrix-table td { padding: 6px 8px; font-size: 0.8em; }
-        .pos-table th, .pos-table td { padding: 6px 8px; font-size: 0.8em; }
-    }
+    .rr-stat .s-value { font-size: 1.2em; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE (<480px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+    .rr-header .brand { font-size: 1.1em; letter-spacing: 0.08em; }
+    .rr-cards { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .rr-card .val { font-size: 1.2em; }
+    .rr-table { min-width: 500px; font-size: 0.72em; }
+    .stTabs [data-baseweb="tab"] { font-size: 0.65em !important; padding: 5px 8px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
+
 # ─── Data Loading ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_latest_scan():
-    json_path = "data/latest_scan.json"
-    if os.path.exists(json_path):
-        with open(json_path, 'r') as f:
-            return json.load(f)
+    p = "data/latest_scan.json"
+    if os.path.exists(p):
+        with open(p, 'r') as f: return json.load(f)
     return None
+
 @st.cache_data(ttl=300)
 def load_today_signals():
-    # 가장 최근 signal 파일 찾기 (거래일 기준 파일명)
     import glob
     files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
     if files:
         df = pd.read_csv(files[0])
         return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
+
 @st.cache_data(ttl=300)
 def load_history():
-    path = "data/history.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path)
+    p = "data/history.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p)
         df['date'] = pd.to_datetime(df['date'])
         return df
     return pd.DataFrame()
+
 @st.cache_data(ttl=300)
 def load_tracker_summary():
-    path = "data/tracker_summary.json"
-    if os.path.exists(path):
-        with open(path, 'r') as f:
-            return json.load(f)
+    p = "data/tracker_summary.json"
+    if os.path.exists(p):
+        with open(p, 'r') as f: return json.load(f)
     return None
-# ─── Header ───────────────────────────────────────────────────────────────────
-st.title("📈 US Stock Surge Scanner")
-scan_info = load_latest_scan()
-tracker_info = load_tracker_summary()
-header_parts = []
-if scan_info:
-    header_parts.append(f"마지막 스캔: {scan_info.get('scan_time', 'N/A')}")
-    header_parts.append(
-        f"A: {scan_info.get('strategy_a_count', 0)}건 | "
-        f"B: {scan_info.get('strategy_b_count', 0)}건 | "
-        f"C: {scan_info.get('strategy_c_count', 0)}건 | "
-        f"D: {scan_info.get('strategy_d_count', 0)}건 | "
-        f"E: {scan_info.get('strategy_e_count', 0)}건"
-    )
-if tracker_info:
-    header_parts.append(
-        f"추적: 진행중 {tracker_info.get('open_count', 0)}건 | "
-        f"익절 {tracker_info.get('win_count', 0)}건 | "
-        f"손절 {tracker_info.get('loss_count', 0)}건 | "
-        f"트레일링 {tracker_info.get('trailing_count', 0)}건"
-    )
-if header_parts:
-    st.caption(" | ".join(header_parts))
-else:
-    st.caption("아직 스캔 결과가 없습니다. scanner.py를 실행하세요.")
-st.divider()
-# ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
-    "🟢 A — 급락 반등 +5%",
-    "🔵 B — 고수익 +15%",
-    "🟠 C — 과매도 반등 +5%",
-    "🔴 D — 초저가 폭락 +20%",
-    "🟣 E — 급락 속반등 +10%",
-    "📊 히스토리",
-])
-today_signals = load_today_signals()
-history = load_history()
-# ─── Tab: Strategy A ─────────────────────────────────────────────────────────
-with tab_a:
-    st.subheader("🟢 전략 A — 급락 반등 (+5% / 5일)")
-    st.markdown("""
-    📌 **이런 종목을 찾습니다:**
-    5일 넘게 연속 하락하면서 3일간 -15% 이상 빠지고,
-    장중 위아래로 20% 이상 흔들리며,
-    RSI가 20 이하로 극단적 과매도 상태이고,
-    현재가가 5일 최저가와 거의 같은 바닥권 종목
 
-    💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
-    익절: +5% 도달 시 즉시 매도 ─
-    손절: -20% ─
-    트레일링: 고점 대비 -3% 하락 시 매도 ─
-    보유: 최대 5일, 미도달 시 종가 청산
-
-    📊 **백테스트 (5년, 262건):** 승률 90.1% | 누적 +515%
-    """)
-    st.divider()
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        sig_a = today_signals[today_signals['strategy'] == 'A']
-    else:
-        sig_a = pd.DataFrame()
-    if not sig_a.empty:
-        st.success(f"오늘 신호: {len(sig_a)}건")
-        display_cols_a = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'intraday', 'ret3d',
-                         'consec_down', 'dist_low5', 'tp_price', 'sl_price']
-        available_cols = [c for c in display_cols_a if c in sig_a.columns]
-        st.dataframe(
-            sig_a[available_cols].reset_index(drop=True),
-            use_container_width=True,
-            column_config={
-                "ticker": st.column_config.TextColumn("종목", width="small"),
-                "date": st.column_config.TextColumn("거래일"),
-                "scan_time": st.column_config.TextColumn("스캔시각"),
-                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                "ret3d": st.column_config.NumberColumn("3일수익률", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.1f%%"),
-                "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-            },
-        )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 수익 시 -3% 트레일링 → 목표 +5% 또는 5일 타임아웃")
-    else:
-        st.markdown('<div class="no-signal">오늘 Strategy A 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_a = history[history['strategy'] == 'A']
-        if not hist_a.empty:
-            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
-            recent_a = hist_a[hist_a['date'] >= cutoff]
-            if not recent_a.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                show_a = recent_a.sort_values('date', ascending=False).reset_index(drop=True)
-                show_a['date'] = show_a['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'] if c in show_a.columns]
-                st.dataframe(show_a[display_cols], use_container_width=True,
-                    column_config={
-                        "date": st.column_config.TextColumn("거래일"),
-                        "scan_time": st.column_config.TextColumn("스캔시각"),
-                        "ticker": st.column_config.TextColumn("종목"),
-                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                        "ret3d": st.column_config.NumberColumn("3일수익률", format="%.1f%%"),
-                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                        "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.1f%%"),
-                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-                    })
-# ─── Tab: Strategy B ─────────────────────────────────────────────────────────
-with tab_b:
-    st.subheader("🔵 전략 B — 고수익 폭락 반등 (+15% / 10일)")
-    st.markdown("""
-    📌 **이런 종목을 찾습니다:**
-    RSI 7일·14일 모두 극단적 과매도 구간이면서,
-    최근 변동성이 평소의 3배 이상으로 폭발하고,
-    20일 이동평균 대비 -25% 이상 괴리가 벌어졌지만,
-    매출은 여전히 성장 중인 펀더멘탈 있는 종목
-
-    💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
-    익절: +15% 지정가 매도 ─
-    손절: -20% ─
-    보유: 최대 10일, 미체결 시 종가 청산
-
-    📊 **백테스트 (5년, 31건):** 승률 90.3% | 28건 적중
-    """)
-    st.divider()
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        sig_b = today_signals[today_signals['strategy'] == 'B']
-    else:
-        sig_b = pd.DataFrame()
-    if not sig_b.empty:
-        st.success(f"오늘 신호: {len(sig_b)}건")
-        display_cols_b = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'rsi14', 'atr_ratio',
-                         'intra_pct', 'ma20_pos', 'rev_growth', 'tp_price', 'sl_price']
-        available_cols = [c for c in display_cols_b if c in sig_b.columns]
-        st.dataframe(
-            sig_b[available_cols].reset_index(drop=True),
-            use_container_width=True,
-            column_config={
-                "ticker": st.column_config.TextColumn("종목", width="small"),
-                "date": st.column_config.TextColumn("거래일"),
-                "scan_time": st.column_config.TextColumn("스캔시각"),
-                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
-                "atr_ratio": st.column_config.NumberColumn("변동성배율", format="%.2f"),
-                "intra_pct": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                "ma20_pos": st.column_config.NumberColumn("20일이평괴리", format="%.1f%%"),
-                "rev_growth": st.column_config.NumberColumn("매출성장", format="%.1f%%"),
-                "tp_price": st.column_config.NumberColumn("매도가", format="$%.2f"),
-                "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-            },
-        )
-        st.info("※ 매수 즉시 +15% 지정가 매도 + -20% 손절 주문 동시 설정. 둘 다 미체결 시 10거래일 후 종가 청산")
-    else:
-        st.markdown('<div class="no-signal">오늘 Strategy B 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_b = history[history['strategy'] == 'B']
-        if not hist_b.empty:
-            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
-            recent_b = hist_b[hist_b['date'] >= cutoff]
-            if not recent_b.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                show_b = recent_b.sort_values('date', ascending=False).reset_index(drop=True)
-                show_b['date'] = show_b['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'] if c in show_b.columns]
-                st.dataframe(show_b[display_cols], use_container_width=True,
-                    column_config={
-                        "date": st.column_config.TextColumn("거래일"),
-                        "scan_time": st.column_config.TextColumn("스캔시각"),
-                        "ticker": st.column_config.TextColumn("종목"),
-                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                        "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
-                        "atr_ratio": st.column_config.NumberColumn("변동성배율", format="%.2f"),
-                        "intra_pct": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                        "ma20_pos": st.column_config.NumberColumn("20일이평괴리", format="%.1f%%"),
-                        "rev_growth": st.column_config.NumberColumn("매출성장", format="%.1f%%"),
-                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-                    })
-# ─── Tab: Strategy C ─────────────────────────────────────────────────────────
-with tab_c:
-    st.subheader("🟠 전략 C — 과매도 급락 반등 (+5% / 5일)")
-    st.markdown("""
-    📌 **이런 종목을 찾습니다:**
-    최근 4일 이상 연속 하락하면서
-    오늘 하루에만 -8% 이상 급락하고,
-    장중 위아래로 20% 이상 흔들리며,
-    RSI가 30 이하로 극단적 과매도 상태이고,
-    현재가가 5일 최저가와 거의 같은 바닥권 종목
-
-    💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
-    익절: +5% 도달 시 즉시 매도 ─
-    손절: -20% ─
-    보유: 최대 5일, 미도달 시 종가 청산
-
-    📊 **백테스트 (5년, 624건):** 승률 86.9% | 건당 평균 +3.8%
-    """)
-    st.divider()
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        sig_c = today_signals[today_signals['strategy'] == 'C']
-    else:
-        sig_c = pd.DataFrame()
-    if not sig_c.empty:
-        st.success(f"오늘 신호: {len(sig_c)}건")
-        display_cols_c = ['ticker', 'date', 'scan_time', 'price', 'rsi7', 'intraday', 'ret1d',
-                         'consec_down', 'dist_low5', 'tp_price', 'sl_price']
-        available_cols = [c for c in display_cols_c if c in sig_c.columns]
-        st.dataframe(
-            sig_c[available_cols].reset_index(drop=True),
-            use_container_width=True,
-            column_config={
-                "ticker": st.column_config.TextColumn("종목", width="small"),
-                "date": st.column_config.TextColumn("거래일"),
-                "scan_time": st.column_config.TextColumn("스캔시각"),
-                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                "ret1d": st.column_config.NumberColumn("당일수익률", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.2f%%"),
-                "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-            },
-        )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → -20% 손절 주문 → 목표 +5% 또는 5일 타임아웃")
-    else:
-        st.markdown('<div class="no-signal">오늘 Strategy C 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_c = history[history['strategy'] == 'C']
-        if not hist_c.empty:
-            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
-            recent_c = hist_c[hist_c['date'] >= cutoff]
-            if not recent_c.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                show_c = recent_c.sort_values('date', ascending=False).reset_index(drop=True)
-                show_c['date'] = show_c['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','scan_time','ticker','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'] if c in show_c.columns]
-                st.dataframe(show_c[display_cols], use_container_width=True,
-                    column_config={
-                        "date": st.column_config.TextColumn("거래일"),
-                        "scan_time": st.column_config.TextColumn("스캔시각"),
-                        "ticker": st.column_config.TextColumn("종목"),
-                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                        "rsi7": st.column_config.NumberColumn("RSI(7일)", format="%.1f"),
-                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                        "ret1d": st.column_config.NumberColumn("당일수익률", format="%.1f%%"),
-                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                        "dist_low5": st.column_config.NumberColumn("5일저점괴리", format="%.2f%%"),
-                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                        "sl_price": st.column_config.NumberColumn("손절가", format="$%.2f"),
-                    })
-# ─── Tab: Strategy D ─────────────────────────────────────────────────────────
-with tab_d:
-    st.subheader("🔴 전략 D — 초저가 폭락 반등 (+20% / 30일)")
-    st.markdown("""
-    📌 **이런 종목을 찾습니다:**
-    $3 이하 초저가주가 5일간 -40% 이상 대폭락하면서,
-    장중 변동폭이 30% 이상으로 극단적으로 흔들리고,
-    RSI(14)가 25 이하로 완전히 바닥을 찍은 종목
-
-    💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
-    익절: +20% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
-    손절: 없음 ─
-    보유: 최대 30일, 미도달 시 종가 청산
-
-    📊 **백테스트 (5년, 130건):** 승률 97.7% | 건당 평균 +18.9%
-    """)
-    st.divider()
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        sig_d = today_signals[today_signals['strategy'] == 'D']
-    else:
-        sig_d = pd.DataFrame()
-    if not sig_d.empty:
-        st.success(f"오늘 신호: {len(sig_d)}건")
-        display_cols_d = ['ticker', 'date', 'scan_time', 'price', 'rsi14', 'intraday', 'ret5d',
-                         'tp_price', 'hold_days']
-        available_cols = [c for c in display_cols_d if c in sig_d.columns]
-        st.dataframe(
-            sig_d[available_cols].reset_index(drop=True),
-            use_container_width=True,
-            column_config={
-                "ticker": st.column_config.TextColumn("종목", width="small"),
-                "date": st.column_config.TextColumn("거래일"),
-                "scan_time": st.column_config.TextColumn("스캔시각"),
-                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
-                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
-                "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
-            },
-        )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +20% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
-    else:
-        st.markdown('<div class="no-signal">오늘 Strategy D 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_d = history[history['strategy'] == 'D']
-        if not hist_d.empty:
-            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
-            recent_d = hist_d[hist_d['date'] >= cutoff]
-            if not recent_d.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                show_d = recent_d.sort_values('date', ascending=False).reset_index(drop=True)
-                show_d['date'] = show_d['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','scan_time','ticker','price','rsi14','intraday','ret5d','tp_price','hold_days'] if c in show_d.columns]
-                st.dataframe(show_d[display_cols], use_container_width=True,
-                    column_config={
-                        "date": st.column_config.TextColumn("거래일"),
-                        "scan_time": st.column_config.TextColumn("스캔시각"),
-                        "ticker": st.column_config.TextColumn("종목"),
-                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                        "rsi14": st.column_config.NumberColumn("RSI(14일)", format="%.1f"),
-                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                        "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
-                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                        "hold_days": st.column_config.NumberColumn("최대보유일", format="%d일"),
-                    })
-# ─── Tab: Strategy E ─────────────────────────────────────────────────────────
-with tab_e:
-    st.subheader("🟣 전략 E — 급락 속반등 (+10% / 최대 30일)")
-    st.markdown("""
-    📌 **이런 종목을 찾습니다:**
-    $3~$10 저가주가 5일간 -25% 이상 급락하면서,
-    5일 이상 연속 하락하고,
-    장중 변동폭이 20% 이상으로 크게 흔들리며,
-    평균 거래량 20만주 이상으로 유동성이 확보된 종목
-
-    💰 **매매 방법:**
-    매수: 다음 거래일 시장가 (D+1 시가) ─
-    익절: +10% 도달 시 즉시 매도 (중간값 2일 만에 도달) ─
-    손절: 없음 ─
-    보유: 최대 30일, 미도달 시 종가 청산
-
-    📊 **백테스트 (5년, 300건):** 승률 91.0% | 건당 평균 max +104.9%
-
-    ⏱ **보유기간별 도달률:**
-    2일 보유: 53.0% (159/300건) ─
-    5일 보유: 68.3% (205/300건) ─
-    10일 보유: 78.7% (236/300건) ─
-    30일 보유: 91.0% (273/300건)
-    """)
-    st.divider()
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        sig_e = today_signals[today_signals['strategy'] == 'E']
-    else:
-        sig_e = pd.DataFrame()
-    if not sig_e.empty:
-        st.success(f"오늘 신호: {len(sig_e)}건")
-        display_cols_e = ['ticker', 'date', 'scan_time', 'price', 'ret5d', 'intraday', 'consec_down',
-                         'vol_avg', 'tp_price', 'hold_days']
-        available_cols = [c for c in display_cols_e if c in sig_e.columns]
-        st.dataframe(
-            sig_e[available_cols].reset_index(drop=True),
-            use_container_width=True,
-            column_config={
-                "ticker": st.column_config.TextColumn("종목", width="small"),
-                "date": st.column_config.TextColumn("거래일"),
-                "scan_time": st.column_config.TextColumn("스캔시각"),
-                "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
-                "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                "vol_avg": st.column_config.NumberColumn("평균거래량", format="%d"),
-                "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                "hold_days": st.column_config.NumberColumn("보유일", format="%d일"),
-            },
-        )
-        st.info("※ 다음 거래일 시장가 매수 (D+1 Open) → +10% 익절 지정가 설정 → 미체결 시 30일 후 종가 청산. 손절 없음")
-    else:
-        st.markdown('<div class="no-signal">오늘 Strategy E 신호 없음</div>', unsafe_allow_html=True)
-    if not history.empty and 'strategy' in history.columns:
-        hist_e = history[history['strategy'] == 'E']
-        if not hist_e.empty:
-            cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
-            recent_e = hist_e[hist_e['date'] >= cutoff]
-            if not recent_e.empty:
-                st.divider()
-                st.subheader("최근 30일 신호")
-                show_e = recent_e.sort_values('date', ascending=False).reset_index(drop=True)
-                show_e['date'] = show_e['date'].dt.strftime('%Y-%m-%d')
-                display_cols = [c for c in ['date','scan_time','ticker','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'] if c in show_e.columns]
-                st.dataframe(show_e[display_cols], use_container_width=True,
-                    column_config={
-                        "date": st.column_config.TextColumn("거래일"),
-                        "scan_time": st.column_config.TextColumn("스캔시각"),
-                        "ticker": st.column_config.TextColumn("종목"),
-                        "price": st.column_config.NumberColumn("종가", format="$%.2f"),
-                        "ret5d": st.column_config.NumberColumn("5일수익률", format="%.1f%%"),
-                        "intraday": st.column_config.NumberColumn("일중변동", format="%.1f%%"),
-                        "consec_down": st.column_config.NumberColumn("연속하락", format="%d일"),
-                        "vol_avg": st.column_config.NumberColumn("평균거래량", format="%d"),
-                        "tp_price": st.column_config.NumberColumn("익절가", format="$%.2f"),
-                        "hold_days": st.column_config.NumberColumn("최대보유일", format="%d일"),
-                    })
-# ─── Data Loading: Positions ─────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_open_positions():
-    path = "data/open_positions.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path, dtype=str)
+    p = "data/open_positions.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p, dtype=str)
         return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
+
 @st.cache_data(ttl=300)
 def load_closed_positions():
-    path = "data/closed_positions.csv"
-    if os.path.exists(path):
-        df = pd.read_csv(path, dtype=str)
+    p = "data/closed_positions.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p, dtype=str)
         return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
-# ─── Helper: HTML 렌더링 함수들 ──────────────────────────────────────────────
 
-STRAT_NAMES = {'A': '급락반등 +5%', 'B': '고수익 +15%', 'C': '과매도 +5%', 'D': '초저가 +20%', 'E': '속반등 +10%'}
+# ─── Constants ────────────────────────────────────────────────────────────────
+STRAT_TAB = {'A': '5%5일a', 'B': '15%10일', 'C': '5%5일b', 'D': '20%30일', 'E': '10%30일'}
+STRAT_NAMES = {'A': '5%5일a · 급락반등', 'B': '15%10일 · 고수익', 'C': '5%5일b · 과매도', 'D': '20%30일 · 초저가', 'E': '10%30일 · 속반등'}
+STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등'}
 STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%'}
+STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10}
 STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%'}
+STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30}
 
-def safe_str(val, fallback='—'):
-    if val is None or str(val).strip() in ('', 'nan', 'None', 'NaN'):
-        return fallback
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+def safe_str(val, fb='—'):
+    if val is None or str(val).strip() in ('', 'nan', 'None', 'NaN'): return fb
     return str(val)
 
-def safe_float(val, fallback=0):
+def safe_float(val, fb=0):
     try:
         v = float(val)
-        return v if not pd.isna(v) else fallback
-    except:
-        return fallback
+        return v if not pd.isna(v) else fb
+    except: return fb
 
-def strat_badge(s):
-    return f'<span class="strat-badge strat-{s}">{s}</span>'
+def stag(s):
+    return f'<span class="stag stag-{s}">{STRAT_TAB.get(s, s)}</span>'
 
-def cell_html(ach, det):
-    if det == 0:
-        return '<span class="cell-none">—</span>'
-    if ach == det:
-        return f'<span class="cell-win">{ach}/{det}</span>'
-    if ach == 0:
-        return f'<span class="cell-partial">0/{det}</span>'
-    return f'<span class="cell-partial">{ach}/{det}</span>'
+def cell_html(ach, det, loss=0, prog=0):
+    """Render matrix cell: ach=wins, det=total, loss=loss+expired, prog=open+pending"""
+    if det == 0: return '<span class="c-none">—</span>'
+    if ach == det: return f'<span class="c-win">{ach}/{det}</span>'
+    # All still in progress (no closed results yet)
+    if prog > 0 and loss == 0 and ach == 0 and prog == det:
+        return f'<span class="c-pending">{det}</span>'
+    # Build composite: wins / losses / in-progress
+    parts = []
+    closed = ach + loss
+    if ach > 0: parts.append(f'<span class="c-win">{ach}</span>')
+    if loss > 0: parts.append(f'<span class="c-loss">{loss}</span>')
+    if prog > 0: parts.append(f'<span class="c-pending">{prog}</span>')
+    if not parts:
+        return f'<span class="c-partial">{ach}/{det}</span>'
+    # Format: green·red·gray / total
+    sep = '<span class="c-muted">·</span>'
+    color = 'c-win' if ach > 0 and loss == 0 else 'c-loss' if ach == 0 and loss > 0 else 'c-partial'
+    return f'{sep.join(parts)} <span class="c-muted">/</span> <span class="{color}">{det}</span>'
 
-def render_summary_card(value, label, color='#fff'):
-    return f'''<div class="summary-card">
-        <div class="value" style="color:{color}">{value}</div>
-        <div class="label">{label}</div>
+def progress_bar(val, color):
+    w = min(val, 100)
+    return f'''<div class="rr-prog">
+        <div class="rr-prog-track"><div class="rr-prog-fill" style="width:{w:.0f}%;background:{color}"></div></div>
+        <span class="rr-prog-text" style="color:{color}">{val:.0f}%</span>
     </div>'''
 
+def chg_html(val_raw):
+    v = safe_float(val_raw)
+    if val_raw == '—': return '<span class="c-muted">—</span>'
+    cls = 'c-win' if v > 0 else 'c-loss' if v < 0 else 'c-none'
+    return f'<span class="{cls}">{v:+.1f}%</span>'
 
-# ─── Tab: History ─────────────────────────────────────────────────────────────
+def result_badge(r):
+    m = {'WIN': ('st-win', 'WIN'), 'LOSS': ('st-loss', 'LOSS'), 'EXPIRED': ('st-expired', 'EXP'),
+         'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
+    cls, txt = m.get(r, ('c-muted', r))
+    return f'<span class="{cls}">{txt}</span>'
+
+# ─── Header ───────────────────────────────────────────────────────────────────
+scan_info = load_latest_scan()
+tracker_info = load_tracker_summary()
+
+st.markdown('''<div class="rr-header">
+    <div class="brand">SURGE <span>SCANNER</span></div>
+    <div class="sub">US Equity Mean-Reversion Intelligence</div>
+</div>
+<div class="rr-divider"></div>''', unsafe_allow_html=True)
+
+meta_parts = []
+if scan_info:
+    meta_parts.append(f'<span class="hl">Last Scan</span> {scan_info.get("scan_time", "N/A")}')
+    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k.lower()}_count", 0)}' for k in 'ABCDE')
+    meta_parts.append(f'<span class="hl">Signals</span> {counts}')
+if tracker_info:
+    meta_parts.append(f'<span class="hl">Active</span> {tracker_info.get("open_count", 0)} <span class="hl">Win</span> {tracker_info.get("win_count", 0)} <span class="hl">Loss</span> {tracker_info.get("loss_count", 0)}')
+if meta_parts:
+    st.markdown(f'<div class="rr-meta">{"<span>|</span>".join(meta_parts)}</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="rr-meta">Awaiting first scan...</div>', unsafe_allow_html=True)
+
+# ─── Tabs ─────────────────────────────────────────────────────────────────────
+today_signals = load_today_signals()
+history = load_history()
+
+# Count today's signals for tab label
+_today_n = len(today_signals) if not today_signals.empty else 0
+_today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
+
+tab_today, tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
+    _today_label, "5%5일a", "15%10일", "5%5일b", "20%30일", "10%30일", "Performance"
+])
+
+# ─── Strategy Tab Builder ─────────────────────────────────────────────────────
+STRAT_INFO = {
+    'A': {
+        'title': '5%5일a — 급락반등',
+        'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
+        'bt': '90.1% (236/262)',
+        'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret3d": st.column_config.NumberColumn("Ret 3D", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "dist_low5": st.column_config.NumberColumn("Dist L5", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'B': {
+        'title': '15%10일 — 고수익',
+        'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
+        'bt': '90.3% (28/31)',
+        'cols': ['ticker','date','scan_time','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "atr_ratio": st.column_config.NumberColumn("ATR", format="%.2f"),
+            "intra_pct": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ma20_pos": st.column_config.NumberColumn("MA20%", format="%.1f%%"),
+            "rev_growth": st.column_config.NumberColumn("Rev Gr", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'C': {
+        'title': '5%5일b — 과매도',
+        'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
+        'bt': '86.9% (542/624)',
+        'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "dist_low5": st.column_config.NumberColumn("Dist L5", format="%.2f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'D': {
+        'title': '20%30일 — 초저가',
+        'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
+        'bt': '97.7% (127/130)',
+        'cols': ['ticker','date','scan_time','price','rsi14','intraday','ret5d','tp_price','hold_days'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
+        },
+    },
+    'E': {
+        'title': '10%30일 — 속반등',
+        'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
+        'bt': '91.0% (273/300)',
+        'cols': ['ticker','date','scan_time','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "vol_avg": st.column_config.NumberColumn("Avg Vol", format="%d"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
+        },
+    },
+}
+
+def render_strategy_tab(key, tab_obj):
+    info = STRAT_INFO[key]
+    with tab_obj:
+        # Strategy info card
+        desc_html = ''.join(f'<div>{d}</div>' for d in info['desc'])
+        rules_html = ''.join(f'<div>{r}</div>' for r in info['rules'])
+        st.markdown(f'''<div class="rr-strat-info si-{key}">
+            <h3>{stag(key)} {info["title"]}</h3>
+            <div class="si-grid">
+                <div class="si-section"><div class="si-label">Entry Conditions</div>{desc_html}</div>
+                <div class="si-section"><div class="si-label">Exit Rules</div>{rules_html}</div>
+                <div class="si-section"><div class="si-label">Backtest</div>
+                    <div class="si-stat"><span class="big" style="color:var(--gold)">{info["bt"].split("(")[0].strip()}</span></div>
+                    <div style="color:var(--text-muted);font-size:0.85em;margin-top:4px">({info["bt"].split("(")[1] if "(" in info["bt"] else ""})</div>
+                </div>
+            </div>
+        </div>''', unsafe_allow_html=True)
+
+        # Today's signals
+        if not today_signals.empty and 'strategy' in today_signals.columns:
+            sig = today_signals[today_signals['strategy'] == key]
+        else:
+            sig = pd.DataFrame()
+
+        if not sig.empty:
+            st.markdown(f'<div class="rr-legend" style="color:var(--gold)">Today — {len(sig)} signal{"s" if len(sig)>1 else ""} detected</div>', unsafe_allow_html=True)
+            avail = [c for c in info['cols'] if c in sig.columns]
+            st.dataframe(sig[avail].reset_index(drop=True), use_container_width=True, column_config=info['col_config'])
+        else:
+            st.markdown(f'<div class="rr-empty">No {STRAT_TAB.get(key, key)} signals today</div>', unsafe_allow_html=True)
+
+        # Recent 30d history
+        if not history.empty and 'strategy' in history.columns:
+            hist = history[history['strategy'] == key]
+            if not hist.empty:
+                cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
+                recent = hist[hist['date'] >= cutoff]
+                if not recent.empty:
+                    st.markdown('<div class="rr-divider" style="margin:20px auto"></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="rr-legend">Recent 30 Days — {len(recent)} signals</div>', unsafe_allow_html=True)
+                    show = recent.sort_values('date', ascending=False).reset_index(drop=True)
+                    show['date'] = show['date'].dt.strftime('%Y-%m-%d')
+                    avail = [c for c in info['cols'] if c in show.columns]
+                    st.dataframe(show[avail], use_container_width=True, column_config=info['col_config'])
+
+# ─── Tab: Today's Picks ──────────────────────────────────────────────────────
+with tab_today:
+    if today_signals.empty:
+        st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'''<div class="rr-legend" style="color:var(--gold);font-size:0.9em;margin-bottom:16px">
+            Today — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> signal{"s" if len(today_signals)>1 else ""} detected
+        </div>''', unsafe_allow_html=True)
+
+        # Build the today table grouped by strategy
+        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+        html += '<th>Strategy</th><th>Target</th><th>Hold</th><th>Ticker</th>'
+        html += '<th>Price</th><th>TP Price</th><th>Backtest</th>'
+        html += '</tr></thead><tbody>'
+
+        for s_key in ['A', 'B', 'C', 'D', 'E']:
+            if 'strategy' not in today_signals.columns:
+                continue
+            s_sig = today_signals[today_signals['strategy'] == s_key]
+            if s_sig.empty:
+                continue
+            for idx, row in s_sig.iterrows():
+                tk = safe_str(row.get('ticker'))
+                pr = safe_float(row.get('price', 0))
+                tp = safe_float(row.get('tp_price', 0))
+                pr_h = f'${pr:.2f}' if pr > 0 else '—'
+                tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
+                tab_name = STRAT_TAB.get(s_key, s_key)
+
+                html += f'<tr>'
+                html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
+                html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
+                html += f'<td style="color:var(--text-secondary)">{STRAT_MAX_HOLD.get(s_key,"")}일</td>'
+                html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
+                html += f'<td>{pr_h}</td>'
+                html += f'<td>{tp_h}</td>'
+                html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
+                html += f'</tr>'
+
+        html += '</tbody></table></div>'
+        st.markdown(html, unsafe_allow_html=True)
+
+        # Strategy breakdown summary
+        st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+        strat_counts = today_signals.groupby('strategy').size() if 'strategy' in today_signals.columns else pd.Series(dtype=int)
+        cards_html = '<div class="rr-cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">'
+        for s_key in ['A', 'B', 'C', 'D', 'E']:
+            cnt = int(strat_counts.get(s_key, 0))
+            if cnt == 0:
+                continue
+            cards_html += f'''<div class="rr-card">
+                <div class="val" style="color:var(--text-primary)">{cnt}</div>
+                <div class="lbl">{STRAT_TAB.get(s_key, s_key)}</div>
+                <div style="font-size:0.68em;color:var(--text-muted);margin-top:4px">{STRAT_TP.get(s_key,"")} / {STRAT_MAX_HOLD.get(s_key,"")}일</div>
+            </div>'''
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+for k, t in [('A', tab_a), ('B', tab_b), ('C', tab_c), ('D', tab_d), ('E', tab_e)]:
+    render_strategy_tab(k, t)
+
+# ─── Tab: Performance ─────────────────────────────────────────────────────────
 with tab_history:
     open_pos = load_open_positions()
     closed_pos = load_closed_positions()
 
-    # ── 데이터 준비 ──
+    # Data prep
     all_records = pd.DataFrame()
     frames = []
     if not open_pos.empty and 'strategy' in open_pos.columns:
-        tmp_open = open_pos[['strategy', 'signal_date', 'status']].copy()
-        tmp_open.rename(columns={'status': 'result'}, inplace=True)
-        frames.append(tmp_open)
+        tmp = open_pos[['strategy', 'signal_date', 'status']].copy()
+        tmp.rename(columns={'status': 'result'}, inplace=True)
+        frames.append(tmp)
     if not closed_pos.empty and 'strategy' in closed_pos.columns:
-        result_col = 'result_status' if 'result_status' in closed_pos.columns else 'status'
-        tmp_closed = closed_pos[['strategy', 'signal_date', result_col]].copy()
-        tmp_closed.rename(columns={result_col: 'result'}, inplace=True)
-        frames.append(tmp_closed)
+        rc = 'result_status' if 'result_status' in closed_pos.columns else 'status'
+        tmp = closed_pos[['strategy', 'signal_date', rc]].copy()
+        tmp.rename(columns={rc: 'result'}, inplace=True)
+        frames.append(tmp)
     if frames:
         all_records = pd.concat(frames, ignore_index=True)
         all_records['signal_date'] = pd.to_datetime(all_records['signal_date'], errors='coerce')
@@ -636,602 +895,951 @@ with tab_history:
         all_records['month_str'] = all_records['signal_date'].dt.strftime('%Y-%m')
 
     strategies = ['A', 'B', 'C', 'D', 'E']
-    rs_col_name = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
+    rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
-    # ── 전체 집계 ──
-    total_detected = len(all_records)
+    # Aggregate
+    total_det = len(all_records)
     total_closed = len(closed_pos) if not closed_pos.empty else 0
-    total_win = len(closed_pos[closed_pos[rs_col_name] == 'WIN']) if total_closed > 0 else 0
-    total_loss = len(closed_pos[closed_pos[rs_col_name] == 'LOSS']) if total_closed > 0 else 0
-    total_expired = len(closed_pos[closed_pos[rs_col_name] == 'EXPIRED']) if total_closed > 0 else 0
-    total_trailing = len(closed_pos[closed_pos[rs_col_name] == 'TRAILING']) if total_closed > 0 else 0
-    total_open_cnt = len(open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
-    overall_wr = (total_win / total_closed * 100) if total_closed > 0 else 0
+    total_win = len(closed_pos[closed_pos[rs_col] == 'WIN']) if total_closed > 0 else 0
+    total_loss = len(closed_pos[closed_pos[rs_col] == 'LOSS']) if total_closed > 0 else 0
+    total_exp = len(closed_pos[closed_pos[rs_col] == 'EXPIRED']) if total_closed > 0 else 0
+    total_open = len(open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
+    wr = (total_win / total_closed * 100) if total_closed > 0 else 0
 
-    # ══════════════════════════════════════════════════════════════════
-    # 상단 요약 카드
-    # ══════════════════════════════════════════════════════════════════
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(render_summary_card(f'{total_detected}', '총 탐지', '#64b5f6'), unsafe_allow_html=True)
-    with c2:
-        st.markdown(render_summary_card(f'{total_open_cnt}', '진행중', '#ffb74d'), unsafe_allow_html=True)
-    with c3:
-        st.markdown(render_summary_card(f'{total_win}', '익절 성공', '#81c784'), unsafe_allow_html=True)
-    with c4:
-        st.markdown(render_summary_card(f'{total_loss + total_expired + total_trailing}', '손절/초과/트레일', '#e57373'), unsafe_allow_html=True)
-    with c5:
-        wr_color = '#81c784' if overall_wr >= 80 else '#ffb74d' if overall_wr >= 50 else '#e57373'
-        st.markdown(render_summary_card(f'{overall_wr:.1f}%', '실전 승률', wr_color), unsafe_allow_html=True)
+    # Summary cards
+    wr_color = 'var(--green-bright)' if wr >= 80 else 'var(--amber)' if wr >= 50 else 'var(--red-bright)'
+    st.markdown(f'''<div class="rr-cards">
+        <div class="rr-card"><div class="val" style="color:var(--text-secondary)">{total_det}</div><div class="lbl">Detected</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--blue)">{total_open}</div><div class="lbl">Active</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--green-bright)">{total_win}</div><div class="lbl">Wins</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--red-bright)">{total_loss + total_exp}</div><div class="lbl">Loss / Exp</div></div>
+        <div class="rr-card accent"><div class="val" style="color:var(--gold)">{wr:.1f}%</div><div class="lbl">Win Rate</div></div>
+    </div>''', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
-
-    # ── 서브 탭 ──
-    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker = st.tabs([
-        "📅 일별 성적", "📆 월별 성적", "🏆 전략별 승률", "🟡 진행중 포지션", "📋 청산 내역", "🔍 티커별"
+    # Sub tabs
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl, h_analytics = st.tabs([
+        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L", "Analytics"
     ])
 
-    # ══════════════════════════════════════════════════════════════════
-    # 1) 일별 매트릭스
-    # ══════════════════════════════════════════════════════════════════
+    # ── 1) Daily Matrix ──
     with h_daily:
         if all_records.empty:
-            st.markdown('<div class="no-signal">아직 데이터가 없습니다. 스캐너 실행 후 데이터가 쌓이면 여기에 일별 성적이 표시됩니다.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-empty">No data yet — run scanner first</div>', unsafe_allow_html=True)
         else:
             cutoff = all_records['signal_date'].max() - pd.Timedelta(days=30)
             recent = all_records[all_records['signal_date'] >= cutoff].copy()
-            date_order = sorted(recent['date_str'].unique(),
-                                key=lambda x: pd.to_datetime(x, format='%m/%d'))
+            # Sort by actual date, not by mm/dd string (avoids year-boundary bug)
+            _date_map = recent.drop_duplicates('date_str').set_index('date_str')['signal_date']
+            date_order = sorted(recent['date_str'].unique(), key=lambda x: _date_map.get(x, pd.Timestamp.min))
 
-            det_g = recent.groupby(['strategy', 'date_str']).size().unstack(fill_value=0)
-            wins_r = recent[recent['result'] == 'WIN']
-            ach_g = wins_r.groupby(['strategy', 'date_str']).size().unstack(fill_value=0) if not wins_r.empty else pd.DataFrame(0, index=strategies, columns=date_order)
+            det_g = recent.groupby(['strategy','date_str']).size().unstack(fill_value=0)
+            wins_r = recent[recent['result']=='WIN']
+            ach_g = wins_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not wins_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
+            loss_r = recent[recent['result'].isin(['LOSS','EXPIRED'])]
+            loss_g = loss_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not loss_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
+            prog_r = recent[recent['result'].isin(['OPEN','PENDING'])]
+            prog_g = prog_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not prog_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
 
             for s in strategies:
-                if s not in det_g.index: det_g.loc[s] = 0
-                if s not in ach_g.index: ach_g.loc[s] = 0
+                for g in [det_g,ach_g,loss_g,prog_g]:
+                    if s not in g.index: g.loc[s]=0
             for d in date_order:
-                if d not in det_g.columns: det_g[d] = 0
-                if d not in ach_g.columns: ach_g[d] = 0
+                for g in [det_g,ach_g,loss_g,prog_g]:
+                    if d not in g.columns: g[d]=0
 
-            # HTML 테이블 생성
-            html = '<table class="matrix-table"><thead><tr><th class="strat-col">전략</th>'
-            for d in date_order:
-                html += f'<th>{d}</th>'
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th>Strategy</th>'
+            for d in date_order: html += f'<th>{d}</th>'
             html += '</tr></thead><tbody>'
-
             for s in strategies:
-                html += f'<tr><td class="strat-label">{strat_badge(s)} {STRAT_NAMES.get(s,"")}</td>'
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
                 for d in date_order:
-                    det_v = int(det_g.loc[s, d]) if d in det_g.columns else 0
-                    ach_v = int(ach_g.loc[s, d]) if d in ach_g.columns else 0
-                    html += f'<td>{cell_html(ach_v, det_v)}</td>'
+                    dv = int(det_g.loc[s,d]) if d in det_g.columns else 0
+                    av = int(ach_g.loc[s,d]) if d in ach_g.columns else 0
+                    lv = int(loss_g.loc[s,d]) if d in loss_g.columns else 0
+                    pv = int(prog_g.loc[s,d]) if d in prog_g.columns else 0
+                    html += f'<td>{cell_html(av,dv,lv,pv)}</td>'
                 html += '</tr>'
+            html += '</tbody></table></div>'
 
-            html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">최근 30일 — 셀: <b>익절 성공건수 / 총 탐지건수</b> (초록=전부달성, 주황=일부달성, 회색=미탐지)</p>{html}', unsafe_allow_html=True)
+            st.markdown(f'''<div class="rr-legend">
+                Last 30 days — <span class="c-win">Green = All TP</span> ·
+                <span class="c-loss">Red = Loss</span> ·
+                <span class="c-partial">Amber = Partial</span> ·
+                <span class="c-pending">Gray = Active</span>
+            </div>{html}''', unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    # 2) 월별 매트릭스
-    # ══════════════════════════════════════════════════════════════════
+    # ── 2) Monthly Matrix ──
     with h_monthly:
         if all_records.empty:
-            st.markdown('<div class="no-signal">아직 데이터가 없습니다.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-empty">No data yet</div>', unsafe_allow_html=True)
         else:
-            month_order = sorted(all_records['month_str'].unique())
-            m_det_g = all_records.groupby(['strategy', 'month_str']).size().unstack(fill_value=0)
-            m_wins = all_records[all_records['result'] == 'WIN']
-            m_ach_g = m_wins.groupby(['strategy', 'month_str']).size().unstack(fill_value=0) if not m_wins.empty else pd.DataFrame(0, index=strategies, columns=month_order)
+            mo = sorted(all_records['month_str'].unique())
+            m_det = all_records.groupby(['strategy','month_str']).size().unstack(fill_value=0)
+            m_win = all_records[all_records['result']=='WIN']
+            m_ach = m_win.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_win.empty else pd.DataFrame(0,index=strategies,columns=mo)
+            m_l = all_records[all_records['result'].isin(['LOSS','EXPIRED'])]
+            m_lg = m_l.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_l.empty else pd.DataFrame(0,index=strategies,columns=mo)
+            m_p = all_records[all_records['result'].isin(['OPEN','PENDING'])]
+            m_pg = m_p.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_p.empty else pd.DataFrame(0,index=strategies,columns=mo)
 
             for s in strategies:
-                if s not in m_det_g.index: m_det_g.loc[s] = 0
-                if s not in m_ach_g.index: m_ach_g.loc[s] = 0
-            for m in month_order:
-                if m not in m_det_g.columns: m_det_g[m] = 0
-                if m not in m_ach_g.columns: m_ach_g[m] = 0
+                for g in [m_det,m_ach,m_lg,m_pg]:
+                    if s not in g.index: g.loc[s]=0
+            for m in mo:
+                for g in [m_det,m_ach,m_lg,m_pg]:
+                    if m not in g.columns: g[m]=0
 
-            # 달성/탐지 합산 테이블
-            html = '<table class="matrix-table"><thead><tr><th class="strat-col">전략</th>'
-            for m in month_order:
-                html += f'<th>{m}</th>'
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th>Strategy</th>'
+            for m in mo: html += f'<th>{m}</th>'
             html += '</tr></thead><tbody>'
             for s in strategies:
-                html += f'<tr><td class="strat-label">{strat_badge(s)} {STRAT_NAMES.get(s,"")}</td>'
-                for m in month_order:
-                    det_v = int(m_det_g.loc[s, m]) if m in m_det_g.columns else 0
-                    ach_v = int(m_ach_g.loc[s, m]) if m in m_ach_g.columns else 0
-                    html += f'<td>{cell_html(ach_v, det_v)}</td>'
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                for m in mo:
+                    dv=int(m_det.loc[s,m]) if m in m_det.columns else 0
+                    av=int(m_ach.loc[s,m]) if m in m_ach.columns else 0
+                    lv=int(m_lg.loc[s,m]) if m in m_lg.columns else 0
+                    pv=int(m_pg.loc[s,m]) if m in m_pg.columns else 0
+                    html += f'<td>{cell_html(av,dv,lv,pv)}</td>'
                 html += '</tr>'
-            html += '</tbody></table>'
-            st.markdown(f'<p style="color:#888; font-size:0.85em; margin-bottom:8px;">월별 종합 — 셀: <b>익절 성공건수 / 총 탐지건수</b></p>{html}', unsafe_allow_html=True)
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    # 3) 전략별 승률
-    # ══════════════════════════════════════════════════════════════════
+    # ── 3) Strategy Win Rates ──
     with h_winrate:
-        html = '<table class="matrix-table"><thead><tr>'
-        html += '<th class="strat-col">전략</th><th>익절 목표</th><th>총 탐지건수</th><th>청산 완료</th>'
-        html += '<th>익절 성공</th><th>손절 처리</th><th>보유기간 초과청산</th><th>트레일링</th><th>현재 진행중</th>'
-        html += '<th>실전 승률</th><th>백테스트 승률</th><th>건당 평균수익률</th>'
+        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+        html += '<th>Strategy</th><th>Target</th><th>Total</th><th>Closed</th>'
+        html += '<th>Win</th><th>Loss</th><th>Expired</th><th>Active</th>'
+        html += '<th>Win Rate</th><th>Backtest</th><th>Avg P&L</th>'
         html += '</tr></thead><tbody>'
 
         for s in strategies:
-            s_all = all_records[all_records['strategy'] == s] if not all_records.empty else pd.DataFrame()
-            s_closed = closed_pos[closed_pos['strategy'] == s] if not closed_pos.empty and 'strategy' in closed_pos.columns else pd.DataFrame()
-            s_open_df = open_pos[(open_pos['strategy'] == s) & (open_pos['status'].isin(['OPEN', 'PENDING']))] if not open_pos.empty and 'strategy' in open_pos.columns and 'status' in open_pos.columns else pd.DataFrame()
+            s_all = all_records[all_records['strategy']==s] if not all_records.empty else pd.DataFrame()
+            s_cl = closed_pos[closed_pos['strategy']==s] if not closed_pos.empty and 'strategy' in closed_pos.columns else pd.DataFrame()
+            s_op = open_pos[(open_pos['strategy']==s)&(open_pos['status'].isin(['OPEN','PENDING']))] if not open_pos.empty and 'strategy' in open_pos.columns and 'status' in open_pos.columns else pd.DataFrame()
 
-            n_det = len(s_all)
-            n_closed = len(s_closed)
-            n_win = len(s_closed[s_closed[rs_col_name] == 'WIN']) if n_closed > 0 else 0
-            n_loss = len(s_closed[s_closed[rs_col_name] == 'LOSS']) if n_closed > 0 else 0
-            n_exp = len(s_closed[s_closed[rs_col_name] == 'EXPIRED']) if n_closed > 0 else 0
-            n_trail = len(s_closed[s_closed[rs_col_name] == 'TRAILING']) if n_closed > 0 else 0
-            n_active = len(s_open_df)
-            wr = (n_win / n_closed * 100) if n_closed > 0 else 0
+            nd=len(s_all); nc=len(s_cl)
+            nw = len(s_cl[s_cl[rs_col]=='WIN']) if nc>0 else 0
+            nl = len(s_cl[s_cl[rs_col]=='LOSS']) if nc>0 else 0
+            ne = len(s_cl[s_cl[rs_col]=='EXPIRED']) if nc>0 else 0
+            na = len(s_op)
+            sw = (nw/nc*100) if nc>0 else 0
+            avg = 0
+            if nc>0 and 'result_pct' in s_cl.columns:
+                avg = safe_float(pd.to_numeric(s_cl['result_pct'],errors='coerce').mean())
 
-            avg_ret = 0
-            if n_closed > 0 and 'result_pct' in s_closed.columns:
-                avg_ret = safe_float(pd.to_numeric(s_closed['result_pct'], errors='coerce').mean())
+            wrc = 'c-win' if sw>=80 else 'c-partial' if sw>0 else 'c-none'
+            rc = 'c-win' if avg>0 else 'c-loss' if avg<0 else 'c-none'
 
-            wr_class = 'cell-win' if wr >= 80 else 'cell-partial' if wr > 0 else 'cell-none'
-            ret_class = 'cell-win' if avg_ret > 0 else 'cell-loss' if avg_ret < 0 else 'cell-none'
-            bt_wr = STRAT_BT_WR.get(s, '—')
+            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+            html += f'<td style="color:var(--gold);font-weight:600">{STRAT_TP.get(s,"")}</td>'
+            html += f'<td>{nd}</td><td>{nc if nc>0 else "—"}</td>'
+            html += f'<td class="c-win">{nw if nw>0 else "—"}</td>'
+            html += f'<td class="{"c-loss" if nl>0 else "c-none"}">{nl if nl>0 else "—"}</td>'
+            html += f'<td class="{"c-partial" if ne>0 else "c-none"}">{ne if ne>0 else "—"}</td>'
+            html += f'<td class="{"st-open" if na>0 else "c-none"}">{na if na>0 else "—"}</td>'
+            html += f'<td class="{wrc}">{sw:.1f}%</td>' if nc>0 else '<td class="c-none">—</td>'
+            html += f'<td class="c-muted">{STRAT_BT_WR.get(s,"—")}</td>'
+            html += f'<td class="{rc}">{avg:+.1f}%</td>' if nc>0 else '<td class="c-none">—</td>'
+            html += '</tr>'
 
-            html += f'<tr>'
-            html += f'<td class="strat-label">{strat_badge(s)} {STRAT_NAMES.get(s,"")}</td>'
-            html += f'<td style="font-weight:700">{STRAT_TP.get(s,"")}</td>'
-            html += f'<td>{n_det}</td>'
-            html += f'<td>{n_closed if n_closed > 0 else "—"}</td>'
-            html += f'<td class="cell-win">{n_win if n_win > 0 else "—"}</td>'
-            html += f'<td class="{"status-loss" if n_loss > 0 else "cell-none"}">{n_loss if n_loss > 0 else "—"}</td>'
-            html += f'<td class="{"status-expired" if n_exp > 0 else "cell-none"}">{n_exp if n_exp > 0 else "—"}</td>'
-            html += f'<td class="{"status-trailing" if n_trail > 0 else "cell-none"}">{n_trail if n_trail > 0 else "—"}</td>'
-            html += f'<td class="{"status-open" if n_active > 0 else "cell-none"}">{n_active if n_active > 0 else "—"}</td>'
-            html += f'<td class="{wr_class}" style="font-size:1.05em">{wr:.1f}%</td>' if n_closed > 0 else '<td class="cell-none">—</td>'
-            html += f'<td style="color:#888">{bt_wr}</td>'
-            html += f'<td class="{ret_class}">{avg_ret:+.1f}%</td>' if n_closed > 0 else '<td class="cell-none">—</td>'
-            html += f'</tr>'
-
-        html += '</tbody></table>'
+        html += '</tbody></table></div>'
         st.markdown(html, unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    # 4) 진행중 포지션
-    # ══════════════════════════════════════════════════════════════════
+    # ── 4) Active Positions ──
     with h_active:
         active = pd.DataFrame()
         if not open_pos.empty and 'status' in open_pos.columns:
-            active = open_pos[open_pos['status'].isin(['PENDING', 'OPEN'])]
+            active = open_pos[open_pos['status'].isin(['PENDING','OPEN'])]
         if not active.empty:
-            html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th>'
-            html += '<th>매수가</th><th>현재가</th><th>현재 손익률</th>'
-            html += '<th>목표 익절가</th><th>보유중 최고가</th><th>최고가 도달일</th>'
-            html += '<th>익절목표 달성률</th><th>익절까지 남은%</th>'
-            html += '<th>보유일/최대</th><th>현재 상태</th>'
+            fa1, fa2, _ = st.columns([2,2,6])
+            with fa1:
+                astrats = sorted(active['strategy'].dropna().unique()) if 'strategy' in active.columns else []
+                af = st.selectbox('Strategy', ['All']+astrats, key='af')
+            with fa2:
+                asort = st.selectbox('Sort', ['Date (New)','Date (Old)','P&L High','P&L Low','Ach High'], key='as')
+            if af != 'All': active = active[active['strategy']==af]
+            if asort=='Date (New)': active=active.sort_values('signal_date',ascending=False)
+            elif asort=='Date (Old)': active=active.sort_values('signal_date',ascending=True)
+            elif asort in ('P&L High','P&L Low'):
+                active['_s']=pd.to_numeric(active.get('change_pct',0),errors='coerce').fillna(0)
+                active=active.sort_values('_s',ascending=(asort=='P&L Low'))
+            elif asort=='Ach High':
+                active['_s']=pd.to_numeric(active.get('achievement_pct',0),errors='coerce').fillna(0)
+                active=active.sort_values('_s',ascending=False)
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Entry</th>'
+            html += '<th>Price</th><th>Current</th><th>P&L</th>'
+            html += '<th>TP</th><th>Peak</th><th>Peak Date</th>'
+            html += '<th>Achievement</th><th>Remaining</th>'
+            html += '<th>Days</th><th>Status</th>'
             html += '</tr></thead><tbody>'
 
             for _, row in active.iterrows():
-                s = safe_str(row.get('strategy'))
-                tk = safe_str(row.get('ticker'))
-                sig_dt = safe_str(row.get('signal_date'))
-                ent_dt = safe_str(row.get('entry_date'))
-                ent_pr_raw = safe_str(row.get('entry_price'))
-                cur_pr_raw = safe_str(row.get('current_price'))
-                tp_pr_raw = safe_str(row.get('tp_price'))
-                max_pr_raw = safe_str(row.get('max_price'))
-                max_pr_dt = safe_str(row.get('max_price_date'))
-                ach_pct_raw = safe_str(row.get('achievement_pct'))
-                chg_pct_raw = safe_str(row.get('change_pct'))
-                days_held = safe_str(row.get('days_held'))
-                mh = safe_str(row.get('max_hold'))
-                status = safe_str(row.get('status'))
+                s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
+                sig_dt=safe_str(row.get('signal_date')); status=safe_str(row.get('status'))
+                is_p = (status=='PENDING')
+                sp = safe_float(safe_str(row.get('signal_price')))
+                ep_raw=safe_str(row.get('entry_price')); cp_raw=safe_str(row.get('current_price'))
+                tp_raw=safe_str(row.get('tp_price')); mx_raw=safe_str(row.get('max_price'))
+                mx_dt=safe_str(row.get('max_price_date'))
+                ach_raw=safe_str(row.get('achievement_pct')); chg_raw=safe_str(row.get('change_pct'))
+                dh=safe_str(row.get('days_held')); mh_raw=safe_str(row.get('max_hold'))
+                mh = mh_raw if mh_raw!='—' else str(STRAT_MAX_HOLD.get(s,''))
 
-                ent_dt_html = f'<span class="price-none">{ent_dt}</span>' if ent_dt == '—' else ent_dt
-                ent_pr_html = f'<span class="price-none">—</span>' if ent_pr_raw == '—' else f'${ent_pr_raw}'
-                cur_pr_html = f'<span class="price-none">—</span>' if cur_pr_raw == '—' else f'${cur_pr_raw}'
-                tp_pr_html = f'${tp_pr_raw}' if tp_pr_raw != '—' else '—'
-                max_pr_html = f'${max_pr_raw}' if max_pr_raw != '—' else '—'
-                status_class = 'status-open' if status == 'OPEN' else 'status-pending'
-
-                # 수익률 색상
-                chg_pct_val = safe_float(chg_pct_raw)
-                chg_class = 'cell-win' if chg_pct_val > 0 else 'status-loss' if chg_pct_val < 0 else 'cell-none'
-                chg_html = f'<span class="{chg_class}">{chg_pct_val:+.1f}%</span>' if chg_pct_raw != '—' else '—'
-
-                # TP 달성률 프로그레스
-                ach_val = safe_float(ach_pct_raw)
-                ach_color = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
-                if ach_pct_raw != '—' and ach_val > 0:
-                    ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
-                        <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
-                            <div style="width:{min(ach_val,100):.0f}%;background:{ach_color};height:100%;border-radius:4px"></div>
-                        </div>
-                        <span style="font-size:0.82em;font-weight:700;color:{ach_color}">{ach_val:.0f}%</span>
-                    </div>'''
+                if is_p:
+                    ep_h=f'<span class="c-muted">${sp:.2f}</span>' if sp>0 else '<span class="c-muted">—</span>'
+                    cp_h=ep_h; chg_h='<span class="c-muted">WAIT</span>'
+                    mx_h='<span class="c-muted">—</span>'; mx_dt_h='<span class="c-muted">—</span>'
+                    ach_h='<span class="c-muted">—</span>'
+                    tp_f=safe_float(tp_raw)
+                    rem_h = f'<span class="c-muted">~{STRAT_TP.get(s,"")}</span>'
+                    days_h=f'<span class="c-muted">0/{mh}</span>'
+                    ent_dt_h='<span class="c-muted">WAIT</span>'
                 else:
-                    ach_html = '<span class="price-none">—</span>'
+                    ent_dt_h=safe_str(row.get('entry_date'))
+                    if ep_raw=='—' and sp>0: ep_raw=f'{sp:.2f}'
+                    ep_h = f'${ep_raw}' if ep_raw!='—' else '—'
+                    if cp_raw=='—':
+                        fb=safe_float(ep_raw) if ep_raw!='—' else sp
+                        cp_h=f'<span class="c-muted">${fb:.2f}</span>' if fb>0 else '—'
+                        cp_raw=str(fb) if fb>0 else '—'
+                    else: cp_h=f'${cp_raw}'
+                    tp_h=f'${tp_raw}' if tp_raw!='—' else '—'
+                    mx_h=f'${mx_raw}' if mx_raw!='—' else '<span class="c-muted">—</span>'
+                    mx_dt_h=mx_dt
+                    chg_h=chg_html(chg_raw)
 
-                # TP 잔여거리 계산
-                tp_remain_html = '—'
-                cur_f = safe_float(cur_pr_raw)
-                tp_f = safe_float(tp_pr_raw)
-                if cur_f > 0 and tp_f > 0:
-                    remain_pct = (tp_f - cur_f) / cur_f * 100
-                    if remain_pct > 0:
-                        tp_remain_html = f'<span style="color:#2979ff;font-weight:600">+{remain_pct:.1f}%</span>'
+                    ach_val=safe_float(ach_raw)
+                    ac='var(--green-bright)' if ach_val>=100 else 'var(--amber)' if ach_val>=50 else 'var(--red-bright)'
+                    ach_h=progress_bar(ach_val,ac) if ach_raw!='—' and ach_val>0 else '<span class="c-muted">—</span>'
+
+                    cf=safe_float(cp_raw); tf=safe_float(tp_raw)
+                    if cf>0 and tf>0:
+                        rp=(tf-cf)/cf*100
+                        rem_h=f'<span style="color:var(--blue);font-weight:500">+{rp:.1f}%</span>' if rp>0 else '<span class="c-win">HIT</span>'
+                    else: rem_h='—'
+                    # Expiration warning: color days based on usage ratio
+                    dh_i = safe_float(dh); mh_i = safe_float(mh)
+                    if dh!='—' and mh_i > 0:
+                        usage = dh_i / mh_i
+                        if usage >= 0.8:
+                            days_h = f'<span style="color:var(--red-bright);font-weight:700">{dh}/{mh}</span>'
+                        elif usage >= 0.6:
+                            days_h = f'<span style="color:var(--amber);font-weight:600">{dh}/{mh}</span>'
+                        else:
+                            days_h = f'{dh}/{mh}'
                     else:
-                        tp_remain_html = f'<span class="cell-win">달성</span>'
+                        days_h = f'{dh}/{mh}' if dh!='—' else '—'
 
-                # 보유일 / 최대보유
-                days_html = f'{days_held}' if days_held != '—' else '—'
-                if days_held != '—' and mh != '—':
-                    days_html = f'{days_held}/{mh}일'
+                st_cls = 'st-open' if status=='OPEN' else 'st-pending'
+                st_txt = 'OPEN' if status=='OPEN' else 'WAIT'
 
-                html += f'<tr>'
-                html += f'<td>{strat_badge(s)}</td>'
-                html += f'<td style="font-weight:700">{tk}</td>'
-                html += f'<td>{sig_dt}</td>'
-                html += f'<td>{ent_dt_html}</td>'
-                html += f'<td>{ent_pr_html}</td>'
-                html += f'<td>{cur_pr_html}</td>'
-                html += f'<td>{chg_html}</td>'
-                html += f'<td>{tp_pr_html}</td>'
-                html += f'<td style="font-weight:600">{max_pr_html}</td>'
-                html += f'<td>{max_pr_dt}</td>'
-                html += f'<td>{ach_html}</td>'
-                html += f'<td>{tp_remain_html}</td>'
-                html += f'<td>{days_html}</td>'
-                status_kr = '진행중' if status == 'OPEN' else '대기중' if status == 'PENDING' else status
-                html += f'<td class="{status_class}">{status_kr}</td>'
-                html += f'</tr>'
+                html += f'<tr><td>{stag(s)}</td><td style="font-weight:600;color:var(--text-primary)">{tk}</td>'
+                html += f'<td>{sig_dt}</td><td>{ent_dt_h}</td><td>{ep_h}</td><td>{cp_h}</td><td>{chg_h}</td>'
+                html += f'<td>{tp_raw if tp_raw!="—" else "—"}</td><td>{mx_h}</td><td>{mx_dt_h}</td>'
+                html += f'<td>{ach_h}</td><td>{rem_h}</td><td>{days_h}</td>'
+                html += f'<td class="{st_cls}">{st_txt}</td></tr>'
 
-            html += '</tbody></table>'
+            html += '</tbody></table></div>'
             st.markdown(html, unsafe_allow_html=True)
-            st.markdown('<p style="color:#888;font-size:0.8em;margin-top:8px">TP달성률 = (최고가-진입가) / (익절가-진입가) × 100 | TP잔여 = 현재가에서 익절가까지 남은 %</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="no-signal">진행 중인 포지션이 없습니다</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-legend">Achievement = (Peak - Entry) / (TP - Entry) × 100 | Remaining = % from current to TP</div>', unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    # 5) 청산 내역 상세
-    # ══════════════════════════════════════════════════════════════════
+            # Expanders for detail
+            for _, row in active.iterrows():
+                tk=safe_str(row.get('ticker')); s=safe_str(row.get('strategy'))
+                status=safe_str(row.get('status')); st_kr='OPEN' if status=='OPEN' else 'WAIT'
+                with st.expander(f"[{STRAT_TAB.get(s, s)}] {tk} — {st_kr}", expanded=False):
+                    d1,d2,d3=st.columns(3)
+                    sp=safe_float(safe_str(row.get('signal_price')))
+                    ep=safe_float(safe_str(row.get('entry_price')))
+                    cp=safe_float(safe_str(row.get('current_price')))
+                    tp=safe_float(safe_str(row.get('tp_price')))
+                    sl=safe_float(safe_str(row.get('sl_price')))
+                    mx=safe_float(safe_str(row.get('max_price')))
+                    mn=safe_float(safe_str(row.get('min_price')))
+                    cv=safe_float(safe_str(row.get('change_pct')))
+                    av=safe_float(safe_str(row.get('achievement_pct')))
+                    dh=safe_str(row.get('days_held'))
+                    mh_r=safe_str(row.get('max_hold'))
+                    mh=mh_r if mh_r!='—' else str(STRAT_MAX_HOLD.get(s,''))
+                    with d1:
+                        st.markdown(f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)} ({STRAT_KR.get(s,'')})\n- Date: {safe_str(row.get('signal_date'))}\n- Price: ${sp:.2f}" if sp>0 else f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)}\n- Date: {safe_str(row.get('signal_date'))}\n- Price: —")
+                    with d2:
+                        if status=='PENDING':
+                            st.markdown(f"**Entry**\n- Status: Waiting\n- TP: ${tp:.2f}" + (f"\n- SL: ${sl:.2f}" if sl>0 else "\n- SL: None"))
+                        else:
+                            st.markdown(f"**Position**\n- Entry: ${ep:.2f}\n- Current: ${cp:.2f}\n- P&L: {cv:+.1f}%")
+                    with d3:
+                        if status!='PENDING':
+                            st.markdown(f"**Tracking**\n- Days: {dh}/{mh}\n- Peak: ${mx:.2f}\n- Low: ${mn:.2f}\n- Achievement: {av:.0f}%")
+                        else:
+                            st.markdown(f"**Tracking**\n- Days: 0/{mh}\n- Target: {STRAT_TP.get(s,'')}")
+        else:
+            st.markdown('<div class="rr-empty">No active positions</div>', unsafe_allow_html=True)
+
+    # ── 5) Closed Positions ──
     with h_closed_detail:
         if not closed_pos.empty and 'strategy' in closed_pos.columns:
-            # 최신순 정렬
-            cp_sorted = closed_pos.copy()
-            cp_sorted['_close_dt'] = pd.to_datetime(cp_sorted.get('close_date', ''), errors='coerce')
-            cp_sorted = cp_sorted.sort_values('_close_dt', ascending=False)
+            cp_s = closed_pos.copy()
+            fc1,fc2,fc3,_=st.columns([2,2,2,4])
+            with fc1:
+                cs=sorted(cp_s['strategy'].dropna().unique())
+                cf=st.selectbox('Strategy',['All']+list(cs),key='cf')
+            with fc2:
+                ro=['All']
+                if rs_col in cp_s.columns: ro+=sorted(cp_s[rs_col].dropna().unique())
+                cr=st.selectbox('Result',ro,key='cr')
+            with fc3:
+                cso=st.selectbox('Sort',['Close (New)','Close (Old)','P&L High','P&L Low'],key='cso')
+            if cf!='All': cp_s=cp_s[cp_s['strategy']==cf]
+            if cr!='All': cp_s=cp_s[cp_s[rs_col]==cr]
+            cp_s['_cd']=pd.to_datetime(cp_s.get('close_date',''),errors='coerce')
+            if cso=='Close (New)': cp_s=cp_s.sort_values('_cd',ascending=False)
+            elif cso=='Close (Old)': cp_s=cp_s.sort_values('_cd',ascending=True)
+            elif cso in ('P&L High','P&L Low'):
+                cp_s['_rp']=pd.to_numeric(cp_s.get('result_pct',0),errors='coerce').fillna(0)
+                cp_s=cp_s.sort_values('_rp',ascending=(cso=='P&L Low'))
 
-            html = '<table class="pos-table"><thead><tr>'
-            html += '<th>전략</th><th>종목(티커)</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
-            html += '<th>청산 결과</th><th>청산일</th><th>청산가</th><th>최종 손익률</th>'
-            html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Entry</th><th>Price</th>'
+            html += '<th>Result</th><th>Close</th><th>Close $</th><th>P&L</th>'
+            html += '<th>TP Hit</th><th>Peak</th><th>Peak Date</th><th>Ach%</th>'
             html += '</tr></thead><tbody>'
 
-            for _, row in cp_sorted.iterrows():
-                s = safe_str(row.get('strategy'))
-                tk = safe_str(row.get('ticker'))
-                sig_dt = safe_str(row.get('signal_date'))
-                ent_dt = safe_str(row.get('entry_date'))
-                ent_pr = safe_str(row.get('entry_price'))
-                result = safe_str(row.get(rs_col_name, 'status'))
-                close_dt = safe_str(row.get('close_date'))
-                close_pr = safe_str(row.get('close_price'))
-                result_pct_raw = safe_str(row.get('result_pct'))
-                tp_hit_dt = safe_str(row.get('tp_hit_date'))
-                max_pr = safe_str(row.get('max_price'))
-                max_pr_dt = safe_str(row.get('max_price_date'))
-                max_ach_raw = safe_str(row.get('max_achievement_pct'))
+            for _, row in cp_s.iterrows():
+                s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
+                sig_dt=safe_str(row.get('signal_date')); ent_dt=safe_str(row.get('entry_date'))
+                ent_pr=safe_str(row.get('entry_price')); result=safe_str(row.get(rs_col,'status'))
+                close_dt=safe_str(row.get('close_date')); close_pr=safe_str(row.get('close_price'))
+                rp_raw=safe_str(row.get('result_pct')); tp_hit=safe_str(row.get('tp_hit_date'))
+                mx=safe_str(row.get('max_price')); mx_dt=safe_str(row.get('max_price_date'))
+                ma_raw=safe_str(row.get('max_achievement_pct'))
 
-                # 결과 색상
-                if result == 'WIN':
-                    result_html = '<span class="status-win">익절 성공</span>'
-                elif result == 'LOSS':
-                    result_html = '<span class="status-loss">손절</span>'
-                elif result == 'EXPIRED':
-                    result_html = '<span class="status-expired">기간초과</span>'
-                elif result == 'TRAILING':
-                    result_html = '<span class="status-trailing">트레일링</span>'
+                res_h=result_badge(result)
+                rp_h=chg_html(rp_raw)
+
+                tp_h = f'<span class="c-win">{tp_hit}</span>' if tp_hit!='—' else '<span class="c-muted">—</span>'
+
+                if tp_hit=='—' and mx!='—':
+                    mx_h=f'<span style="color:var(--amber);font-weight:600">${mx}</span>'
+                    mx_dt_h=f'<span style="color:var(--amber)">{mx_dt}</span>'
                 else:
-                    result_html = result
+                    mx_h=f'${mx}' if mx!='—' else '—'
+                    mx_dt_h=mx_dt
 
-                # 수익률 색상
-                rp_val = safe_float(result_pct_raw)
-                rp_class = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
-                rp_html = f'<span class="{rp_class}">{rp_val:+.1f}%</span>' if result_pct_raw != '—' else '—'
+                ma_val=safe_float(ma_raw)
+                if ma_raw!='—' and ma_val>0:
+                    ac='var(--green-bright)' if ma_val>=100 else 'var(--amber)' if ma_val>=50 else 'var(--red-bright)'
+                    ma_h=f'<span style="color:{ac};font-weight:600">{ma_val:.0f}%</span>'
+                else: ma_h='—'
 
-                # TP 달성일: 달성했으면 날짜, 아니면 "미달성"
-                if tp_hit_dt != '—':
-                    tp_hit_html = f'<span class="cell-win">{tp_hit_dt}</span>'
-                else:
-                    tp_hit_html = '<span class="price-none">미달성</span>'
+                ep_h=f'${ent_pr}' if ent_pr!='—' else '—'
+                cp_h=f'${close_pr}' if close_pr!='—' else '—'
 
-                # 최고가/최고가일 — 미달성 시 "여기까지 도달" 느낌
-                max_pr_html = f'${max_pr}' if max_pr != '—' else '—'
-                if tp_hit_dt == '—' and max_pr != '—':
-                    # TP 미달성인데 최고가가 있으면 강조
-                    max_pr_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
-                    max_pr_dt_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
-                else:
-                    max_pr_dt_html = max_pr_dt
+                html += f'<tr><td>{stag(s)}</td><td style="font-weight:600">{tk}</td>'
+                html += f'<td>{sig_dt}</td><td>{ent_dt}</td><td>{ep_h}</td>'
+                html += f'<td>{res_h}</td><td>{close_dt}</td><td>{cp_h}</td><td>{rp_h}</td>'
+                html += f'<td>{tp_h}</td><td>{mx_h}</td><td>{mx_dt_h}</td><td>{ma_h}</td></tr>'
 
-                # 최대 달성률
-                max_ach_val = safe_float(max_ach_raw)
-                if max_ach_raw != '—' and max_ach_val > 0:
-                    ach_color = '#00c853' if max_ach_val >= 100 else '#ff9100' if max_ach_val >= 50 else '#e57373'
-                    max_ach_html = f'<span style="color:{ach_color};font-weight:700">{max_ach_val:.0f}%</span>'
-                else:
-                    max_ach_html = '—'
-
-                ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '—'
-                close_pr_html = f'${close_pr}' if close_pr != '—' else '—'
-
-                html += f'<tr>'
-                html += f'<td>{strat_badge(s)}</td>'
-                html += f'<td style="font-weight:700">{tk}</td>'
-                html += f'<td>{sig_dt}</td>'
-                html += f'<td>{ent_dt}</td>'
-                html += f'<td>{ent_pr_html}</td>'
-                html += f'<td>{result_html}</td>'
-                html += f'<td>{close_dt}</td>'
-                html += f'<td>{close_pr_html}</td>'
-                html += f'<td>{rp_html}</td>'
-                html += f'<td>{tp_hit_html}</td>'
-                html += f'<td>{max_pr_html}</td>'
-                html += f'<td>{max_pr_dt_html}</td>'
-                html += f'<td>{max_ach_html}</td>'
-                html += f'</tr>'
-
-            html += '</tbody></table>'
+            html += '</tbody></table></div>'
             st.markdown(html, unsafe_allow_html=True)
-            st.markdown('''<p style="color:#888;font-size:0.8em;margin-top:8px">
-                TP달성일 = 일중 고가가 익절가에 도달한 최초 날짜 |
-                미달성 시 <span style="color:#ff9100">주황색</span>으로 최고가·날짜를 표시 (가장 가까이 접근한 시점) |
-                최대달성률 = 보유기간 중 최고가 기준 TP 목표 대비 달성 비율
-            </p>''', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="no-signal">청산된 포지션이 없습니다</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-empty">No closed positions</div>', unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════════════════════════════
-    # 6) 티커별 — 그룹 헤더 + 개별 포지션 상세
-    # ══════════════════════════════════════════════════════════════════
+    # ── 6) By Ticker ──
     with h_ticker:
-        # ── 모든 포지션을 통합 DataFrame으로 합치기 ──
-        tk_rows = []
-
+        tk_rows=[]
         if not closed_pos.empty and 'ticker' in closed_pos.columns:
             for _, row in closed_pos.iterrows():
-                result = safe_str(row.get(rs_col_name, 'status'))
-                tk_rows.append({
-                    'ticker': safe_str(row.get('ticker')),
-                    'strategy': safe_str(row.get('strategy')),
-                    'signal_date': safe_str(row.get('signal_date')),
-                    'entry_date': safe_str(row.get('entry_date')),
-                    'entry_price': safe_str(row.get('entry_price')),
-                    'tp_price': safe_str(row.get('tp_price')),
-                    'current_price': safe_str(row.get('close_price')),
-                    'max_price': safe_str(row.get('max_price')),
-                    'max_price_date': safe_str(row.get('max_price_date')),
-                    'result': result,
-                    'result_pct': safe_str(row.get('result_pct')),
-                    'tp_hit_date': safe_str(row.get('tp_hit_date')),
-                    'max_ach': safe_str(row.get('max_achievement_pct')),
-                    'close_date': safe_str(row.get('close_date')),
-                    'is_open': False,
-                    'change_pct': safe_str(row.get('result_pct')),
-                    'achievement_pct': safe_str(row.get('max_achievement_pct')),
-                    'days_held': safe_str(row.get('days_held')),
-                })
-
+                result=safe_str(row.get(rs_col,'status'))
+                tk_rows.append({'ticker':safe_str(row.get('ticker')),'strategy':safe_str(row.get('strategy')),
+                    'signal_date':safe_str(row.get('signal_date')),'entry_date':safe_str(row.get('entry_date')),
+                    'entry_price':safe_str(row.get('entry_price')),'tp_price':safe_str(row.get('tp_price')),
+                    'current_price':safe_str(row.get('close_price')),'max_price':safe_str(row.get('max_price')),
+                    'max_price_date':safe_str(row.get('max_price_date')),'result':result,
+                    'result_pct':safe_str(row.get('result_pct')),'tp_hit_date':safe_str(row.get('tp_hit_date')),
+                    'max_ach':safe_str(row.get('max_achievement_pct')),'close_date':safe_str(row.get('close_date')),
+                    'is_open':False,'signal_price':'—'})
         if not open_pos.empty and 'ticker' in open_pos.columns:
             for _, row in open_pos.iterrows():
-                status = safe_str(row.get('status'))
-                tk_rows.append({
-                    'ticker': safe_str(row.get('ticker')),
-                    'strategy': safe_str(row.get('strategy')),
-                    'signal_date': safe_str(row.get('signal_date')),
-                    'entry_date': safe_str(row.get('entry_date')),
-                    'entry_price': safe_str(row.get('entry_price')),
-                    'tp_price': safe_str(row.get('tp_price')),
-                    'current_price': safe_str(row.get('current_price')),
-                    'max_price': safe_str(row.get('max_price')),
-                    'max_price_date': safe_str(row.get('max_price_date')),
-                    'result': status,
-                    'result_pct': safe_str(row.get('change_pct')),
-                    'tp_hit_date': '—',
-                    'max_ach': safe_str(row.get('achievement_pct')),
-                    'close_date': '—',
-                    'is_open': True,
-                    'change_pct': safe_str(row.get('change_pct')),
-                    'achievement_pct': safe_str(row.get('achievement_pct')),
-                    'days_held': safe_str(row.get('days_held')),
-                })
+                status=safe_str(row.get('status'))
+                tk_rows.append({'ticker':safe_str(row.get('ticker')),'strategy':safe_str(row.get('strategy')),
+                    'signal_date':safe_str(row.get('signal_date')),'entry_date':safe_str(row.get('entry_date')),
+                    'entry_price':safe_str(row.get('entry_price')),'signal_price':safe_str(row.get('signal_price')),
+                    'tp_price':safe_str(row.get('tp_price')),'current_price':safe_str(row.get('current_price')),
+                    'max_price':safe_str(row.get('max_price')),'max_price_date':safe_str(row.get('max_price_date')),
+                    'result':status,'result_pct':safe_str(row.get('change_pct')),'tp_hit_date':'—',
+                    'max_ach':safe_str(row.get('achievement_pct')),'close_date':'—','is_open':True})
 
         if not tk_rows:
-            st.markdown('<div class="no-signal">아직 추적 중인 티커가 없습니다</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-empty">No tracked tickers</div>', unsafe_allow_html=True)
         else:
-            # 티커별 그룹핑
-            from collections import defaultdict
-            ticker_groups = defaultdict(list)
-            for r in tk_rows:
-                if r['ticker'] != '—':
-                    ticker_groups[r['ticker']].append(r)
+            ft1,ft2,_=st.columns([2,2,6])
+            with ft1:
+                tks=sorted(set(r['strategy'] for r in tk_rows if r['strategy']!='—'))
+                tf=st.selectbox('Strategy',['All']+tks,key='tf')
+            with ft2:
+                ts=st.selectbox('Sort',['Recent','Name','Count','Win Rate'],key='ts')
+            filtered = tk_rows if tf=='All' else [r for r in tk_rows if r['strategy']==tf]
+            tg=defaultdict(list)
+            for r in filtered:
+                if r['ticker']!='—': tg[r['ticker']].append(r)
+            for t in tg: tg[t].sort(key=lambda x:x['signal_date'],reverse=True)
 
-            # 각 티커 내에서 signal_date 내림차순, 티커 간에는 최신 신호일 순
-            for tk in ticker_groups:
-                ticker_groups[tk].sort(key=lambda x: x['signal_date'], reverse=True)
-            sorted_tickers = sorted(ticker_groups.items(),
-                                    key=lambda x: x[1][0]['signal_date'] if x[1] else '', reverse=True)
+            if ts=='Recent': st_list=sorted(tg.items(),key=lambda x:x[1][0]['signal_date'] if x[1] else '',reverse=True)
+            elif ts=='Name': st_list=sorted(tg.items(),key=lambda x:x[0])
+            elif ts=='Count': st_list=sorted(tg.items(),key=lambda x:len(x[1]),reverse=True)
+            elif ts=='Win Rate':
+                def _wr(item):
+                    w=sum(1 for p in item[1] if p['result']=='WIN')
+                    c=sum(1 for p in item[1] if p['result'] in ('WIN','LOSS','EXPIRED'))
+                    return (w/c*100) if c>0 else 0
+                st_list=sorted(tg.items(),key=_wr,reverse=True)
+            else: st_list=sorted(tg.items(),key=lambda x:x[1][0]['signal_date'] if x[1] else '',reverse=True)
 
-            st.markdown(f'<p style="color:#888;font-size:0.85em;margin-bottom:8px">전체 {len(sorted_tickers)}개 종목 — 티커별 모든 포지션 상세</p>', unsafe_allow_html=True)
+            st.markdown(f'<div class="rr-legend">{len(st_list)} tickers</div>', unsafe_allow_html=True)
 
-            html = ''
-            for tk, positions in sorted_tickers:
-                # ── 티커 그룹 집계 ──
-                n_total = len(positions)
-                n_win = sum(1 for p in positions if p['result'] == 'WIN')
-                n_loss = sum(1 for p in positions if p['result'] == 'LOSS')
-                n_exp = sum(1 for p in positions if p['result'] == 'EXPIRED')
-                n_trail = sum(1 for p in positions if p['result'] == 'TRAILING')
-                n_active = sum(1 for p in positions if p['result'] in ('OPEN', 'PENDING'))
-                n_closed = n_win + n_loss + n_exp + n_trail
-                wr = (n_win / n_closed * 100) if n_closed > 0 else 0
-                strats = sorted(set(p['strategy'] for p in positions if p['strategy'] != '—'))
-                badges = ' '.join(strat_badge(s_) for s_ in strats)
+            html=''
+            for tk,positions in st_list:
+                nt=len(positions)
+                nw=sum(1 for p in positions if p['result']=='WIN')
+                nl=sum(1 for p in positions if p['result']=='LOSS')
+                ne=sum(1 for p in positions if p['result']=='EXPIRED')
+                na=sum(1 for p in positions if p['result'] in ('OPEN','PENDING'))
+                nc=nw+nl+ne
+                tw=(nw/nc*100) if nc>0 else 0
+                badges=' '.join(stag(s_) for s_ in sorted(set(p['strategy'] for p in positions if p['strategy']!='—')))
+                wc='var(--green-bright)' if tw>=80 else 'var(--amber)' if tw>0 else 'var(--text-muted)'
 
-                wr_color = '#00c853' if wr >= 80 else '#ff9100' if wr > 0 else '#888'
-                wr_txt = f'{wr:.0f}%' if n_closed > 0 else '—'
+                parts=[]
+                if nw>0: parts.append(f'<span class="c-win">{nw}W</span>')
+                if nl>0: parts.append(f'<span class="c-loss">{nl}L</span>')
+                if ne>0: parts.append(f'<span class="c-partial">{ne}E</span>')
+                if na>0: parts.append(f'<span class="st-open">{na}A</span>')
+                sm=' / '.join(parts) if parts else '—'
 
-                # 요약 바
-                summary_parts = []
-                if n_win > 0:
-                    summary_parts.append(f'<span class="status-win">{n_win}익절</span>')
-                if n_loss > 0:
-                    summary_parts.append(f'<span class="status-loss">{n_loss}손절</span>')
-                if n_exp > 0:
-                    summary_parts.append(f'<span class="status-expired">{n_exp}만기</span>')
-                if n_trail > 0:
-                    summary_parts.append(f'<span class="status-trailing">{n_trail}트레일</span>')
-                if n_active > 0:
-                    summary_parts.append(f'<span class="status-open">{n_active} 진행</span>')
-                summary_str = ' / '.join(summary_parts) if summary_parts else '—'
-
-                # ── 티커 헤더 (진한 배경, 큰 글씨) ──
-                html += f'''<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;
-                    padding:14px 20px;margin:16px 0 2px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <span style="color:#fff;font-weight:800;font-size:1.3em">{tk}</span>
-                        <span>{badges}</span>
+                html += f'''<div class="tk-header">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="tk-name">{tk}</span>{badges}
                     </div>
-                    <div style="display:flex;align-items:center;gap:16px;color:#a0a0c0;font-size:0.88em">
-                        <span>{n_total}건</span>
-                        <span>{summary_str}</span>
-                        <span style="color:{wr_color};font-weight:700;font-size:1.1em">승률 {wr_txt}</span>
+                    <div class="tk-meta"><span>{nt}</span><span>{sm}</span>
+                        <span style="color:{wc};font-weight:600">{tw:.0f}%</span>
                     </div>
                 </div>'''
 
-                # ── 해당 티커의 개별 포지션 테이블 ──
-                html += '<table class="pos-table" style="margin-bottom:0"><thead><tr>'
-                html += '<th>전략</th><th>신호 발생일</th><th>매수일(D+1)</th><th>매수가</th>'
-                html += '<th>청산 결과</th><th>최종 손익률</th>'
-                html += '<th>익절가 도달일</th><th>보유중 최고가</th><th>최고가 기록일</th><th>익절목표 접근률</th>'
+                html += '<table class="rr-table" style="margin-bottom:0"><thead><tr>'
+                html += '<th>Strat</th><th>Signal</th><th>Entry</th><th>Price</th>'
+                html += '<th>Result</th><th>P&L</th><th>TP Hit</th><th>Peak</th><th>Peak Date</th><th>Ach%</th>'
                 html += '</tr></thead><tbody>'
 
                 for p in positions:
-                    s_ = p['strategy']
-                    sig_dt = p['signal_date']
-                    ent_dt = p['entry_date']
-                    ent_pr = p['entry_price']
-                    result = p['result']
-                    rp_raw = p['result_pct']
-                    tp_hit = p['tp_hit_date']
-                    max_pr = p['max_price']
-                    max_pr_dt = p['max_price_date']
-                    max_ach_raw = p['max_ach']
+                    s_=p['strategy']; res=p['result']; rp=p['result_pct']
+                    tp_hit=p['tp_hit_date']; mx=p['max_price']; mx_dt=p['max_price_date']; ma=p['max_ach']
+                    ep=p['entry_price']; sig_pr=p.get('signal_price','—'); sp_f=safe_float(sig_pr)
+                    is_pend=(res=='PENDING')
 
-                    ent_pr_html = f'${ent_pr}' if ent_pr != '—' else '<span class="price-none">—</span>'
-
-                    # 결과 뱃지
-                    if result == 'WIN':
-                        res_html = '<span class="status-win">익절 성공</span>'
-                    elif result == 'LOSS':
-                        res_html = '<span class="status-loss">손절</span>'
-                    elif result == 'EXPIRED':
-                        res_html = '<span class="status-expired">기간초과</span>'
-                    elif result == 'TRAILING':
-                        res_html = '<span class="status-trailing">트레일링</span>'
-                    elif result == 'OPEN':
-                        res_html = '<span class="status-open">진행중</span>'
-                    elif result == 'PENDING':
-                        res_html = '<span class="status-pending">대기중</span>'
+                    if is_pend:
+                        ed_h='<span class="c-muted">WAIT</span>'
+                        ep_h=f'<span class="c-muted">${sp_f:.2f}</span>' if sp_f>0 else '<span class="c-muted">—</span>'
+                        rp_h='<span class="c-muted">—</span>'; tp_h='<span class="c-muted">—</span>'
+                        mx_h='<span class="c-muted">—</span>'; mxd_h='<span class="c-muted">—</span>'
+                        ach_h='<span class="c-muted">—</span>'
                     else:
-                        res_html = result
+                        ed_h=p['entry_date'] if p['entry_date']!='—' else '<span class="c-muted">—</span>'
+                        if ep=='—' and sp_f>0: ep=f'{sp_f:.2f}'
+                        ep_h=f'${ep}' if ep!='—' else '<span class="c-muted">—</span>'
+                        rp_h=chg_html(rp)
+                        tp_h=f'<span class="c-win">{tp_hit}</span>' if tp_hit!='—' else '<span class="c-muted">—</span>'
+                        if mx!='—':
+                            if tp_hit=='—':
+                                mx_h=f'<span style="color:var(--amber);font-weight:600">${mx}</span>'
+                                mxd_h=f'<span style="color:var(--amber)">{mx_dt}</span>'
+                            else: mx_h=f'${mx}'; mxd_h=mx_dt
+                        else: mx_h='<span class="c-muted">—</span>'; mxd_h='<span class="c-muted">—</span>'
+                        mav=safe_float(ma)
+                        if ma!='—' and mav>0:
+                            ac='var(--green-bright)' if mav>=100 else 'var(--amber)' if mav>=50 else 'var(--red-bright)'
+                            ach_h=progress_bar(mav,ac)
+                        else: ach_h='<span class="c-muted">—</span>'
 
-                    # 수익률
-                    rp_val = safe_float(rp_raw)
-                    rp_cls = 'cell-win' if rp_val > 0 else 'status-loss' if rp_val < 0 else 'cell-none'
-                    rp_html = f'<span class="{rp_cls}">{rp_val:+.1f}%</span>' if rp_raw != '—' else '<span class="price-none">—</span>'
-
-                    # TP 달성일
-                    if tp_hit != '—':
-                        tp_html = f'<span class="cell-win">{tp_hit}</span>'
-                    else:
-                        tp_html = '<span class="price-none">미달성</span>'
-
-                    # 최고가 — TP 미달성 시 주황 강조
-                    if max_pr != '—':
-                        if tp_hit == '—':
-                            mp_html = f'<span style="color:#ff9100;font-weight:700">${max_pr}</span>'
-                            mpd_html = f'<span style="color:#ff9100">{max_pr_dt}</span>'
-                        else:
-                            mp_html = f'${max_pr}'
-                            mpd_html = max_pr_dt
-                    else:
-                        mp_html = '<span class="price-none">—</span>'
-                        mpd_html = '<span class="price-none">—</span>'
-
-                    # TP 달성률 — 프로그레스바
-                    ach_val = safe_float(max_ach_raw)
-                    if max_ach_raw != '—' and ach_val > 0:
-                        ac = '#00c853' if ach_val >= 100 else '#ff9100' if ach_val >= 50 else '#e57373'
-                        ach_html = f'''<div style="display:flex;align-items:center;gap:4px">
-                            <div style="flex:1;background:#eee;border-radius:4px;height:8px;min-width:40px">
-                                <div style="width:{min(ach_val,100):.0f}%;background:{ac};height:100%;border-radius:4px"></div>
-                            </div>
-                            <span style="font-size:0.82em;font-weight:700;color:{ac}">{ach_val:.0f}%</span>
-                        </div>'''
-                    else:
-                        ach_html = '<span class="price-none">—</span>'
-
-                    html += f'<tr>'
-                    html += f'<td>{strat_badge(s_)}</td>'
-                    html += f'<td>{sig_dt}</td>'
-                    html += f'<td>{ent_dt if ent_dt != "—" else "<span class=price-none>—</span>"}</td>'
-                    html += f'<td>{ent_pr_html}</td>'
-                    html += f'<td>{res_html}</td>'
-                    html += f'<td>{rp_html}</td>'
-                    html += f'<td>{tp_html}</td>'
-                    html += f'<td>{mp_html}</td>'
-                    html += f'<td>{mpd_html}</td>'
-                    html += f'<td>{ach_html}</td>'
-                    html += f'</tr>'
-
+                    html += f'<tr><td>{stag(s_)}</td><td>{p["signal_date"]}</td><td>{ed_h}</td><td>{ep_h}</td>'
+                    html += f'<td>{result_badge(res)}</td><td>{rp_h}</td><td>{tp_h}</td>'
+                    html += f'<td>{mx_h}</td><td>{mxd_h}</td><td>{ach_h}</td></tr>'
                 html += '</tbody></table>'
 
             st.markdown(html, unsafe_allow_html=True)
-            st.markdown('''<p style="color:#888;font-size:0.8em;margin-top:12px">
-                각 종목의 전체 포지션 이력을 시간순으로 표시 |
-                TP달성일 = 일중 고가가 익절가 도달한 최초 날짜 |
-                <span style="color:#ff9100">주황색 최고가</span> = TP 미달성 시 가장 가까이 접근한 가격과 날짜 |
-                TP달성률 바 = 목표 대비 최대 도달 비율
-            </p>''', unsafe_allow_html=True)
+
+    # ── 7) P&L Chart ──
+    with h_pnl:
+        if closed_pos.empty or 'close_date' not in closed_pos.columns or 'result_pct' not in closed_pos.columns:
+            st.markdown('<div class="rr-empty">No closed positions for P&L</div>', unsafe_allow_html=True)
+        else:
+            pnl_df = closed_pos[['strategy','close_date','result_pct']].copy()
+            pnl_df['result_pct']=pd.to_numeric(pnl_df['result_pct'],errors='coerce')
+            pnl_df=pnl_df.dropna(subset=['result_pct','close_date'])
+            pnl_df['close_date']=pd.to_datetime(pnl_df['close_date'],errors='coerce')
+            pnl_df=pnl_df.dropna(subset=['close_date']).sort_values('close_date')
+
+            if pnl_df.empty:
+                st.markdown('<div class="rr-empty">No valid P&L data</div>', unsafe_allow_html=True)
+            else:
+                strats_data=sorted(pnl_df['strategy'].unique())
+                sc={'A':'#4a9e7d','B':'#4a7a9e','C':'#b8954a','D':'#9e4a5a','E':'#7a5aaf'}
+
+                chart_data=pd.DataFrame()
+                for s in strats_data:
+                    sd=pnl_df[pnl_df['strategy']==s].copy().sort_values('close_date')
+                    sd[s]=sd['result_pct'].cumsum()
+                    daily=sd.groupby('close_date')[s].last()
+                    chart_data=daily.to_frame() if chart_data.empty else chart_data.join(daily,how='outer')
+
+                total=pnl_df.sort_values('close_date').copy()
+                total['Total']=total['result_pct'].cumsum()
+                td=total.groupby('close_date')['Total'].last()
+                chart_data=chart_data.join(td,how='outer').sort_index().ffill().fillna(0)
+
+                def calc_mdd(cs):
+                    # Prepend 0 as starting point so initial losses count as drawdown
+                    start_idx = cs.index[0] - pd.Timedelta(days=1) if len(cs) > 0 else cs.index[0]
+                    cs0 = pd.concat([pd.Series([0.0], index=[start_idx]), cs])
+                    pk=cs0.cummax(); dd=cs0-pk; mv=dd.min()
+                    if mv==0: return 0,None,None,pd.Series(0,index=cs.index)
+                    me=dd.idxmin(); ms=cs0.loc[:me].idxmax()
+                    # Return dd aligned to original index (drop the prepended zero)
+                    return mv,ms,me,dd.iloc[1:]
+
+                tc=chart_data['Total'] if 'Total' in chart_data.columns else pd.Series(dtype=float)
+                tm,tms,tme,tdd = calc_mdd(tc) if not tc.empty else (0,None,None,pd.Series(dtype=float))
+
+                smdd={}
+                for s in strats_data:
+                    if s in chart_data.columns:
+                        sv,ss,se,sd=calc_mdd(chart_data[s])
+                        smdd[s]={'mdd':sv,'start':ss,'end':se,'dd':sd}
+
+                tp=pnl_df['result_pct'].sum(); ap=pnl_df['result_pct'].mean()
+                nt=len(pnl_df); nw_profit=len(pnl_df[pnl_df['result_pct']>0])
+                tw=(nw_profit/nt*100) if nt>0 else 0
+                tc_='var(--green-bright)' if tp>0 else 'var(--red-bright)' if tp<0 else 'var(--text-muted)'
+                mc_='var(--red-bright)' if tm<-5 else 'var(--amber)' if tm<0 else 'var(--text-muted)'
+                wc_='var(--green-bright)' if tw>=80 else 'var(--amber)' if tw>0 else 'var(--text-muted)'
+
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Cumulative P&L</div><div class="s-value" style="color:{tc_}">{tp:+.1f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Avg per Trade</div><div class="s-value" style="color:{tc_}">{ap:+.2f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Trades</div><div class="s-value" style="color:var(--text-secondary)">{nt}</div></div>
+                    <div class="rr-stat"><div class="s-label">Profit Rate</div><div class="s-value" style="color:{wc_}">{tw:.0f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Max Drawdown</div><div class="s-value" style="color:{mc_}">{tm:.1f}%</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if tms is not None and tme is not None:
+                    ms_s=tms.strftime('%Y-%m-%d') if hasattr(tms,'strftime') else str(tms)
+                    me_s=tme.strftime('%Y-%m-%d') if hasattr(tme,'strftime') else str(tme)
+                    st.markdown(f'<div class="rr-legend" style="color:var(--red-bright)">MDD Period: {ms_s} → {me_s} ({tm:.1f}%p)</div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="rr-legend">Cumulative P&L by Strategy + Total</div>', unsafe_allow_html=True)
+                cl=[sc.get(c,'#c9a96e') if c!='Total' else '#c9a96e' for c in chart_data.columns]
+                st.line_chart(chart_data, color=cl if cl else None)
+
+                st.markdown('<div class="rr-legend" style="margin-top:16px">Drawdown — 0% = Peak, Negative = Loss from Peak</div>', unsafe_allow_html=True)
+                dd_c=pd.DataFrame()
+                for s in strats_data:
+                    if s in smdd: dd_c[s]=smdd[s]['dd']
+                if not tdd.empty: dd_c['Total']=tdd
+                dd_c=dd_c.sort_index().ffill().fillna(0)
+                dcl=[sc.get(c,'#c9a96e') if c!='Total' else '#c9a96e' for c in dd_c.columns]
+                st.area_chart(dd_c, color=dcl if dcl else None)
+
+                # Risk summary table
+                st.markdown('<div class="rr-legend" style="margin-top:16px">Strategy Risk Summary</div>', unsafe_allow_html=True)
+                sh='<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                sh+='<th>Strategy</th><th>Trades</th><th>Win%</th><th>Cum P&L</th><th>Avg</th>'
+                sh+='<th>Best</th><th>Worst</th><th style="color:var(--red-bright)">MDD</th><th>MDD Period</th>'
+                sh+='</tr></thead><tbody>'
+
+                for s in strats_data:
+                    sp=pnl_df[pnl_df['strategy']==s]['result_pct']
+                    sn=len(sp); sw=len(sp[sp>0]); sr=(sw/sn*100) if sn>0 else 0
+                    st_=sp.sum(); sa=sp.mean(); smx=sp.max(); smn=sp.min()
+                    stc='var(--green-bright)' if st_>0 else 'var(--red-bright)' if st_<0 else 'var(--text-muted)'
+                    swc='c-win' if sr>=80 else 'c-partial' if sr>0 else 'c-none'
+                    si=smdd.get(s,{})
+                    sm=si.get('mdd',0); sms=si.get('start'); sme=si.get('end')
+                    smc='var(--red-bright)' if sm<-5 else 'var(--amber)' if sm<0 else 'var(--text-muted)'
+                    if sms and sme:
+                        msr=f'{sms.strftime("%m/%d") if hasattr(sms,"strftime") else str(sms)[:5]}→{sme.strftime("%m/%d") if hasattr(sme,"strftime") else str(sme)[:5]}'
+                    else: msr='—'
+
+                    sh+=f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{sn}</td>'
+                    sh+=f'<td class="{swc}">{sr:.0f}%</td>'
+                    sh+=f'<td style="color:{stc};font-weight:600">{st_:+.1f}%</td>'
+                    sh+=f'<td style="color:{stc}">{sa:+.2f}%</td>'
+                    sh+=f'<td class="c-win">{smx:+.1f}%</td>'
+                    sh+=f'<td class="c-loss">{smn:+.1f}%</td>'
+                    sh+=f'<td style="color:{smc};font-weight:600">{sm:.1f}%</td>'
+                    sh+=f'<td class="c-muted">{msr}</td></tr>'
+
+                sh+='</tbody></table></div>'
+                st.markdown(sh, unsafe_allow_html=True)
+
+    # ── 8) Analytics ──
+    with h_analytics:
+        if closed_pos.empty or len(closed_pos) < 2:
+            st.markdown('<div class="rr-empty">Not enough closed positions for analytics</div>', unsafe_allow_html=True)
+        else:
+            an_cp = closed_pos.copy()
+            an_cp['signal_date_dt'] = pd.to_datetime(an_cp['signal_date'], errors='coerce')
+            an_cp['entry_date_dt'] = pd.to_datetime(an_cp.get('entry_date', ''), errors='coerce')
+            an_cp['close_date_dt'] = pd.to_datetime(an_cp.get('close_date', ''), errors='coerce')
+            an_cp['tp_hit_date_dt'] = pd.to_datetime(an_cp.get('tp_hit_date', ''), errors='coerce')
+            an_cp['result_pct_f'] = pd.to_numeric(an_cp.get('result_pct', 0), errors='coerce').fillna(0)
+            an_cp['days_held_f'] = pd.to_numeric(an_cp.get('days_held', 0), errors='coerce').fillna(0)
+            an_cp['signal_price_f'] = pd.to_numeric(an_cp.get('signal_price', 0), errors='coerce').fillna(0)
+            an_cp['entry_price_f'] = pd.to_numeric(an_cp.get('entry_price', 0), errors='coerce').fillna(0)
+            an_cp['max_ach_f'] = pd.to_numeric(an_cp.get('max_achievement_pct', 0), errors='coerce').fillna(0)
+            an_rs = rs_col
+
+            # ─────────────────────────────────────────
+            # 1) TIME-TO-TP — TP 도달 소요일 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">TP 도달 속도 (Time-to-TP)</div>', unsafe_allow_html=True)
+
+            wins = an_cp[an_cp[an_rs] == 'WIN'].copy()
+            if wins.empty:
+                st.markdown('<div class="rr-empty">No WIN positions yet</div>', unsafe_allow_html=True)
+            else:
+                # days_held_f is already trading days from tracker (close_date==tp_hit_date for WIN)
+                # Do NOT use (tp_hit_date - entry_date).dt.days — that gives calendar days (Fri→Mon=3, not 1)
+                wins['ttp_days'] = wins['days_held_f']
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Wins</th><th>Avg Days to TP</th><th>Median</th><th>Min</th><th>Max</th><th>1일 내 도달</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    sw = wins[wins['strategy'] == s]
+                    if sw.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="5" class="c-muted">—</td></tr>'
+                        continue
+                    ttp = sw['ttp_days']
+                    avg_d = ttp.mean(); med_d = ttp.median(); min_d = ttp.min(); max_d = ttp.max()
+                    d1 = len(sw[ttp <= 1])
+                    d1_pct = (d1 / len(sw) * 100) if len(sw) > 0 else 0
+                    spd_color = 'var(--green-bright)' if avg_d <= 2 else 'var(--amber)' if avg_d <= 5 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td>{len(sw)}</td>'
+                    html += f'<td style="color:{spd_color};font-weight:700">{avg_d:.1f}일</td>'
+                    html += f'<td>{med_d:.0f}일</td><td>{min_d:.0f}일</td><td>{max_d:.0f}일</td>'
+                    html += f'<td style="color:var(--green-bright)">{d1} ({d1_pct:.0f}%)</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">빠를수록 자본 회전율이 높아져 복리 효과 극대화</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 2) EXPECTED VALUE — 전략별 기대값
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">기대값 (Expected Value per Trade)</div>', unsafe_allow_html=True)
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strategy</th><th>Win Rate</th><th>Avg Win</th><th>Avg Loss</th><th>EV</th><th>Profit Factor</th>'
+            html += '</tr></thead><tbody>'
+            for s in strategies:
+                sc_ = an_cp[an_cp['strategy'] == s]
+                if sc_.empty:
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="5" class="c-muted">—</td></tr>'
+                    continue
+                nw_ = len(sc_[sc_[an_rs] == 'WIN']); nl_ = len(sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])])
+                nc_ = nw_ + nl_
+                wr_ = (nw_ / nc_ * 100) if nc_ > 0 else 0
+                w_pnl = sc_[sc_[an_rs] == 'WIN']['result_pct_f']
+                l_pnl = sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])]['result_pct_f']
+                avg_w = w_pnl.mean() if len(w_pnl) > 0 else 0
+                avg_l = l_pnl.mean() if len(l_pnl) > 0 else 0
+                ev = (wr_ / 100) * avg_w + (1 - wr_ / 100) * avg_l
+                gross_w = w_pnl.sum() if len(w_pnl) > 0 else 0
+                gross_l = abs(l_pnl.sum()) if len(l_pnl) > 0 else 0
+                pf = (gross_w / gross_l) if gross_l > 0 else float('inf') if gross_w > 0 else 0
+                ev_c = 'var(--green-bright)' if ev > 0 else 'var(--red-bright)' if ev < 0 else 'var(--text-muted)'
+                pf_c = 'var(--green-bright)' if pf >= 2 else 'var(--amber)' if pf >= 1 else 'var(--red-bright)'
+                pf_s = f'{pf:.2f}' if pf != float('inf') else '∞'
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                html += f'<td>{wr_:.1f}%</td>'
+                html += f'<td class="c-win">{avg_w:+.2f}%</td>'
+                html += f'<td class="c-loss">{avg_l:+.2f}%</td>'
+                html += f'<td style="color:{ev_c};font-weight:700;font-size:1.1em">{ev:+.2f}%</td>'
+                html += f'<td style="color:{pf_c};font-weight:600">{pf_s}</td></tr>'
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+            st.markdown('<div class="rr-legend">EV = (승률 × 평균수익) + (패률 × 평균손실) | Profit Factor = 총이익 / 총손실 (≥2.0 우수)</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 3) DAY-OF-WEEK ANALYSIS — 요일별 성과
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">요일별 신호 성과 (Day-of-Week)</div>', unsafe_allow_html=True)
+
+            dow_names = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri'}
+            an_cp['dow'] = an_cp['signal_date_dt'].dt.dayofweek
+            dow_valid = an_cp.dropna(subset=['dow'])
+
+            if dow_valid.empty:
+                st.markdown('<div class="rr-empty">No data</div>', unsafe_allow_html=True)
+            else:
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Day</th><th>Signals</th><th>Win</th><th>Loss</th><th>Win Rate</th><th>Avg P&L</th>'
+                html += '</tr></thead><tbody>'
+                for d_i in range(5):
+                    d_data = dow_valid[dow_valid['dow'] == d_i]
+                    if d_data.empty:
+                        html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    dw = len(d_data[d_data[an_rs] == 'WIN'])
+                    dl = len(d_data[d_data[an_rs].isin(['LOSS', 'EXPIRED'])])
+                    dc = dw + dl
+                    dwr = (dw / dc * 100) if dc > 0 else 0
+                    davg = d_data['result_pct_f'].mean()
+                    wrc_ = 'c-win' if dwr >= 80 else 'c-partial' if dwr >= 50 else 'c-loss' if dc > 0 else 'c-none'
+                    ac_ = 'c-win' if davg > 0 else 'c-loss' if davg < 0 else 'c-none'
+                    html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td>'
+                    html += f'<td>{len(d_data)}</td>'
+                    html += f'<td class="c-win">{dw}</td><td class="c-loss">{dl}</td>'
+                    html += f'<td class="{wrc_}">{dwr:.0f}%</td>'
+                    html += f'<td class="{ac_}">{davg:+.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">특정 요일에 승률이 현저히 낮으면 해당 요일 신호를 스킵하는 필터 고려</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 4) SLIPPAGE — 시그널가 vs 진입가 괴리
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">슬리피지 (Signal vs Entry Price)</div>', unsafe_allow_html=True)
+
+            slip = an_cp[(an_cp['signal_price_f'] > 0) & (an_cp['entry_price_f'] > 0)].copy()
+            if slip.empty:
+                st.markdown('<div class="rr-empty">No slippage data</div>', unsafe_allow_html=True)
+            else:
+                slip['slip_pct'] = (slip['entry_price_f'] - slip['signal_price_f']) / slip['signal_price_f'] * 100
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Trades</th><th>Avg Slip</th><th>Median</th><th>Max (불리)</th><th>Std Dev</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    ss = slip[slip['strategy'] == s]
+                    if ss.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    sl_data = ss['slip_pct']
+                    avg_sl = sl_data.mean(); med_sl = sl_data.median()
+                    # Max unfavorable = max positive slip (bought higher than signal)
+                    max_sl = sl_data.max()
+                    std_sl = sl_data.std() if len(sl_data) > 1 else 0.0
+                    sc_ = 'var(--green-bright)' if abs(avg_sl) < 1 else 'var(--amber)' if abs(avg_sl) < 3 else 'var(--red-bright)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{len(ss)}</td>'
+                    html += f'<td style="color:{sc_};font-weight:600">{avg_sl:+.2f}%</td>'
+                    html += f'<td>{med_sl:+.2f}%</td>'
+                    html += f'<td class="c-loss">{max_sl:+.2f}%</td>'
+                    html += f'<td class="c-muted">{std_sl:.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">양수 = 시그널가보다 비싸게 매수 (불리) | 음수 = 시그널가보다 싸게 매수 (유리)</div>', unsafe_allow_html=True)
+                # Check if all slippage is 0 (system sets entry=signal by design)
+                if abs(slip['slip_pct'].sum()) < 0.01:
+                    st.markdown('<div class="rr-legend" style="color:var(--text-muted);font-style:italic">※ 현재 시스템은 시그널가 = 진입가 (애프터마켓 종가 매수). 실거래 시 슬리피지 발생 가능.</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 5) WIN/LOSS STREAK — 연승/연패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">연승·연패 분석 (Streak)</div>', unsafe_allow_html=True)
+
+            streak_df = an_cp.dropna(subset=['close_date_dt']).sort_values('close_date_dt').copy()
+            if len(streak_df) < 2:
+                st.markdown('<div class="rr-empty">Not enough data</div>', unsafe_allow_html=True)
+            else:
+                streak_df['is_win'] = (streak_df[an_rs] == 'WIN').astype(int)
+                # Calculate streaks
+                def calc_streaks(series):
+                    max_w = max_l = cur_w = cur_l = 0
+                    all_w = []; all_l = []
+                    for v in series:
+                        if v == 1:
+                            cur_w += 1; cur_l = 0
+                            max_w = max(max_w, cur_w)
+                        else:
+                            cur_l += 1; cur_w = 0
+                            max_l = max(max_l, cur_l)
+                        if cur_w > 0: all_w.append(cur_w)
+                        if cur_l > 0: all_l.append(cur_l)
+                    avg_w = sum(all_w) / len(all_w) if all_w else 0
+                    avg_l = sum(all_l) / len(all_l) if all_l else 0
+                    return max_w, max_l, avg_w, avg_l
+
+                # Overall
+                o_mw, o_ml, o_aw, o_al = calc_streaks(streak_df['is_win'])
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Max 연승</th><th>Max 연패</th><th>Avg 연승</th><th>Avg 연패</th>'
+                html += '</tr></thead><tbody>'
+
+                # Overall row
+                ml_c = 'var(--red-bright)' if o_ml >= 5 else 'var(--amber)' if o_ml >= 3 else 'var(--text-secondary)'
+                html += f'<tr style="border-top:2px solid var(--gold-dim)"><td style="color:var(--gold);font-weight:700">TOTAL</td>'
+                html += f'<td class="c-win" style="font-weight:700;font-size:1.1em">{o_mw}</td>'
+                html += f'<td style="color:{ml_c};font-weight:700;font-size:1.1em">{o_ml}</td>'
+                html += f'<td class="c-win">{o_aw:.1f}</td><td class="c-loss">{o_al:.1f}</td></tr>'
+
+                for s in strategies:
+                    s_streak = streak_df[streak_df['strategy'] == s]
+                    if len(s_streak) < 2:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    s_mw, s_ml, s_aw, s_al = calc_streaks(s_streak['is_win'])
+                    sml_c = 'var(--red-bright)' if s_ml >= 5 else 'var(--amber)' if s_ml >= 3 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td class="c-win">{s_mw}</td><td style="color:{sml_c};font-weight:600">{s_ml}</td>'
+                    html += f'<td class="c-win">{s_aw:.1f}</td><td class="c-loss">{s_al:.1f}</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">최대 연패가 크면 자금관리(켈리 기준 등) 재검토 필요 — 심리적 한계선 설정 참고</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 6) NEAR-MISS — TP 근접 후 실패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">아쉬운 실패 (Near-Miss Analysis)</div>', unsafe_allow_html=True)
+
+            non_wins = an_cp[an_cp[an_rs].isin(['LOSS', 'EXPIRED'])].copy()
+            if non_wins.empty:
+                st.markdown('<div class="rr-empty">No losses/expirations</div>', unsafe_allow_html=True)
+            else:
+                nm_80 = non_wins[non_wins['max_ach_f'] >= 80]
+                nm_50 = non_wins[(non_wins['max_ach_f'] >= 50) & (non_wins['max_ach_f'] < 80)]
+                nm_low = non_wins[non_wins['max_ach_f'] < 50]
+
+                total_nw = len(non_wins)
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Total Loss/Exp</div><div class="s-value" style="color:var(--red-bright)">{total_nw}</div></div>
+                    <div class="rr-stat"><div class="s-label">≥80% 도달 후 실패</div><div class="s-value" style="color:var(--amber)">{len(nm_80)}</div></div>
+                    <div class="rr-stat"><div class="s-label">50~80% 도달</div><div class="s-value" style="color:var(--text-secondary)">{len(nm_50)}</div></div>
+                    <div class="rr-stat"><div class="s-label">&lt;50% (완전 실패)</div><div class="s-value" style="color:var(--red-bright)">{len(nm_low)}</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if not nm_80.empty:
+                    nm_rate = len(nm_80) / total_nw * 100
+                    st.markdown(f'<div class="rr-legend" style="color:var(--amber)">Near-miss rate: {nm_rate:.0f}% — TP의 80% 이상 도달했지만 실패한 비율이 높으면 TP 하향 조정 검토</div>', unsafe_allow_html=True)
+
+                    # Show the near-miss details
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Result</th><th>Max Ach%</th><th>Result P&L</th><th>Peak</th>'
+                    html += '</tr></thead><tbody>'
+                    for _, row in nm_80.sort_values('max_ach_f', ascending=False).head(20).iterrows():
+                        s_ = safe_str(row.get('strategy')); tk_ = safe_str(row.get('ticker'))
+                        sd_ = safe_str(row.get('signal_date')); res_ = safe_str(row.get(an_rs))
+                        ma_ = row['max_ach_f']; rp_ = row['result_pct_f']
+                        mx_ = safe_str(row.get('max_price'))
+                        html += f'<tr><td>{stag(s_)}</td><td style="font-weight:600">{tk_}</td><td>{sd_}</td>'
+                        html += f'<td>{result_badge(res_)}</td>'
+                        html += f'<td style="color:var(--amber);font-weight:700">{ma_:.0f}%</td>'
+                        html += f'<td class="c-loss">{rp_:+.1f}%</td>'
+                        html += f'<td>${mx_}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 7) CONCURRENT POSITIONS — 동시 포지션 수
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">동시 포지션 수 (Concurrent Positions)</div>', unsafe_allow_html=True)
+
+            # Build timeline from all positions (open + closed)
+            pos_events = []
+            for df_src, is_closed in [(an_cp, True)]:
+                for _, row in df_src.iterrows():
+                    ed = row['entry_date_dt']
+                    cd = row['close_date_dt'] if is_closed else pd.NaT
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': cd if pd.notna(cd) else pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+            # Include currently open positions
+            if not open_pos.empty and 'entry_date' in open_pos.columns:
+                for _, row in open_pos.iterrows():
+                    ed = pd.to_datetime(row.get('entry_date', ''), errors='coerce')
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+
+            if not pos_events:
+                st.markdown('<div class="rr-empty">No position data</div>', unsafe_allow_html=True)
+            else:
+                # Generate daily concurrent count
+                all_dates = set()
+                for pe in pos_events:
+                    dr = pd.date_range(pe['open'], pe['close'], freq='B')  # business days
+                    all_dates.update(dr)
+                if all_dates:
+                    all_dates = sorted(all_dates)
+                    daily_counts = []
+                    for dt in all_dates:
+                        cnt = sum(1 for pe in pos_events if pe['open'] <= dt <= pe['close'])
+                        daily_counts.append({'date': dt, 'count': cnt})
+                    conc_df = pd.DataFrame(daily_counts).set_index('date')
+
+                    max_conc = conc_df['count'].max()
+                    avg_conc = conc_df['count'].mean()
+                    max_date = conc_df['count'].idxmax()
+                    max_date_s = max_date.strftime('%Y-%m-%d') if hasattr(max_date, 'strftime') else str(max_date)
+
+                    mc_c = 'var(--red-bright)' if max_conc >= 10 else 'var(--amber)' if max_conc >= 5 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Max Concurrent</div><div class="s-value" style="color:{mc_c}">{max_conc}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Concurrent</div><div class="s-value" style="color:var(--text-secondary)">{avg_conc:.1f}</div></div>
+                        <div class="rr-stat"><div class="s-label">Peak Date</div><div class="s-value" style="color:var(--text-secondary);font-size:0.8em">{max_date_s}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    st.markdown('<div class="rr-legend">동시 포지션 수 추이 — 자금 배분 및 리스크 노출 관리에 활용</div>', unsafe_allow_html=True)
+                    st.area_chart(conc_df, color=['#c9a96e'])
+                else:
+                    st.markdown('<div class="rr-empty">No date range data</div>', unsafe_allow_html=True)
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("정보")
+    st.markdown('''<div style="text-align:center;padding:16px 0">
+        <div style="font-family:var(--font-display);font-size:1.2em;color:var(--text-primary);letter-spacing:0.1em">SURGE</div>
+        <div style="font-family:var(--font-display);font-size:0.9em;color:var(--gold);letter-spacing:0.15em">SCANNER</div>
+    </div>''', unsafe_allow_html=True)
+    st.divider()
+
     st.markdown("""
-    **US Stock Surge Scanner**
+| Name | WR | Hold |
+|------|-----|------|
+| 5%5일a | 90.1% | 5d |
+| 15%10일 | 90.3% | 10d |
+| 5%5일b | 86.9% | 5d |
+| 20%30일 | 97.7% | 30d |
+| 10%30일 | 91.0% | 30d |
 
-    매일 미국 장 마감 후 자동 스캔하여
-    급락 후 반등 가능성이 높은 종목을 포착합니다.
-
-    | 전략 | 목표 | 승률 | 보유 |
-    |------|------|------|------|
-    | A | +5% | 90.1% | 5일 |
-    | B | +15% | 90.3% | 10일 |
-    | C | +5% | 86.9% | 5일 |
-    | D | +20% | 97.7% | 30일 |
-    | E | +10% | 91.0% | 30일 |
-
-    ---
-    GitHub Actions로 평일 자동 실행
+---
+Auto-scan via GitHub Actions
     """)
     st.divider()
     if tracker_info:
-        st.markdown(f"**마지막 추적:** {tracker_info.get('last_tracked', 'N/A')}")
-        st.markdown(f"진행중: {tracker_info.get('open_count', 0)}건 | "
-                   f"대기: {tracker_info.get('pending_count', 0)}건 | "
-                   f"청산: {tracker_info.get('closed_count', 0)}건")
-    if st.button("🔄 새로고침"):
+        st.markdown(f"**Last tracked:** {tracker_info.get('last_tracked', 'N/A')}")
+        st.markdown(f"Active: {tracker_info.get('open_count',0)} | Pending: {tracker_info.get('pending_count',0)} | Closed: {tracker_info.get('closed_count',0)}")
+    if st.button("Refresh"):
         st.cache_data.clear()
         st.rerun()
+    st.divider()
+    st.markdown("**Auto Refresh**")
+    ar = st.toggle("Enable", value=False, key='ar')
+    ri = st.select_slider("Interval", options=[1,2,3,5,10,15,30], value=5, key='ri')
+    st.caption(f"{'Active' if ar else 'Paused'} — {ri}min")
+    if ar:
+        import streamlit.components.v1 as components
+        components.html(f"""<script>setTimeout(function(){{ window.parent.location.reload(); }}, {ri*60*1000});</script>""", height=0)
