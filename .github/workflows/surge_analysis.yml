@@ -1,0 +1,66 @@
+name: "Surge 200%+ Analysis"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6시간
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy
+
+      - name: Run 200%+ Surge Collector
+        run: python surge_collector.py 2>&1 | tee surge_collector.log
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surge-analysis-results
+          path: |
+            data/surge_200pct_events.csv
+            data/surge_200pct_summary.json
+            surge_collector.log
+
+      - name: Commit results
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/surge_200pct_events.csv data/surge_200pct_summary.json || true
+          git diff --cached --quiet || git commit -m "data: 200%+ surge analysis results"
+          git push || echo "Push failed"
+
+      - name: Step Summary
+        if: always()
+        run: |
+          echo "## 200%+ Surge Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/surge_200pct_summary.json ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/surge_200pct_summary.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/surge_200pct_events.csv ]; then
+            echo "### Top 20 Events (by return)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -1 data/surge_200pct_events.csv >> $GITHUB_STEP_SUMMARY
+            sort -t',' -k7 -rn data/surge_200pct_events.csv | head -20 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Log (last 50 lines)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -50 surge_collector.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
