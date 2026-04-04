@@ -928,8 +928,8 @@ with tab_history:
     </div>''', unsafe_allow_html=True)
 
     # Sub tabs
-    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl, h_analytics = st.tabs([
-        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L", "Analytics"
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl, h_analytics, h_dq, h_risk = st.tabs([
+        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L", "Analytics", "Data Quality", "Risk"
     ])
 
     # ── 1) Daily Matrix ──
@@ -1821,6 +1821,496 @@ with tab_history:
                     st.area_chart(conc_df, color=['#c9a96e'])
                 else:
                     st.markdown('<div class="rr-empty">No date range data</div>', unsafe_allow_html=True)
+
+    # ── 9) Data Quality ──
+    with h_dq:
+        st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:1em;margin-bottom:16px">데이터 품질 대시보드 (Data Quality)</div>', unsafe_allow_html=True)
+
+        # Load all signal files for quality analysis
+        _dq_files = sorted(glob.glob('data/signal_*.csv'))
+        _dq_frames = []
+        for f in _dq_files:
+            try:
+                _df = pd.read_csv(f)
+                _dq_frames.append(_df)
+            except Exception:
+                pass
+        dq_signals = pd.concat(_dq_frames, ignore_index=True) if _dq_frames else pd.DataFrame()
+
+        if dq_signals.empty:
+            st.markdown('<div class="rr-empty">No signal data for quality analysis</div>', unsafe_allow_html=True)
+        else:
+            # 1) Data completeness — missing fields per strategy
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">필드 완전성 (Field Completeness)</div>', unsafe_allow_html=True)
+
+            critical_fields = ['ticker', 'date', 'price', 'tp_price', 'strategy']
+            optional_fields = ['rsi7', 'rsi14', 'intraday', 'ret3d', 'ret1d', 'ret5d', 'consec_down', 'dist_low5', 'vol_avg']
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Field</th><th>Present</th><th>Missing</th><th>Fill Rate</th><th>Status</th>'
+            html += '</tr></thead><tbody>'
+            for fld in critical_fields + optional_fields:
+                if fld in dq_signals.columns:
+                    present = int(dq_signals[fld].notna().sum())
+                    missing = int(dq_signals[fld].isna().sum())
+                    total = present + missing
+                    rate = (present / total * 100) if total > 0 else 0
+                    is_critical = fld in critical_fields
+                    sc_ = 'var(--green-bright)' if rate >= 99 else 'var(--amber)' if rate >= 90 else 'var(--red-bright)'
+                    status = '✓' if rate >= 99 else '⚠' if rate >= 90 else '✗'
+                    fld_style = 'font-weight:600;color:var(--gold)' if is_critical else ''
+                    html += f'<tr><td style="{fld_style}">{fld}</td><td>{present}</td><td>{missing}</td>'
+                    html += f'<td style="color:{sc_};font-weight:600">{rate:.1f}%</td>'
+                    html += f'<td style="color:{sc_}">{status}</td></tr>'
+                else:
+                    html += f'<tr><td class="c-muted">{fld}</td><td colspan="4" class="c-muted">N/A</td></tr>'
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # 2) Volume anomaly detection
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">거래량 이상 탐지 (Volume Anomalies)</div>', unsafe_allow_html=True)
+
+            if 'vol_avg' in dq_signals.columns:
+                dq_signals['vol_avg_n'] = pd.to_numeric(dq_signals['vol_avg'], errors='coerce')
+                vol_data = dq_signals.dropna(subset=['vol_avg_n'])
+                if not vol_data.empty:
+                    vol_med = vol_data['vol_avg_n'].median()
+                    vol_mean = vol_data['vol_avg_n'].mean()
+                    vol_std = vol_data['vol_avg_n'].std()
+                    low_vol = vol_data[vol_data['vol_avg_n'] < vol_med * 0.3]
+                    extreme_vol = vol_data[vol_data['vol_avg_n'] > vol_mean + 3 * vol_std] if vol_std > 0 else pd.DataFrame()
+
+                    lv_c = 'var(--red-bright)' if len(low_vol) > 5 else 'var(--amber)' if len(low_vol) > 0 else 'var(--green-bright)'
+                    ev_c = 'var(--amber)' if len(extreme_vol) > 0 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Median Volume</div><div class="s-value" style="color:var(--text-secondary)">{vol_med:,.0f}</div></div>
+                        <div class="rr-stat"><div class="s-label">Low Vol Signals</div><div class="s-value" style="color:{lv_c}">{len(low_vol)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Extreme Vol</div><div class="s-value" style="color:{ev_c}">{len(extreme_vol)}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    if not low_vol.empty:
+                        st.markdown('<div class="rr-legend" style="color:var(--amber)">⚠ Low volume signals — 유동성 부족으로 실제 매수/매도 시 슬리피지 위험</div>', unsafe_allow_html=True)
+                        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                        html += '<th>Ticker</th><th>Date</th><th>Strategy</th><th>Avg Volume</th><th>Price</th>'
+                        html += '</tr></thead><tbody>'
+                        for _, r in low_vol.head(15).iterrows():
+                            html += f'<tr><td style="font-weight:600">{safe_str(r.get("ticker"))}</td>'
+                            html += f'<td>{safe_str(r.get("date"))}</td>'
+                            html += f'<td>{stag(safe_str(r.get("strategy")))}</td>'
+                            html += f'<td style="color:var(--red-bright)">{r["vol_avg_n"]:,.0f}</td>'
+                            html += f'<td>${safe_float(r.get("price",0)):.2f}</td></tr>'
+                        html += '</tbody></table></div>'
+                        st.markdown(html, unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-empty">No volume data available</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">Volume field not present in signals</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # 3) Price anomaly detection
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">가격 이상 탐지 (Price Anomalies)</div>', unsafe_allow_html=True)
+
+            if 'price' in dq_signals.columns:
+                dq_signals['price_n'] = pd.to_numeric(dq_signals['price'], errors='coerce')
+                pr_data = dq_signals.dropna(subset=['price_n'])
+                if not pr_data.empty:
+                    penny = pr_data[pr_data['price_n'] < 1.0]
+                    zero_pr = pr_data[pr_data['price_n'] <= 0]
+
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Total Signals</div><div class="s-value" style="color:var(--text-secondary)">{len(pr_data)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Penny (&lt;$1)</div><div class="s-value" style="color:{"var(--amber)" if len(penny)>0 else "var(--green-bright)"}">{len(penny)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Zero/Negative</div><div class="s-value" style="color:{"var(--red-bright)" if len(zero_pr)>0 else "var(--green-bright)"}">{len(zero_pr)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Price</div><div class="s-value" style="color:var(--text-secondary)">${pr_data["price_n"].mean():.2f}</div></div>
+                    </div>''', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-empty">No valid price data</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">Price field not present</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # 4) Data gap detection — signal file date gaps
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">데이터 갭 탐지 (Signal Date Gaps)</div>', unsafe_allow_html=True)
+
+            if 'date' in dq_signals.columns:
+                dq_dates = pd.to_datetime(dq_signals['date'], errors='coerce').dropna().dt.normalize().unique()
+                dq_dates = sorted(dq_dates)
+                if len(dq_dates) >= 2:
+                    gaps = []
+                    for i in range(1, len(dq_dates)):
+                        diff = (dq_dates[i] - dq_dates[i-1]).days
+                        if diff > 4:  # More than a long weekend (Fri→Mon = 3)
+                            gaps.append({
+                                'from': dq_dates[i-1].strftime('%Y-%m-%d'),
+                                'to': dq_dates[i].strftime('%Y-%m-%d'),
+                                'days': diff
+                            })
+
+                    gc = 'var(--green-bright)' if len(gaps) == 0 else 'var(--amber)' if len(gaps) <= 3 else 'var(--red-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Scan Days</div><div class="s-value" style="color:var(--text-secondary)">{len(dq_dates)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Date Range</div><div class="s-value" style="color:var(--text-secondary);font-size:0.7em">{dq_dates[0].strftime("%Y-%m-%d")} ~ {dq_dates[-1].strftime("%Y-%m-%d")}</div></div>
+                        <div class="rr-stat"><div class="s-label">Gaps (&gt;4d)</div><div class="s-value" style="color:{gc}">{len(gaps)}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    if gaps:
+                        st.markdown('<div class="rr-legend" style="color:var(--amber)">⚠ 스캔 누락 기간 — 공휴일이 아닌 경우 GitHub Actions 실패 확인 필요</div>', unsafe_allow_html=True)
+                        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                        html += '<th>From</th><th>To</th><th>Gap (days)</th><th>Note</th>'
+                        html += '</tr></thead><tbody>'
+                        for g in gaps:
+                            note = '공휴일 가능' if g['days'] <= 5 else '스캔 누락 의심'
+                            nc = 'var(--text-muted)' if g['days'] <= 5 else 'var(--red-bright)'
+                            html += f'<tr><td>{g["from"]}</td><td>{g["to"]}</td>'
+                            html += f'<td style="color:var(--amber);font-weight:600">{g["days"]}일</td>'
+                            html += f'<td style="color:{nc}">{note}</td></tr>'
+                        html += '</tbody></table></div>'
+                        st.markdown(html, unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="rr-legend" style="color:var(--green-bright)">✓ 모든 거래일에 스캔 데이터 존재 — 데이터 갭 없음</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-empty">Not enough dates for gap analysis</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">No date field in signals</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # 5) Duplicate signal detection
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">중복 시그널 탐지 (Duplicate Signals)</div>', unsafe_allow_html=True)
+
+            dup_cols = ['ticker', 'date', 'strategy']
+            dup_check_cols = [c for c in dup_cols if c in dq_signals.columns]
+            if len(dup_check_cols) == 3:
+                dups = dq_signals[dq_signals.duplicated(subset=dup_check_cols, keep=False)]
+                dup_count = len(dq_signals[dq_signals.duplicated(subset=dup_check_cols, keep='first')])
+
+                dc = 'var(--green-bright)' if dup_count == 0 else 'var(--amber)' if dup_count <= 3 else 'var(--red-bright)'
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Total Signals</div><div class="s-value" style="color:var(--text-secondary)">{len(dq_signals)}</div></div>
+                    <div class="rr-stat"><div class="s-label">Duplicates</div><div class="s-value" style="color:{dc}">{dup_count}</div></div>
+                    <div class="rr-stat"><div class="s-label">Unique</div><div class="s-value" style="color:var(--green-bright)">{len(dq_signals) - dup_count}</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if dup_count > 0:
+                    st.markdown('<div class="rr-legend" style="color:var(--amber)">⚠ 동일 날짜/티커/전략의 중복 시그널 발견</div>', unsafe_allow_html=True)
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Ticker</th><th>Date</th><th>Strategy</th><th>Price</th>'
+                    html += '</tr></thead><tbody>'
+                    for _, r in dups.head(20).iterrows():
+                        html += f'<tr><td style="font-weight:600">{safe_str(r.get("ticker"))}</td>'
+                        html += f'<td>{safe_str(r.get("date"))}</td>'
+                        html += f'<td>{stag(safe_str(r.get("strategy")))}</td>'
+                        html += f'<td>${safe_float(r.get("price",0)):.2f}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-legend" style="color:var(--green-bright)">✓ 중복 시그널 없음</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">Missing columns for duplicate check</div>', unsafe_allow_html=True)
+
+    # ── 10) Portfolio Risk Management ──
+    with h_risk:
+        st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:1em;margin-bottom:16px">포트폴리오 리스크 관리 (Portfolio Risk)</div>', unsafe_allow_html=True)
+
+        # Combine open + closed for risk analysis
+        risk_open = open_pos.copy() if not open_pos.empty else pd.DataFrame()
+        risk_closed = closed_pos.copy() if not closed_pos.empty else pd.DataFrame()
+
+        if risk_open.empty and risk_closed.empty:
+            st.markdown('<div class="rr-empty">No position data for risk analysis</div>', unsafe_allow_html=True)
+        else:
+            # ── 10-1) Concentration Analysis — 전략 집중도 ──
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">전략 집중도 (Strategy Concentration)</div>', unsafe_allow_html=True)
+
+            active_pos = risk_open[risk_open['status'].str.upper().isin(['OPEN', 'PENDING'])] if not risk_open.empty and 'status' in risk_open.columns else pd.DataFrame()
+
+            if not active_pos.empty and 'strategy' in active_pos.columns:
+                strat_dist = active_pos['strategy'].value_counts()
+                total_active = len(active_pos)
+                max_strat = strat_dist.index[0] if len(strat_dist) > 0 else '—'
+                max_count = int(strat_dist.iloc[0]) if len(strat_dist) > 0 else 0
+                max_pct = (max_count / total_active * 100) if total_active > 0 else 0
+                conc_c = 'var(--red-bright)' if max_pct > 60 else 'var(--amber)' if max_pct > 40 else 'var(--green-bright)'
+                num_strats_used = len(strat_dist)
+
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Active Positions</div><div class="s-value" style="color:var(--blue)">{total_active}</div></div>
+                    <div class="rr-stat"><div class="s-label">Strategies Used</div><div class="s-value" style="color:var(--text-secondary)">{num_strats_used}/5</div></div>
+                    <div class="rr-stat"><div class="s-label">Most Concentrated</div><div class="s-value" style="color:{conc_c}">{stag(max_strat)} {max_pct:.0f}%</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Active</th><th>Share</th><th>Distribution</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    sc_ = int(strat_dist.get(s, 0))
+                    sp_ = (sc_ / total_active * 100) if total_active > 0 else 0
+                    bar_w = min(sp_, 100)
+                    bc_ = 'var(--green-bright)' if sp_ <= 30 else 'var(--amber)' if sp_ <= 50 else 'var(--red-bright)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{sc_}</td>'
+                    html += f'<td style="font-weight:600">{sp_:.0f}%</td>'
+                    html += f'<td><div style="background:var(--bg-elevated);border-radius:4px;overflow:hidden;height:16px">'
+                    html += f'<div style="width:{bar_w}%;height:100%;background:{bc_};border-radius:4px"></div></div></td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+
+                if max_pct > 60:
+                    st.markdown(f'<div class="rr-legend" style="color:var(--red-bright)">⚠ {max_strat} 전략에 60% 이상 집중 — 다른 전략으로 분산 권장</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">No active positions</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # ── 10-2) Ticker Concentration — 종목 집중도 ──
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">종목 집중도 (Ticker Concentration)</div>', unsafe_allow_html=True)
+
+            if not active_pos.empty and 'ticker' in active_pos.columns:
+                tk_dist = active_pos['ticker'].value_counts()
+                multi_tk = tk_dist[tk_dist > 1]
+
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Unique Tickers</div><div class="s-value" style="color:var(--text-secondary)">{len(tk_dist)}</div></div>
+                    <div class="rr-stat"><div class="s-label">Multi-position Tickers</div><div class="s-value" style="color:{"var(--amber)" if len(multi_tk)>0 else "var(--green-bright)"}">{len(multi_tk)}</div></div>
+                    <div class="rr-stat"><div class="s-label">Max per Ticker</div><div class="s-value" style="color:{"var(--red-bright)" if (tk_dist.max() if len(tk_dist)>0 else 0)>2 else "var(--text-secondary)"}">{int(tk_dist.max()) if len(tk_dist)>0 else 0}</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if not multi_tk.empty:
+                    st.markdown('<div class="rr-legend" style="color:var(--amber)">⚠ 동일 종목 복수 포지션 — 단일 종목 리스크 노출 증가</div>', unsafe_allow_html=True)
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Ticker</th><th>Positions</th><th>Strategies</th>'
+                    html += '</tr></thead><tbody>'
+                    for tk, cnt in multi_tk.items():
+                        strats_for_tk = active_pos[active_pos['ticker'] == tk]['strategy'].unique()
+                        badges = ' '.join(stag(s) for s in sorted(strats_for_tk))
+                        html += f'<tr><td style="font-weight:600">{tk}</td><td style="color:var(--amber);font-weight:600">{cnt}</td><td>{badges}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">No active positions</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # ── 10-3) Concurrent Position Limits — 동시 포지션 한도 분석 ──
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">동시 포지션 한도 분석 (Position Limits)</div>', unsafe_allow_html=True)
+
+            pos_timeline = []
+            if not risk_closed.empty and 'entry_date' in risk_closed.columns and 'close_date' in risk_closed.columns:
+                for _, r in risk_closed.iterrows():
+                    ed = pd.to_datetime(r.get('entry_date', ''), errors='coerce')
+                    cd = pd.to_datetime(r.get('close_date', ''), errors='coerce')
+                    if pd.notna(ed) and pd.notna(cd):
+                        pos_timeline.append({'open': ed, 'close': cd, 'strategy': safe_str(r.get('strategy')), 'ticker': safe_str(r.get('ticker'))})
+            if not active_pos.empty and 'entry_date' in active_pos.columns:
+                for _, r in active_pos.iterrows():
+                    ed = pd.to_datetime(r.get('entry_date', ''), errors='coerce')
+                    if pd.notna(ed):
+                        pos_timeline.append({'open': ed, 'close': pd.Timestamp.now(), 'strategy': safe_str(r.get('strategy')), 'ticker': safe_str(r.get('ticker'))})
+
+            if pos_timeline:
+                all_tl_dates = set()
+                for pe in pos_timeline:
+                    dr = pd.date_range(pe['open'], pe['close'], freq='B')
+                    all_tl_dates.update(dr)
+                all_tl_dates = sorted(all_tl_dates)
+
+                if all_tl_dates:
+                    daily_conc = []
+                    for dt in all_tl_dates:
+                        cnt = sum(1 for pe in pos_timeline if pe['open'] <= dt <= pe['close'])
+                        daily_conc.append({'date': dt, 'concurrent': cnt})
+                    conc_tl = pd.DataFrame(daily_conc)
+
+                    max_c = conc_tl['concurrent'].max()
+                    avg_c = conc_tl['concurrent'].mean()
+                    days_over_5 = len(conc_tl[conc_tl['concurrent'] > 5])
+                    days_over_10 = len(conc_tl[conc_tl['concurrent'] > 10])
+
+                    mc_c2 = 'var(--red-bright)' if max_c > 10 else 'var(--amber)' if max_c > 5 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Peak Concurrent</div><div class="s-value" style="color:{mc_c2}">{max_c}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Concurrent</div><div class="s-value" style="color:var(--text-secondary)">{avg_c:.1f}</div></div>
+                        <div class="rr-stat"><div class="s-label">Days &gt;5 pos</div><div class="s-value" style="color:{"var(--amber)" if days_over_5>0 else "var(--green-bright)"}">{days_over_5}</div></div>
+                        <div class="rr-stat"><div class="s-label">Days &gt;10 pos</div><div class="s-value" style="color:{"var(--red-bright)" if days_over_10>0 else "var(--green-bright)"}">{days_over_10}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    # Recommend position limit
+                    if max_c > 10:
+                        st.markdown('<div class="rr-legend" style="color:var(--red-bright)">⚠ 동시 포지션이 10개를 초과하는 날이 있었습니다. 자금 분산을 위해 전략별 최대 포지션 수를 제한하는 것을 권장합니다.</div>', unsafe_allow_html=True)
+                    elif max_c > 5:
+                        st.markdown('<div class="rr-legend" style="color:var(--amber)">동시 포지션이 5개를 초과하는 날이 있었습니다. 포지션 사이징에 유의하세요.</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="rr-legend" style="color:var(--green-bright)">✓ 동시 포지션 수가 양호합니다.</div>', unsafe_allow_html=True)
+
+                    # Chart
+                    chart_conc = conc_tl.set_index('date')
+                    st.area_chart(chart_conc, color=['#c9a96e'])
+            else:
+                st.markdown('<div class="rr-empty">No timeline data for position limits</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # ── 10-4) Risk Score per Active Position ──
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">활성 포지션 리스크 스코어 (Active Position Risk)</div>', unsafe_allow_html=True)
+
+            if not active_pos.empty and all(c in active_pos.columns for c in ['entry_price', 'current_price', 'days_held', 'max_hold', 'strategy']):
+                risk_rows = []
+                for _, r in active_pos.iterrows():
+                    ep_ = pd.to_numeric(r.get('entry_price', 0), errors='coerce') or 0
+                    cp_ = pd.to_numeric(r.get('current_price', 0), errors='coerce') or 0
+                    dh_ = pd.to_numeric(r.get('days_held', 0), errors='coerce') or 0
+                    mh_ = pd.to_numeric(r.get('max_hold', 5), errors='coerce') or 5
+                    sl_ = pd.to_numeric(r.get('sl_price', 0), errors='coerce') or 0
+
+                    if ep_ <= 0:
+                        continue
+
+                    pnl_pct = (cp_ - ep_) / ep_ * 100 if cp_ > 0 else 0
+
+                    # Risk components (0-100 scale)
+                    # SL distance: closer to SL = higher risk (40pts max)
+                    if sl_ > 0 and cp_ > 0:
+                        sl_dist_pct = (cp_ - sl_) / cp_ * 100
+                        sl_risk = max(0, min(40, 40 * (1 - sl_dist_pct / 20)))
+                    else:
+                        sl_risk = 10  # No SL = moderate risk
+
+                    # Time pressure: closer to expiry = higher risk (30pts max)
+                    time_ratio = dh_ / mh_ if mh_ > 0 else 0
+                    time_risk = min(30, 30 * time_ratio)
+
+                    # P&L risk: negative P&L = higher risk (30pts max)
+                    pnl_risk = max(0, min(30, -pnl_pct * 3)) if pnl_pct < 0 else 0
+
+                    total_risk = sl_risk + time_risk + pnl_risk
+
+                    risk_rows.append({
+                        'ticker': safe_str(r.get('ticker')),
+                        'strategy': safe_str(r.get('strategy')),
+                        'entry_price': ep_,
+                        'current_price': cp_,
+                        'pnl_pct': pnl_pct,
+                        'days_held': int(dh_),
+                        'max_hold': int(mh_),
+                        'risk_score': total_risk,
+                        'sl_risk': sl_risk,
+                        'time_risk': time_risk,
+                        'pnl_risk': pnl_risk,
+                    })
+
+                if risk_rows:
+                    risk_df = pd.DataFrame(risk_rows).sort_values('risk_score', ascending=False)
+                    high_risk = risk_df[risk_df['risk_score'] >= 60]
+                    med_risk = risk_df[(risk_df['risk_score'] >= 30) & (risk_df['risk_score'] < 60)]
+
+                    hr_c = 'var(--red-bright)' if len(high_risk) > 0 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">High Risk (≥60)</div><div class="s-value" style="color:{hr_c}">{len(high_risk)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Medium Risk</div><div class="s-value" style="color:var(--amber)">{len(med_risk)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Low Risk</div><div class="s-value" style="color:var(--green-bright)">{len(risk_df) - len(high_risk) - len(med_risk)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Score</div><div class="s-value" style="color:var(--text-secondary)">{risk_df["risk_score"].mean():.0f}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Ticker</th><th>Strategy</th><th>P&L</th><th>Day</th>'
+                    html += '<th>SL Risk</th><th>Time Risk</th><th>P&L Risk</th><th>Total</th>'
+                    html += '</tr></thead><tbody>'
+                    for _, rr in risk_df.iterrows():
+                        rs_ = rr['risk_score']
+                        rc_ = 'var(--red-bright)' if rs_ >= 60 else 'var(--amber)' if rs_ >= 30 else 'var(--green-bright)'
+                        pc_ = 'c-win' if rr['pnl_pct'] > 0 else 'c-loss' if rr['pnl_pct'] < 0 else 'c-muted'
+                        html += f'<tr><td style="font-weight:600">{rr["ticker"]}</td>'
+                        html += f'<td>{stag(rr["strategy"])}</td>'
+                        html += f'<td class="{pc_}">{rr["pnl_pct"]:+.1f}%</td>'
+                        html += f'<td>{rr["days_held"]}/{rr["max_hold"]}</td>'
+                        html += f'<td>{rr["sl_risk"]:.0f}</td><td>{rr["time_risk"]:.0f}</td><td>{rr["pnl_risk"]:.0f}</td>'
+                        html += f'<td style="color:{rc_};font-weight:700;font-size:1.1em">{rs_:.0f}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+                    st.markdown('<div class="rr-legend">Risk Score = SL거리(40) + 시간압박(30) + 손실(30) — 60 이상이면 주의 필요</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-empty">No active positions with valid data</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">Insufficient data for risk scoring</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+            # ── 10-5) Historical Drawdown Recovery ──
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">드로다운 회복 분석 (Drawdown Recovery)</div>', unsafe_allow_html=True)
+
+            if not risk_closed.empty and 'result_pct' in risk_closed.columns and 'close_date' in risk_closed.columns:
+                dd_df = risk_closed[['close_date', 'result_pct', 'strategy']].copy()
+                dd_df['result_pct'] = pd.to_numeric(dd_df['result_pct'], errors='coerce')
+                dd_df['close_date'] = pd.to_datetime(dd_df['close_date'], errors='coerce')
+                dd_df = dd_df.dropna().sort_values('close_date')
+
+                if len(dd_df) >= 3:
+                    dd_df['cum_pnl'] = dd_df['result_pct'].cumsum()
+                    dd_df['peak'] = dd_df['cum_pnl'].cummax()
+                    dd_df['drawdown'] = dd_df['cum_pnl'] - dd_df['peak']
+
+                    # Find drawdown periods
+                    in_dd = False
+                    dd_periods = []
+                    dd_start = None
+                    dd_peak_val = 0
+
+                    for _, r in dd_df.iterrows():
+                        if r['drawdown'] < -1 and not in_dd:
+                            in_dd = True
+                            dd_start = r['close_date']
+                            dd_peak_val = r['peak']
+                        elif r['drawdown'] >= 0 and in_dd:
+                            in_dd = False
+                            dd_periods.append({
+                                'start': dd_start,
+                                'end': r['close_date'],
+                                'depth': dd_df[(dd_df['close_date'] >= dd_start) & (dd_df['close_date'] <= r['close_date'])]['drawdown'].min(),
+                                'duration': (r['close_date'] - dd_start).days
+                            })
+
+                    # Still in drawdown
+                    if in_dd:
+                        dd_periods.append({
+                            'start': dd_start,
+                            'end': dd_df['close_date'].max(),
+                            'depth': dd_df[dd_df['close_date'] >= dd_start]['drawdown'].min(),
+                            'duration': (dd_df['close_date'].max() - dd_start).days,
+                        })
+
+                    max_dd = dd_df['drawdown'].min()
+                    cur_dd = dd_df['drawdown'].iloc[-1]
+                    mdc = 'var(--red-bright)' if max_dd < -10 else 'var(--amber)' if max_dd < -5 else 'var(--green-bright)'
+                    cdc = 'var(--red-bright)' if cur_dd < -5 else 'var(--amber)' if cur_dd < 0 else 'var(--green-bright)'
+
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Max Drawdown</div><div class="s-value" style="color:{mdc}">{max_dd:.1f}%</div></div>
+                        <div class="rr-stat"><div class="s-label">Current DD</div><div class="s-value" style="color:{cdc}">{cur_dd:.1f}%</div></div>
+                        <div class="rr-stat"><div class="s-label">DD Periods</div><div class="s-value" style="color:var(--text-secondary)">{len(dd_periods)}</div></div>
+                        <div class="rr-stat"><div class="s-label">Longest DD</div><div class="s-value" style="color:var(--text-secondary)">{max(p["duration"] for p in dd_periods) if dd_periods else 0}일</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    if dd_periods:
+                        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                        html += '<th>Start</th><th>End</th><th>Depth</th><th>Duration</th><th>Status</th>'
+                        html += '</tr></thead><tbody>'
+                        for p in sorted(dd_periods, key=lambda x: x['depth']):
+                            ps = p['start'].strftime('%Y-%m-%d') if hasattr(p['start'], 'strftime') else str(p['start'])
+                            pe = p['end'].strftime('%Y-%m-%d') if hasattr(p['end'], 'strftime') else str(p['end'])
+                            recovered = p['end'] < dd_df['close_date'].max() or cur_dd >= 0
+                            status = '<span class="c-win">Recovered</span>' if recovered else '<span class="c-loss">Active</span>'
+                            html += f'<tr><td>{ps}</td><td>{pe}</td>'
+                            html += f'<td style="color:var(--red-bright);font-weight:600">{p["depth"]:.1f}%</td>'
+                            html += f'<td>{p["duration"]}일</td><td>{status}</td></tr>'
+                        html += '</tbody></table></div>'
+                        st.markdown(html, unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="rr-empty">Not enough closed positions</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rr-empty">No closed position data</div>', unsafe_allow_html=True)
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
