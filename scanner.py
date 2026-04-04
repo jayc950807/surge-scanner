@@ -696,6 +696,38 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
         df_hist.to_csv(hist_path, index=False)
         print(f"  히스토리: {hist_path} ({len(df_hist)}건 누적)")
 
+    # ── Data Quality Validation ──
+    dq_warnings = []
+    for sig in all_signals:
+        tk = sig.get('ticker', '?')
+        strat = sig.get('strategy', '?')
+        price = sig.get('price', 0)
+        # Price sanity check
+        if price <= 0:
+            dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — price={price} (zero or negative)")
+        # Volume check (only E has vol_avg)
+        vol = sig.get('vol_avg', None)
+        if vol is not None and vol < 50000:
+            dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — low volume={vol:,} (<50K)")
+        # TP price sanity
+        tp = sig.get('tp_price', 0)
+        if tp > 0 and price > 0 and tp < price:
+            dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — TP=${tp} < entry=${price}")
+        # RSI range check
+        for rsi_key in ['rsi7', 'rsi14']:
+            rsi_v = sig.get(rsi_key, None)
+            if rsi_v is not None and (rsi_v < 0 or rsi_v > 100):
+                dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — {rsi_key}={rsi_v} (out of range)")
+
+    if dq_warnings:
+        print(f"\n{'='*60}")
+        print(f"  DATA QUALITY WARNINGS ({len(dq_warnings)} issues)")
+        print(f"{'='*60}")
+        for w in dq_warnings:
+            print(w)
+    else:
+        print("\n  ✓ Data quality check passed — no issues found")
+
     # JSON summary (Streamlit용)
     summary = {
         'scan_date': date_str,
@@ -706,6 +738,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
         'strategy_d_count': len(signals_d),
         'strategy_e_count': len(signals_e),
         'total_count': len(all_signals),
+        'dq_warnings': len(dq_warnings),
     }
     with open('data/latest_scan.json', 'w') as f:
         json.dump(summary, f, indent=2)
