@@ -1,0 +1,12 @@
+{
+  "run_date": "2026-04-04 17:04 UTC",
+  "data_period": "5y",
+  "tickers_total": 10298,
+  "tickers_filtered": 10298,
+  "combos_total": 22311,
+  "combos_tested": 22311,
+  "best_90pct": 0,
+  "decent_80pct": 0,
+  "runtime_min": 317.2,
+  "best_per_type": {}
+}
