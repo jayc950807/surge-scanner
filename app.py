@@ -1,1285 +1,892 @@
+#!/usr/bin/env python3
 """
-SURGE SCANNER DASHBOARD
-US Stock Surge Scanner - Luxury Dashboard Interface with Advanced Analytics
-"If Rolls-Royce made a trading app"
+================================================================================
+  US Stock Surge Scanner — Streamlit Dashboard
+  Rolls-Royce Inspired Design — Dark Luxury Edition
+================================================================================
 """
-
 import streamlit as st
 import pandas as pd
 import json
 import os
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-import traceback
-import numpy as np
+from datetime import datetime, timedelta, timezone
+from collections import defaultdict
 
-# Try to import KST from shared_config, fallback to local definition
-try:
-    from shared_config import KST
-except ImportError:
-    KST = timezone(timedelta(hours=9))
+KST = timezone(timedelta(hours=9))
 
-# ============================================================================
-# CONFIGURATION & CONSTANTS
-# ============================================================================
+# ─── Page Config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="SURGE SCANNER",
+    page_icon="◆",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-STRAT_TAB = {
-    'A': '5%5일a',
-    'B': '15%10일',
-    'C': '5%5일b',
-    'D': '20%30일',
-    'E': '10%30일'
+# ─── Rolls-Royce Design System ──────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Rolls-Royce Inspired
+   ════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+    --bg-deep:      #080b12;
+    --bg-surface:   #0d1117;
+    --bg-card:      #131920;
+    --bg-elevated:  #1a2230;
+    --bg-hover:     #1e2a3a;
+    --border-subtle:#1c2636;
+    --border-accent:#c9a96e22;
+    --gold:         #c9a96e;
+    --gold-dim:     #9a7d4e;
+    --gold-glow:    #c9a96e18;
+    --text-primary: #e8e4de;
+    --text-secondary:#8a9ab5;
+    --text-muted:   #4d5b72;
+    --green:        #4a9e7d;
+    --green-bright: #5cc49a;
+    --red:          #9e4a5a;
+    --red-bright:   #c46b7c;
+    --blue:         #4a7a9e;
+    --amber:        #b8954a;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body:    'Plus Jakarta Sans', -apple-system, sans-serif;
+    --font-mono:    'Space Mono', monospace;
 }
 
-STRAT_NAMES = {
-    'A': '급락반등',
-    'B': '고수익',
-    'C': '과매도',
-    'D': '초저가',
-    'E': '속반등'
+/* ── Global Reset ── */
+.main .block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1400px;
+}
+.main { background: var(--bg-deep) !important; }
+[data-testid="stAppViewContainer"] { background: var(--bg-deep) !important; }
+[data-testid="stHeader"] { background: transparent !important; }
+[data-testid="stSidebar"] { background: var(--bg-surface) !important; }
+section[data-testid="stSidebar"] .block-container { padding-top: 2rem; }
+
+/* ── Streamlit element overrides ── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    font-size: 0.82em !important;
+    letter-spacing: 0.03em;
+    color: var(--text-muted) !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    background: transparent !important;
+    white-space: nowrap !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: var(--gold) !important;
+    background: var(--bg-elevated) !important;
+    border-bottom: none !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+/* Streamlit divider override */
+hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
+
+/* Selectbox/button styling */
+[data-testid="stSelectbox"] label { color: var(--text-secondary) !important; font-size: 0.82em !important; }
+.stSelectbox > div > div { background: var(--bg-card) !important; border-color: var(--border-subtle) !important; }
+.stButton > button {
+    background: var(--bg-elevated) !important;
+    color: var(--gold) !important;
+    border: 1px solid var(--gold-dim) !important;
+    border-radius: 6px !important;
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.03em;
+}
+.stButton > button:hover { background: var(--bg-hover) !important; }
+
+/* Expander styling */
+[data-testid="stExpander"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 8px !important;
+}
+[data-testid="stExpander"] summary { color: var(--text-primary) !important; font-family: var(--font-body) !important; }
+
+/* Toggle/slider */
+.stToggle label { color: var(--text-secondary) !important; }
+
+/* ════════════════════════════════════════════════════════════════
+   HEADER
+   ════════════════════════════════════════════════════════════════ */
+.rr-header {
+    text-align: center;
+    padding: 28px 0 20px 0;
+}
+.rr-header .brand {
+    font-family: var(--font-display);
+    font-size: 1.8em;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+}
+.rr-header .brand span { color: var(--gold); }
+.rr-header .sub {
+    font-family: var(--font-body);
+    font-size: 0.78em;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+.rr-divider {
+    width: 60px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 16px auto;
+}
+.rr-meta {
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    text-align: center;
+    letter-spacing: 0.04em;
+    margin-bottom: 24px;
+}
+.rr-meta span { margin: 0 12px; }
+.rr-meta .hl { color: var(--text-secondary); }
+
+/* ════════════════════════════════════════════════════════════════
+   SUMMARY CARDS
+   ════════════════════════════════════════════════════════════════ */
+.rr-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.rr-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 20px 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.rr-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--border-subtle);
+}
+.rr-card.accent::before {
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold), var(--gold-dim));
+}
+.rr-card .val {
+    font-family: var(--font-mono);
+    font-size: 1.8em;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+.rr-card .lbl {
+    font-family: var(--font-body);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
-STRAT_KR = {
-    'A': '급락반등',
-    'B': '고수익',
-    'C': '과매도',
-    'D': '초저가',
-    'E': '속반등'
+/* ════════════════════════════════════════════════════════════════
+   MATRIX TABLE
+   ════════════════════════════════════════════════════════════════ */
+.rr-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-body);
+    font-size: 0.84em;
+    background: var(--bg-card);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+}
+.rr-table th {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    padding: 12px 14px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 0.82em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.rr-table th:first-child {
+    text-align: left;
+    padding-left: 20px;
+}
+.rr-table td {
+    padding: 12px 14px;
+    text-align: center;
+    border-bottom: 1px solid #0d131a;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+}
+.rr-table td:first-child {
+    text-align: left;
+    padding-left: 20px;
+    font-family: var(--font-body);
+}
+.rr-table tr:last-child td { border-bottom: none; }
+.rr-table tr:hover td { background: var(--bg-hover); }
+.rr-table tbody tr { transition: background 0.15s ease; }
+
+/* ── Strategy Tags ── */
+.stag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.74em;
+    letter-spacing: 0.02em;
+    border: 1px solid;
+    white-space: nowrap;
+}
+.stag-A { color: var(--green-bright); border-color: var(--green); background: #4a9e7d12; }
+.stag-B { color: var(--blue); border-color: #4a7a9e66; background: #4a7a9e0a; }
+.stag-C { color: var(--amber); border-color: #b8954a66; background: #b8954a0a; }
+.stag-D { color: var(--red-bright); border-color: var(--red); background: #9e4a5a0a; }
+.stag-E { color: #9a7abf; border-color: #7a5aaf66; background: #7a5aaf0a; }
+
+/* ── Cell States ── */
+.c-win { color: var(--green-bright); font-weight: 600; }
+.c-loss { color: var(--red-bright); font-weight: 600; }
+.c-partial { color: var(--amber); font-weight: 500; }
+.c-pending { color: var(--text-muted); font-style: italic; font-weight: 400; }
+.c-none { color: #2a3444; }
+.c-muted { color: var(--text-muted); }
+
+/* ── Status badges ── */
+.st-win { color: var(--green-bright); font-weight: 600; }
+.st-loss { color: var(--red-bright); font-weight: 600; }
+.st-expired { color: var(--amber); font-weight: 600; }
+.st-open { color: var(--blue); font-weight: 600; }
+.st-pending { color: var(--text-muted); font-weight: 500; }
+
+/* ── Progress bar ── */
+.rr-prog {
+    display: flex; align-items: center; gap: 6px;
+}
+.rr-prog-track {
+    flex: 1; background: #1a2230; border-radius: 3px; height: 6px; min-width: 40px; overflow: hidden;
+}
+.rr-prog-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.rr-prog-text { font-size: 0.78em; font-weight: 600; min-width: 32px; text-align: right; }
+
+/* ── Ticker Group Header ── */
+.tk-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    padding: 14px 20px;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.tk-header .tk-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15em;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+}
+.tk-header .tk-meta {
+    font-family: var(--font-body);
+    font-size: 0.82em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.tk-header + .rr-table { border-radius: 0 0 10px 10px; border-top: none; }
+
+/* ── Strategy Info Card (Strategy tabs) ── */
+.rr-strat-info {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+}
+.rr-strat-info::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+}
+.rr-strat-info.si-A::before { background: var(--green); }
+.rr-strat-info.si-B::before { background: var(--blue); }
+.rr-strat-info.si-C::before { background: var(--amber); }
+.rr-strat-info.si-D::before { background: var(--red); }
+.rr-strat-info.si-E::before { background: #7a5aaf; }
+.rr-strat-info h3 {
+    font-family: var(--font-display);
+    font-size: 1.15em;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+    font-weight: 600;
+}
+.rr-strat-info .si-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    font-size: 0.85em;
+}
+.rr-strat-info .si-section { color: var(--text-secondary); line-height: 1.7; }
+.rr-strat-info .si-label {
+    color: var(--text-muted);
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+.rr-strat-info .si-stat {
+    display: inline-flex; align-items: baseline; gap: 6px;
+}
+.rr-strat-info .si-stat .big {
+    font-family: var(--font-mono);
+    font-size: 1.6em;
+    font-weight: 700;
 }
 
-STRAT_TP_NUM = {
-    'A': 5,
-    'B': 15,
-    'C': 5,
-    'D': 20,
-    'E': 10
+/* ── No Signal ── */
+.rr-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.9em;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
 }
 
-STRAT_BT_WR = {
-    'A': '90.1%',
-    'B': '90.3%',
-    'C': '86.9%',
-    'D': '97.7%',
-    'E': '91.0%'
+/* ── PnL stat row ── */
+.rr-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.rr-stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+}
+.rr-stat .s-label {
+    font-family: var(--font-body);
+    font-size: 0.72em;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.rr-stat .s-value {
+    font-family: var(--font-mono);
+    font-size: 1.5em;
+    font-weight: 700;
 }
 
-STRAT_TP = {
-    'A': '+5%',
-    'B': '+15%',
-    'C': '+5%',
-    'D': '+20%',
-    'E': '+10%'
+/* ── Legend ── */
+.rr-legend {
+    font-family: var(--font-body);
+    font-size: 0.76em;
+    color: var(--text-muted);
+    margin: 8px 0 12px 0;
+    letter-spacing: 0.02em;
 }
 
-STRAT_MAX_HOLD = {
-    'A': 5,
-    'B': 10,
-    'C': 5,
-    'D': 30,
-    'E': 30
-}
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE (<768px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .main .block-container { padding: 0.5rem 0.8rem; }
+    .rr-header .brand { font-size: 1.3em; }
+    .rr-header .sub { font-size: 0.68em; }
+    .rr-meta { font-size: 0.65em; }
+    .rr-meta span { margin: 0 6px; }
 
-STRAT_COLORS = {
-    'A': '#4a9e7d',
-    'B': '#4a7a9e',
-    'C': '#b8954a',
-    'D': '#9e4a5a',
-    'E': '#7a5aaf'
-}
-
-COLOR_PALETTE = {
-    'bg_deep': '#080b12',
-    'bg_surface': '#0d1117',
-    'bg_card': '#131920',
-    'bg_elevated': '#1a2230',
-    'bg_hover': '#1e2a3a',
-    'border_subtle': '#1c2636',
-    'gold': '#c9a96e',
-    'gold_dim': '#9a7d4e',
-    'gold_glow': '#c9a96e18',
-    'text_primary': '#e8e4de',
-    'text_secondary': '#8a9ab5',
-    'text_muted': '#4d5b72',
-    'green': '#4a9e7d',
-    'red': '#9e4a5a',
-    'amber': '#b8954a',
-}
-
-DATA_DIR = Path('data')
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-def safe_float(val, default=0.0):
-    """Safely convert value to float"""
-    if val is None or val == '' or pd.isna(val):
-        return default
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return default
-
-
-def safe_str(val, default=''):
-    """Safely convert value to string"""
-    if val is None or pd.isna(val):
-        return default
-    return str(val).strip()
-
-
-def format_currency(val, decimals=2):
-    """Format value as USD currency"""
-    val = safe_float(val)
-    return f"${val:,.{decimals}f}"
-
-
-def format_percent(val, decimals=1):
-    """Format value as percentage"""
-    val = safe_float(val)
-    sign = '+' if val >= 0 else ''
-    return f"{sign}{val:.{decimals}f}%"
-
-
-def get_strategy_color(strategy):
-    """Get color hex for strategy"""
-    return STRAT_COLORS.get(strategy, COLOR_PALETTE['text_secondary'])
-
-
-def get_strategy_name(strategy):
-    """Get display name for strategy"""
-    return STRAT_NAMES.get(strategy, strategy)
-
-
-def stag(s):
-    """Strategy tag HTML"""
-    return f'<span class="stag stag-{s}">{STRAT_TAB[s]}</span>'
-
-
-def cell_html(ach, det, loss, prog):
-    """Matrix cell renderer"""
-    if loss:
-        cls = 'c-loss'
-        val = f"L {det}"
-    elif ach >= 100:
-        cls = 'c-win'
-        val = f"W {det}"
-    elif ach >= 50:
-        cls = 'c-partial'
-        val = f"P {det}"
-    elif prog:
-        cls = 'c-pending'
-        val = f"{ach:.0f}%"
-    else:
-        cls = 'c-none'
-        val = '—'
-    return f'<div class="{cls}">{val}</div>'
-
-
-def progress_bar(val, color='#c9a96e'):
-    """Progress bar HTML"""
-    pct = max(0, min(100, safe_float(val)))
-    return f'''<div class="rr-prog">
-        <div class="rr-prog-track">
-            <div class="rr-prog-fill" style="width:{pct}%; background-color:{color};"></div>
-        </div>
-        <div class="rr-prog-text">{pct:.0f}%</div>
-    </div>'''
-
-
-def chg_html(val_raw):
-    """Colored +/- percentage"""
-    val = safe_float(val_raw)
-    sign = '+' if val >= 0 else ''
-    color = COLOR_PALETTE['green'] if val >= 0 else COLOR_PALETTE['red']
-    return f'<span style="color:{color}">{sign}{val:.2f}%</span>'
-
-
-def result_badge(r):
-    """WIN/LOSS/EXPIRED/OPEN/PENDING badge"""
-    r = safe_str(r).upper()
-    if r == 'WIN':
-        return f'<span class="st-win">WIN</span>'
-    elif r == 'LOSS':
-        return f'<span class="st-loss">LOSS</span>'
-    elif r == 'EXPIRED':
-        return f'<span class="st-expired">EXPIRED</span>'
-    elif r == 'OPEN':
-        return f'<span class="st-open">OPEN</span>'
-    else:
-        return f'<span class="st-pending">PENDING</span>'
-
-
-def calc_risk_score(row):
-    """
-    Calculate risk score for a position. Higher = more dangerous = shows first.
-    Scale: 0-100+ points
-    """
-    score = 0.0
-
-    try:
-        entry = safe_float(row.get('entry_price', 0))
-        current = safe_float(row.get('current_price', 0))
-        sl = safe_float(row.get('sl_price', 0))
-        tp = safe_float(row.get('tp_price', 0))
-        days = safe_float(row.get('days_held', 0))
-        max_hold = safe_float(row.get('max_hold', 0))
-        change_pct = safe_float(row.get('change_pct', 0))
-
-        # Factor 1: Closeness to stop loss (0-40 points)
-        if sl > 0 and entry > 0 and current > sl:
-            sl_distance_pct = ((current - sl) / entry) * 100
-            score += max(0, 40 - (sl_distance_pct * 20))
-
-        # Factor 2: Time pressure (0-30 points)
-        if max_hold > 0 and days >= 0:
-            time_used_ratio = days / max_hold
-            score += min(30, time_used_ratio * 30)
-
-        # Factor 3: Negative performance (0-30 points)
-        if change_pct < 0:
-            score += min(30, abs(change_pct) * 1.5)
-
-    except Exception:
-        pass
-
-    return score
-
-
-def calc_mdd(series):
-    """Calculate Maximum Drawdown and period"""
-    if len(series) == 0:
-        return 0, None, None
-
-    # Prepend 0 for baseline
-    s = pd.Series([0] + list(series))
-    cummax = s.cummax()
-    dd = s - cummax
-    mdd = dd.min()
-    mdd_idx = dd.idxmin()
-
-    if mdd_idx > 0 and mdd_idx < len(s):
-        peak_idx = cummax[:mdd_idx].idxmax()
-        return abs(mdd), peak_idx, mdd_idx
-
-    return 0, None, None
-
-
-def calc_streaks(results):
-    """Calculate win/loss streaks from result list"""
-    if not results:
-        return 0, 0, 0, 0
-
-    streaks = []
-    current_streak = 1
-    current_type = results[0] if len(results) > 0 else 'LOSS'
-
-    for i in range(1, len(results)):
-        if results[i] == current_type:
-            current_streak += 1
-        else:
-            streaks.append((current_type, current_streak))
-            current_type = results[i]
-            current_streak = 1
-    streaks.append((current_type, current_streak))
-
-    win_streaks = [s[1] for s in streaks if s[0] == 'WIN']
-    loss_streaks = [s[1] for s in streaks if s[0] == 'LOSS']
-
-    max_win = max(win_streaks) if win_streaks else 0
-    max_loss = max(loss_streaks) if loss_streaks else 0
-    avg_win = sum(win_streaks) / len(win_streaks) if win_streaks else 0
-    avg_loss = sum(loss_streaks) / len(loss_streaks) if loss_streaks else 0
-
-    return max_win, max_loss, avg_win, avg_loss
-
-
-# ============================================================================
-# DATA LOADING (with caching)
-# ============================================================================
-
-@st.cache_data(ttl=300)
-def load_latest_scan():
-    """Load latest scan metadata"""
-    try:
-        scan_file = DATA_DIR / 'latest_scan.json'
-        if scan_file.exists():
-            with open(scan_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        st.error(f"Error loading latest_scan.json: {e}")
-
-    return {
-        'scan_date': '',
-        'scan_time': '',
-        'strategy_a_count': 0,
-        'strategy_b_count': 0,
-        'strategy_c_count': 0,
-        'strategy_d_count': 0,
-        'strategy_e_count': 0,
-        'total_count': 0
+    /* Cards: 2 columns on mobile */
+    .rr-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .rr-card { padding: 14px 10px; }
+    .rr-card .val { font-size: 1.4em; }
+    .rr-card .lbl { font-size: 0.65em; }
+    /* 5th card spans full width */
+    .rr-cards .rr-card:nth-child(5) {
+        grid-column: 1 / -1;
     }
 
+    /* Tables: horizontal scroll */
+    .rr-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -0.5rem;
+        padding: 0 0.5rem;
+    }
+    .rr-table {
+        font-size: 0.76em;
+        min-width: 600px;
+    }
+    .rr-table th, .rr-table td {
+        padding: 10px 10px;
+        white-space: nowrap;
+    }
+
+    /* Strategy info: single column */
+    .rr-strat-info .si-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .rr-strat-info { padding: 16px 18px; }
+
+    /* Tabs: smaller text */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 0.72em !important;
+        padding: 6px 10px !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        flex-wrap: wrap;
+    }
+
+    /* Ticker header: stack */
+    .tk-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 12px 14px;
+    }
+
+    /* PnL stats: 2-col */
+    .rr-stats {
+        flex-wrap: wrap;
+    }
+    .rr-stat {
+        min-width: calc(50% - 8px);
+        flex: unset;
+        padding: 12px 14px;
+    }
+    .rr-stat .s-value { font-size: 1.2em; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE (<480px)
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+    .rr-header .brand { font-size: 1.1em; letter-spacing: 0.08em; }
+    .rr-cards { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .rr-card .val { font-size: 1.2em; }
+    .rr-table { min-width: 500px; font-size: 0.72em; }
+    .stTabs [data-baseweb="tab"] { font-size: 0.65em !important; padding: 5px 8px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─── Data Loading ─────────────────────────────────────────────────────────────
+@st.cache_data(ttl=300)
+def load_latest_scan():
+    p = "data/latest_scan.json"
+    if os.path.exists(p):
+        with open(p, 'r') as f: return json.load(f)
+    return None
+
+@st.cache_data(ttl=300)
+def load_today_signals():
+    import glob
+    files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
+    if files:
+        df = pd.read_csv(files[0])
+        return df if len(df) > 0 else pd.DataFrame()
+    return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def load_history():
+    p = "data/history.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p)
+        df['date'] = pd.to_datetime(df['date'])
+        return df
+    return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def load_tracker_summary():
-    """Load tracker summary stats"""
-    try:
-        summary_file = DATA_DIR / 'tracker_summary.json'
-        if summary_file.exists():
-            with open(summary_file, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        st.error(f"Error loading tracker_summary.json: {e}")
-
-    return {
-        'last_tracked': '',
-        'open_count': 0,
-        'pending_count': 0,
-        'closed_count': 0,
-        'win_count': 0,
-        'loss_count': 0,
-        'expired_count': 0,
-        'trailing_count': 0
-    }
-
-
-@st.cache_data(ttl=300)
-def load_todays_signals():
-    """Load today's signals"""
-    try:
-        today = datetime.now(tz=KST).strftime('%Y-%m-%d')
-        signal_file = DATA_DIR / f'signal_{today}.csv'
-
-        if signal_file.exists():
-            df = pd.read_csv(signal_file, dtype=str)
-            if len(df) > 0:
-                return df
-    except Exception as e:
-        st.error(f"Error loading today's signals: {e}")
-
-    return pd.DataFrame()
-
+    p = "data/tracker_summary.json"
+    if os.path.exists(p):
+        with open(p, 'r') as f: return json.load(f)
+    return None
 
 @st.cache_data(ttl=300)
 def load_open_positions():
-    """Load all open positions"""
-    try:
-        pos_file = DATA_DIR / 'open_positions.csv'
-        if pos_file.exists():
-            df = pd.read_csv(pos_file, dtype=str)
-            if len(df) > 0:
-                return df
-    except Exception as e:
-        st.error(f"Error loading open_positions.csv: {e}")
-
+    p = "data/open_positions.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p, dtype=str)
+        return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
-
 
 @st.cache_data(ttl=300)
 def load_closed_positions():
-    """Load ALL closed position history (no .head(20) limit)"""
-    try:
-        closed_file = DATA_DIR / 'closed_positions.csv'
-        if closed_file.exists():
-            df = pd.read_csv(closed_file, dtype=str)
-            if len(df) > 0:
-                # Sort by close_date descending (newest first)
-                try:
-                    df['close_date'] = pd.to_datetime(df['close_date'], errors='coerce')
-                    df = df.sort_values('close_date', ascending=False)
-                except Exception:
-                    pass
-                return df  # Return ALL, not just head(20)
-    except Exception as e:
-        st.error(f"Error loading closed_positions.csv: {e}")
-
+    p = "data/closed_positions.csv"
+    if os.path.exists(p):
+        df = pd.read_csv(p, dtype=str)
+        return df if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
 
-
-# ============================================================================
-# CSS & STYLING
-# ============================================================================
-
-def get_custom_css():
-    """Generate custom CSS for luxury dashboard"""
-    css = f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
-
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
-        body {{
-            background-color: {COLOR_PALETTE['bg_deep']};
-            color: {COLOR_PALETTE['text_primary']};
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }}
-
-        .stApp {{
-            background-color: {COLOR_PALETTE['bg_deep']};
-        }}
-
-        .stTabs [data-baseweb="tab-list"] {{
-            display: none;
-        }}
-
-        /* HEADER SECTION */
-        .header-main {{
-            padding: 2rem 1rem;
-            border-bottom: 1px solid {COLOR_PALETTE['border_subtle']};
-            margin-bottom: 2rem;
-        }}
-
-        .header-title {{
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 3.5rem;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            color: {COLOR_PALETTE['text_primary']};
-            margin-bottom: 0.5rem;
-        }}
-
-        .header-meta {{
-            font-family: 'Space Mono', monospace;
-            font-size: 0.85rem;
-            color: {COLOR_PALETTE['text_secondary']};
-            letter-spacing: 0.05em;
-        }}
-
-        .meta-item {{
-            display: inline-block;
-            margin-right: 1.5rem;
-        }}
-
-        .meta-value {{
-            color: {COLOR_PALETTE['gold']};
-            font-weight: 600;
-        }}
-
-        /* SECTION HEADERS */
-        .section-header {{
-            display: flex;
-            align-items: center;
-            margin: 2.5rem 0 1.5rem 0;
-            padding: 0 1rem;
-            gap: 1rem;
-        }}
-
-        .section-label {{
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.1em;
-            color: {COLOR_PALETTE['text_muted']};
-            text-transform: uppercase;
-            white-space: nowrap;
-        }}
-
-        .section-line {{
-            flex: 1;
-            height: 1px;
-            background-color: {COLOR_PALETTE['border_subtle']};
-        }}
-
-        /* NO SIGNALS STATE */
-        .no-signals {{
-            padding: 1.5rem 1rem;
-            color: {COLOR_PALETTE['text_muted']};
-            font-style: italic;
-            text-align: center;
-        }}
-
-        /* SIGNAL CARDS */
-        .signal-card {{
-            background-color: {COLOR_PALETTE['bg_card']};
-            border: 1px solid {COLOR_PALETTE['border_subtle']};
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s ease;
-        }}
-
-        .signal-card:hover {{
-            background-color: {COLOR_PALETTE['bg_elevated']};
-            border-color: {COLOR_PALETTE['gold']};
-        }}
-
-        .signal-header {{
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }}
-
-        .signal-badge {{
-            display: inline-block;
-            padding: 0.35rem 0.6rem;
-            border-radius: 0.3rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: white;
-        }}
-
-        .signal-ticker {{
-            font-family: 'Space Mono', monospace;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: {COLOR_PALETTE['text_primary']};
-        }}
-
-        .signal-price {{
-            font-family: 'Space Mono', monospace;
-            font-size: 1.25rem;
-            color: {COLOR_PALETTE['gold']};
-            font-weight: 600;
-        }}
-
-        .signal-target {{
-            font-size: 0.95rem;
-            color: {COLOR_PALETTE['text_secondary']};
-            margin-top: 0.5rem;
-        }}
-
-        .signal-meta {{
-            font-size: 0.85rem;
-            color: {COLOR_PALETTE['text_muted']};
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid {COLOR_PALETTE['border_subtle']};
-        }}
-
-        /* POSITION CARDS */
-        .pos-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1rem;
-            padding: 0 1rem;
-            margin-bottom: 1rem;
-        }}
-
-        .pos-card {{
-            background-color: {COLOR_PALETTE['bg_card']};
-            border: 1px solid {COLOR_PALETTE['border_subtle']};
-            border-radius: 0.5rem;
-            padding: 1.25rem;
-            transition: all 0.3s ease;
-        }}
-
-        .pos-card:hover {{
-            background-color: {COLOR_PALETTE['bg_elevated']};
-            border-color: {COLOR_PALETTE['text_secondary']};
-        }}
-
-        .pos-card.pos-warn {{
-            border-left: 3px solid {COLOR_PALETTE['red']};
-        }}
-
-        .pos-header {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid {COLOR_PALETTE['border_subtle']};
-        }}
-
-        .pos-header-left {{
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-
-        .pos-ticker {{
-            font-family: 'Space Mono', monospace;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: {COLOR_PALETTE['text_primary']};
-        }}
-
-        .pos-days {{
-            font-family: 'Space Mono', monospace;
-            font-size: 0.8rem;
-            color: {COLOR_PALETTE['text_muted']};
-        }}
-
-        .pos-prices {{
-            font-family: 'Space Mono', monospace;
-            font-size: 0.95rem;
-            color: {COLOR_PALETTE['text_secondary']};
-            margin-bottom: 0.75rem;
-        }}
-
-        .pos-change {{
-            font-weight: 600;
-            margin-left: 0.5rem;
-        }}
-
-        .pos-change.c-win {{
-            color: {COLOR_PALETTE['green']};
-        }}
-
-        .pos-change.c-loss {{
-            color: {COLOR_PALETTE['red']};
-        }}
-
-        .pos-progress {{
-            height: 6px;
-            background-color: {COLOR_PALETTE['bg_elevated']};
-            border-radius: 3px;
-            overflow: hidden;
-            margin-bottom: 0.75rem;
-        }}
-
-        .pos-progress-bar {{
-            height: 100%;
-            background-color: {COLOR_PALETTE['gold']};
-            transition: width 0.3s ease;
-            border-radius: 3px;
-        }}
-
-        .pos-meta {{
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: {COLOR_PALETTE['text_muted']};
-        }}
-
-        /* RESULT ROWS */
-        .result-row {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid {COLOR_PALETTE['border_subtle']};
-            font-family: 'Space Mono', monospace;
-            font-size: 0.9rem;
-        }}
-
-        .result-row:last-child {{
-            border-bottom: none;
-        }}
-
-        .result-left {{
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            flex: 1;
-        }}
-
-        .result-ticker {{
-            font-weight: 700;
-            color: {COLOR_PALETTE['text_primary']};
-            min-width: 60px;
-        }}
-
-        .result-status {{
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }}
-
-        .result-status.win {{
-            background-color: {COLOR_PALETTE['green']}22;
-            color: {COLOR_PALETTE['green']};
-        }}
-
-        .result-status.loss {{
-            background-color: {COLOR_PALETTE['red']}22;
-            color: {COLOR_PALETTE['red']};
-        }}
-
-        .result-status.expired {{
-            background-color: {COLOR_PALETTE['text_muted']}22;
-            color: {COLOR_PALETTE['text_secondary']};
-        }}
-
-        .result-right {{
-            text-align: right;
-            color: {COLOR_PALETTE['text_secondary']};
-        }}
-
-        /* TREND DOTS */
-        .trend-header {{
-            padding: 1rem;
-            background-color: {COLOR_PALETTE['bg_elevated']};
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-        }}
-
-        .trend-row {{
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-            font-size: 0.85rem;
-        }}
-
-        .trend-row:last-child {{
-            margin-bottom: 0;
-        }}
-
-        .trend-dots {{
-            display: flex;
-            gap: 0.3rem;
-            flex: 1;
-        }}
-
-        .dot {{
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-        }}
-
-        .dot-win {{
-            background-color: {COLOR_PALETTE['green']};
-        }}
-
-        .dot-loss {{
-            background-color: {COLOR_PALETTE['red']};
-        }}
-
-        .dot-neutral {{
-            background-color: {COLOR_PALETTE['text_muted']};
-        }}
-
-        .trend-rate {{
-            font-family: 'Space Mono', monospace;
-            font-weight: 600;
-            color: {COLOR_PALETTE['gold']};
-            min-width: 45px;
-            text-align: right;
-        }}
-
-        /* STATS GRID */
-        .stats-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }}
-
-        .stat-box {{
-            background-color: {COLOR_PALETTE['bg_card']};
-            border: 1px solid {COLOR_PALETTE['border_subtle']};
-            border-radius: 0.5rem;
-            padding: 1rem;
-            text-align: center;
-        }}
-
-        .stat-label {{
-            font-size: 0.75rem;
-            color: {COLOR_PALETTE['text_muted']};
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
-        }}
-
-        .stat-value {{
-            font-family: 'Space Mono', monospace;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: {COLOR_PALETTE['gold']};
-        }}
-
-        /* STRATEGY BREAKDOWN */
-        .strategy-breakdown {{
-            background-color: {COLOR_PALETTE['bg_elevated']};
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }}
-
-        .strat-row {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid {COLOR_PALETTE['border_subtle']};
-            font-size: 0.9rem;
-        }}
-
-        .strat-row:last-child {{
-            border-bottom: none;
-        }}
-
-        .strat-name {{
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-weight: 600;
-            color: {COLOR_PALETTE['text_primary']};
-        }}
-
-        .strat-stat {{
-            color: {COLOR_PALETTE['text_secondary']};
-            font-family: 'Space Mono', monospace;
-            font-size: 0.85rem;
-        }}
-
-        /* Strategy Tags */
-        .stag {{ display:inline-block; padding:3px 8px; border-radius:4px; font-family:'Space Mono',monospace; font-weight:700; font-size:0.74em; letter-spacing:0.02em; border:1px solid; white-space:nowrap; }}
-        .stag-A {{ color:#5cc49a; border-color:#4a9e7d; background:#4a9e7d12; }}
-        .stag-B {{ color:#4a7a9e; border-color:#4a7a9e66; background:#4a7a9e0a; }}
-        .stag-C {{ color:#b8954a; border-color:#b8954a66; background:#b8954a0a; }}
-        .stag-D {{ color:#c46b7c; border-color:#9e4a5a; background:#9e4a5a0a; }}
-        .stag-E {{ color:#9a7abf; border-color:#7a5aaf66; background:#7a5aaf0a; }}
-
-        /* Cell States */
-        .c-win {{ color:#5cc49a; font-weight:600; }}
-        .c-loss {{ color:#c46b7c; font-weight:600; }}
-        .c-partial {{ color:#b8954a; font-weight:500; }}
-        .c-pending {{ color:#4d5b72; font-style:italic; }}
-        .c-none {{ color:#2a3444; }}
-        .c-muted {{ color:#4d5b72; }}
-
-        /* Status badges */
-        .st-win {{ color:#5cc49a; font-weight:600; }}
-        .st-loss {{ color:#c46b7c; font-weight:600; }}
-        .st-expired {{ color:#b8954a; font-weight:600; }}
-        .st-open {{ color:#4a7a9e; font-weight:600; }}
-        .st-pending {{ color:#4d5b72; font-weight:500; }}
-
-        /* Progress bar */
-        .rr-prog {{ display:flex; align-items:center; gap:6px; }}
-        .rr-prog-track {{ flex:1; background:#1a2230; border-radius:3px; height:6px; min-width:40px; overflow:hidden; }}
-        .rr-prog-fill {{ height:100%; border-radius:3px; }}
-        .rr-prog-text {{ font-size:0.78em; font-weight:600; min-width:32px; text-align:right; }}
-
-        /* RR-styled tables, cards, stats for Performance section */
-        .rr-table {{ width:100%; border-collapse:separate; border-spacing:0; font-family:'Plus Jakarta Sans',sans-serif; font-size:0.84em; background:#131920; border-radius:10px; overflow:hidden; border:1px solid #1c2636; }}
-        .rr-table th {{ background:#1a2230; color:#4d5b72; padding:12px 14px; text-align:center; font-weight:500; font-size:0.82em; letter-spacing:0.04em; text-transform:uppercase; border-bottom:1px solid #1c2636; }}
-        .rr-table th:first-child {{ text-align:left; padding-left:20px; }}
-        .rr-table td {{ padding:12px 14px; text-align:center; border-bottom:1px solid #0d131a; color:#e8e4de; font-variant-numeric:tabular-nums; font-family:'Space Mono',monospace; font-size:0.92em; }}
-        .rr-table td:first-child {{ text-align:left; padding-left:20px; font-family:'Plus Jakarta Sans',sans-serif; }}
-        .rr-table tr:last-child td {{ border-bottom:none; }}
-        .rr-table tr:hover td {{ background:#1e2a3a; }}
-        .rr-table-wrap {{ overflow-x:auto; -webkit-overflow-scrolling:touch; }}
-
-        .rr-cards {{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:24px; }}
-        .rr-card {{ background:#131920; border:1px solid #1c2636; border-radius:10px; padding:20px 16px; text-align:center; position:relative; overflow:hidden; }}
-        .rr-card::before {{ content:''; position:absolute; top:0; left:0; right:0; height:2px; background:#1c2636; }}
-        .rr-card.accent::before {{ background:linear-gradient(90deg,#9a7d4e,#c9a96e,#9a7d4e); }}
-        .rr-card .val {{ font-family:'Space Mono',monospace; font-size:1.8em; font-weight:700; line-height:1.2; margin-bottom:4px; }}
-        .rr-card .lbl {{ font-family:'Plus Jakarta Sans',sans-serif; font-size:0.72em; color:#4d5b72; letter-spacing:0.08em; text-transform:uppercase; }}
-
-        .rr-stats {{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }}
-        .rr-stat {{ background:#131920; border:1px solid #1c2636; border-radius:8px; padding:16px 20px; flex:1; min-width:120px; text-align:center; }}
-        .rr-stat .s-label {{ font-family:'Plus Jakarta Sans',sans-serif; font-size:0.72em; color:#4d5b72; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:4px; }}
-        .rr-stat .s-value {{ font-family:'Space Mono',monospace; font-size:1.5em; font-weight:700; }}
-
-        .rr-empty {{ text-align:center; padding:48px 20px; color:#4d5b72; font-size:0.9em; background:#131920; border-radius:10px; border:1px solid #1c2636; }}
-        .rr-legend {{ font-family:'Plus Jakarta Sans',sans-serif; font-size:0.76em; color:#4d5b72; margin:8px 0 12px 0; letter-spacing:0.02em; }}
-        .rr-divider {{ width:60px; height:1px; background:linear-gradient(90deg,transparent,#c9a96e,transparent); margin:16px auto; }}
-
-        /* Tab overrides for Performance sub-tabs */
-        .perf-tabs .stTabs [data-baseweb="tab-list"] {{ display:flex !important; gap:0; background:#0d1117; border-radius:8px; padding:4px; border:1px solid #1c2636; }}
-        .perf-tabs .stTabs [data-baseweb="tab"] {{ font-family:'Plus Jakarta Sans',sans-serif !important; font-weight:500 !important; font-size:0.82em !important; color:#4d5b72 !important; padding:8px 16px !important; border-radius:6px !important; border:none !important; background:transparent !important; white-space:nowrap !important; }}
-        .perf-tabs .stTabs [data-baseweb="tab"][aria-selected="true"] {{ color:#c9a96e !important; background:#1a2230 !important; }}
-        .perf-tabs .stTabs [data-baseweb="tab-highlight"] {{ display:none !important; }}
-        .perf-tabs .stTabs [data-baseweb="tab-border"] {{ display:none !important; }}
-
-        /* RESPONSIVE */
-        @media (max-width: 768px) {{
-            .header-title {{
-                font-size: 2.5rem;
-            }}
-
-            .header-meta {{
-                font-size: 0.75rem;
-            }}
-
-            .meta-item {{
-                margin-right: 1rem;
-                display: block;
-                margin-bottom: 0.5rem;
-            }}
-
-            .pos-grid {{
-                grid-template-columns: 1fr;
-            }}
-
-            .stats-grid {{
-                grid-template-columns: repeat(2, 1fr);
-            }}
-
-            .rr-cards {{ grid-template-columns:repeat(2,1fr); gap:8px; }}
-            .rr-card {{ padding:14px 10px; }}
-            .rr-card .val {{ font-size:1.4em; }}
-            .rr-table {{ font-size:0.76em; min-width:600px; }}
-            .rr-table th,.rr-table td {{ padding:10px; white-space:nowrap; }}
-            .rr-stats {{ flex-wrap:wrap; }}
-            .rr-stat {{ min-width:calc(50% - 8px); flex:unset; padding:12px 14px; }}
-            .rr-stat .s-value {{ font-size:1.2em; }}
-        }}
-
-        @media (max-width: 480px) {{
-            .header-title {{
-                font-size: 1.75rem;
-                letter-spacing: 0.1em;
-            }}
-
-            .signal-card {{
-                padding: 1rem;
-            }}
-
-            .signal-ticker {{
-                font-size: 1.25rem;
-            }}
-
-            .stats-grid {{
-                grid-template-columns: 1fr;
-            }}
-
-            .section-header {{
-                padding: 0;
-            }}
-        }}
-    </style>
-    """
-    return css
-
-
-# ============================================================================
-# PAGE SECTIONS
-# ============================================================================
-
-def render_header():
-    """Render page header with metadata"""
-    latest_scan = load_latest_scan()
-    tracker = load_tracker_summary()
-
-    scan_date = safe_str(latest_scan.get('scan_date', ''))
-    scan_time = safe_str(latest_scan.get('scan_time', ''))
-    win_count = safe_float(tracker.get('win_count', 0))
-    open_count = safe_float(tracker.get('open_count', 0))
-
-    html = f"""
-    <div class="header-main">
-        <div class="header-title">SURGE SCANNER</div>
-        <div class="header-meta">
-            <span class="meta-item">Last Scan: <span class="meta-value">{scan_date} {scan_time}</span></span>
-            <span class="meta-item">Active: <span class="meta-value">{int(open_count)}</span></span>
-            <span class="meta-item">Wins: <span class="meta-value">{int(win_count)}</span></span>
-        </div>
-    </div>
-    """
-
-    st.html(html)
-
-
-def render_section_header(label):
-    """Render section header with line"""
-    html = f"""
-    <div class="section-header">
-        <span class="section-label">{label}</span>
-        <div class="section-line"></div>
-    </div>
-    """
-    st.html(html)
-
-
-def render_todays_signals():
-    """Render today's signals section"""
-    render_section_header("TODAY'S SIGNALS")
-
-    signals_df = load_todays_signals()
-
-    if len(signals_df) == 0:
-        st.html('<div class="no-signals">No signals today</div>')
-        return
-
-    # Display signals as cards
-    cols = st.columns([1, 1] if len(signals_df) > 1 else [1])
-
-    for idx, (_, row) in enumerate(signals_df.iterrows()):
-        try:
-            strategy = safe_str(row.get('strategy', ''))
-            ticker = safe_str(row.get('ticker', ''))
-            price = safe_float(row.get('price', 0))
-            tp_price = safe_float(row.get('tp_price', 0))
-
-            # Strategy-specific metadata
-            rsi = safe_float(row.get('rsi', 0)) if 'rsi' in row else None
-            ret_5d = safe_float(row.get('ret_5d', 0)) if 'ret_5d' in row else None
-            intra_high = safe_float(row.get('intra_high_pct', 0)) if 'intra_high_pct' in row else None
-
-            # Determine metric to show
-            metric_text = ''
-            if strategy == 'A' and rsi is not None:
-                metric_text = f"RSI {rsi:.1f}"
-            elif strategy in ['B', 'C', 'D'] and ret_5d is not None:
-                metric_text = f"5D Return {format_percent(ret_5d)}"
-            elif strategy == 'E' and intra_high is not None:
-                metric_text = f"Intra {format_percent(intra_high)}"
-
-            if intra_high is not None and metric_text:
-                metric_text += f" · Intra {format_percent(intra_high)}"
-
-            color = get_strategy_color(strategy)
-            strat_name = get_strategy_name(strategy)
-
-            card_html = f"""
-            <div class="signal-card">
-                <div class="signal-header">
-                    <span class="signal-badge" style="background-color: {color}">{strategy}</span>
-                    <span class="signal-ticker">{ticker}</span>
-                </div>
-                <div class="signal-price">{format_currency(price)}</div>
-                <div class="signal-target">Target {format_currency(tp_price)}</div>
-                <div class="signal-meta">{strat_name} · {metric_text}</div>
-            </div>
-            """
-
-            col_idx = idx % 2
-            with cols[col_idx]:
-                st.html(card_html)
-
-        except Exception as e:
-            st.error(f"Error rendering signal: {e}")
-
-
-def render_active_positions():
-    """Render active positions section sorted by risk"""
-    render_section_header("ACTIVE POSITIONS")
-
-    open_pos_df = load_open_positions()
-
-    if len(open_pos_df) == 0:
-        st.html('<div class="no-signals">No active positions</div>')
-        return
-
-    # Split into OPEN and PENDING
-    open_positions = open_pos_df[
-        (open_pos_df.get('status') == 'OPEN') |
-        (open_pos_df.get('status').isna())
-    ].copy()
-
-    pending_positions = open_pos_df[
-        open_pos_df.get('status') == 'PENDING'
-    ].copy()
-
-    # Calculate risk scores and sort
+# ─── Constants ────────────────────────────────────────────────────────────────
+STRAT_TAB = {'A': '5%5일a', 'B': '15%10일', 'C': '5%5일b', 'D': '20%30일', 'E': '10%30일'}
+STRAT_NAMES = {'A': '5%5일a · 급락반등', 'B': '15%10일 · 고수익', 'C': '5%5일b · 과매도', 'D': '20%30일 · 초저가', 'E': '10%30일 · 속반등'}
+STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등'}
+STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%'}
+STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10}
+STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%'}
+STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30}
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+def safe_str(val, fb='—'):
+    if val is None or str(val).strip() in ('', 'nan', 'None', 'NaN'): return fb
+    return str(val)
+
+def safe_float(val, fb=0):
     try:
-        open_positions['risk_score'] = open_positions.apply(calc_risk_score, axis=1)
-        open_positions = open_positions.sort_values('risk_score', ascending=False)
-    except Exception:
-        pass
+        v = float(val)
+        return v if not pd.isna(v) else fb
+    except: return fb
 
-    # Render OPEN positions
-    if len(open_positions) > 0:
-        st.html('<div style="font-size: 0.85rem; color: #8a9ab5; margin-left: 1rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Open Positions</div>')
+def stag(s):
+    return f'<span class="stag stag-{s}">{STRAT_TAB.get(s, s)}</span>'
 
-        cols = st.columns([1, 1] if len(open_positions) > 1 else [1])
+def cell_html(ach, det, loss=0, prog=0):
+    """Render matrix cell: ach=wins, det=total, loss=loss+expired, prog=open+pending"""
+    if det == 0: return '<span class="c-none">—</span>'
+    if ach == det: return f'<span class="c-win">{ach}/{det}</span>'
+    # All still in progress (no closed results yet)
+    if prog > 0 and loss == 0 and ach == 0 and prog == det:
+        return f'<span class="c-pending">{det}</span>'
+    # Build composite: wins / losses / in-progress
+    parts = []
+    closed = ach + loss
+    if ach > 0: parts.append(f'<span class="c-win">{ach}</span>')
+    if loss > 0: parts.append(f'<span class="c-loss">{loss}</span>')
+    if prog > 0: parts.append(f'<span class="c-pending">{prog}</span>')
+    if not parts:
+        return f'<span class="c-partial">{ach}/{det}</span>'
+    # Format: green·red·gray / total
+    sep = '<span class="c-muted">·</span>'
+    color = 'c-win' if ach > 0 and loss == 0 else 'c-loss' if ach == 0 and loss > 0 else 'c-partial'
+    return f'{sep.join(parts)} <span class="c-muted">/</span> <span class="{color}">{det}</span>'
 
-        for idx, (_, row) in enumerate(open_positions.iterrows()):
-            try:
-                strategy = safe_str(row.get('strategy', ''))
-                ticker = safe_str(row.get('ticker', ''))
-                entry_price = safe_float(row.get('entry_price', 0))
-                current_price = safe_float(row.get('current_price', 0))
-                tp_price = safe_float(row.get('tp_price', 0))
-                sl_price = safe_float(row.get('sl_price', 0))
-                days_held = safe_float(row.get('days_held', 0))
-                max_hold = safe_float(row.get('max_hold', 0))
-                achievement_pct = safe_float(row.get('achievement_pct', 0))
-                change_pct = safe_float(row.get('change_pct', 0))
-                risk_score = safe_float(row.get('risk_score', 0))
+def progress_bar(val, color):
+    w = min(val, 100)
+    return f'''<div class="rr-prog">
+        <div class="rr-prog-track"><div class="rr-prog-fill" style="width:{w:.0f}%;background:{color}"></div></div>
+        <span class="rr-prog-text" style="color:{color}">{val:.0f}%</span>
+    </div>'''
 
-                # Check if position is at risk
-                is_at_risk = risk_score > 25
+def chg_html(val_raw):
+    v = safe_float(val_raw)
+    if val_raw == '—': return '<span class="c-muted">—</span>'
+    cls = 'c-win' if v > 0 else 'c-loss' if v < 0 else 'c-none'
+    return f'<span class="{cls}">{v:+.1f}%</span>'
 
-                # Calculate progress toward TP
-                if tp_price > entry_price:
-                    progress_pct = min(100, max(0, ((current_price - entry_price) / (tp_price - entry_price)) * 100))
-                else:
-                    progress_pct = 0
+def result_badge(r):
+    m = {'WIN': ('st-win', 'WIN'), 'LOSS': ('st-loss', 'LOSS'), 'EXPIRED': ('st-expired', 'EXP'),
+         'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
+    cls, txt = m.get(r, ('c-muted', r))
+    return f'<span class="{cls}">{txt}</span>'
 
-                color = get_strategy_color(strategy)
-                change_class = 'c-win' if change_pct >= 0 else 'c-loss'
-                card_warn_class = 'pos-warn' if is_at_risk else ''
+# ─── Header ───────────────────────────────────────────────────────────────────
+scan_info = load_latest_scan()
+tracker_info = load_tracker_summary()
 
-                card_html = f"""
-                <div class="pos-card {card_warn_class}">
-                    <div class="pos-header">
-                        <div class="pos-header-left">
-                            <span class="signal-badge" style="background-color: {color}">{strategy}</span>
-                            <span class="pos-ticker">{ticker}</span>
-                        </div>
-                        <span class="pos-days">D{int(days_held)}/{int(max_hold)}</span>
-                    </div>
-                    <div class="pos-body">
-                        <div class="pos-prices">
-                            {format_currency(entry_price)} → {format_currency(current_price)}
-                            <span class="pos-change {change_class}">{format_percent(change_pct)}</span>
-                        </div>
-                        <div class="pos-progress">
-                            <div class="pos-progress-bar" style="width: {progress_pct}%"></div>
-                        </div>
-                        <div class="pos-meta">
-                            <span>SL {format_currency(sl_price)}</span>
-                            <span>TP {format_currency(tp_price)}</span>
-                        </div>
-                    </div>
-                </div>
-                """
+st.markdown('''<div class="rr-header">
+    <div class="brand">SURGE <span>SCANNER</span></div>
+    <div class="sub">US Equity Mean-Reversion Intelligence</div>
+</div>
+<div class="rr-divider"></div>''', unsafe_allow_html=True)
 
-                col_idx = idx % 2
-                with cols[col_idx]:
-                    st.html(card_html)
+meta_parts = []
+if scan_info:
+    meta_parts.append(f'<span class="hl">Last Scan</span> {scan_info.get("scan_time", "N/A")}')
+    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k.lower()}_count", 0)}' for k in 'ABCDE')
+    meta_parts.append(f'<span class="hl">Signals</span> {counts}')
+if tracker_info:
+    meta_parts.append(f'<span class="hl">Active</span> {tracker_info.get("open_count", 0)} <span class="hl">Win</span> {tracker_info.get("win_count", 0)} <span class="hl">Loss</span> {tracker_info.get("loss_count", 0)}')
+if meta_parts:
+    st.markdown(f'<div class="rr-meta">{"<span>|</span>".join(meta_parts)}</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="rr-meta">Awaiting first scan...</div>', unsafe_allow_html=True)
 
-            except Exception as e:
-                st.error(f"Error rendering position: {e}")
+# ─── Tabs ─────────────────────────────────────────────────────────────────────
+today_signals = load_today_signals()
+history = load_history()
 
-    # Render PENDING positions
-    if len(pending_positions) > 0:
-        st.html('<div style="font-size: 0.85rem; color: #8a9ab5; margin-left: 1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Pending Positions</div>')
+# Count today's signals for tab label
+_today_n = len(today_signals) if not today_signals.empty else 0
+_today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-        for _, row in pending_positions.iterrows():
-            try:
-                strategy = safe_str(row.get('strategy', ''))
-                ticker = safe_str(row.get('ticker', ''))
-                signal_price = safe_float(row.get('signal_price', 0))
-                signal_date = safe_str(row.get('signal_date', ''))
+tab_today, tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
+    _today_label, "5%5일a", "15%10일", "5%5일b", "20%30일", "10%30일", "Performance"
+])
 
-                color = get_strategy_color(strategy)
+# ─── Strategy Tab Builder ─────────────────────────────────────────────────────
+STRAT_INFO = {
+    'A': {
+        'title': '5%5일a — 급락반등',
+        'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
+        'bt': '90.1% (236/262)',
+        'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret3d": st.column_config.NumberColumn("Ret 3D", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "dist_low5": st.column_config.NumberColumn("Dist L5", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'B': {
+        'title': '15%10일 — 고수익',
+        'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
+        'bt': '90.3% (28/31)',
+        'cols': ['ticker','date','scan_time','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "atr_ratio": st.column_config.NumberColumn("ATR", format="%.2f"),
+            "intra_pct": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ma20_pos": st.column_config.NumberColumn("MA20%", format="%.1f%%"),
+            "rev_growth": st.column_config.NumberColumn("Rev Gr", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'C': {
+        'title': '5%5일b — 과매도',
+        'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
+        'bt': '86.9% (542/624)',
+        'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "dist_low5": st.column_config.NumberColumn("Dist L5", format="%.2f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'D': {
+        'title': '20%30일 — 초저가',
+        'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
+        'bt': '97.7% (127/130)',
+        'cols': ['ticker','date','scan_time','price','rsi14','intraday','ret5d','tp_price','hold_days'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
+        },
+    },
+    'E': {
+        'title': '10%30일 — 속반등',
+        'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
+        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
+        'bt': '91.0% (273/300)',
+        'cols': ['ticker','date','scan_time','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
+            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
+            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
+            "vol_avg": st.column_config.NumberColumn("Avg Vol", format="%d"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
+        },
+    },
+}
 
-                pending_html = f"""
-                <div class="pos-card" style="opacity: 0.7;">
-                    <div class="pos-header">
-                        <div class="pos-header-left">
-                            <span class="signal-badge" style="background-color: {color}">{strategy}</span>
-                            <span class="pos-ticker">{ticker}</span>
-                        </div>
-                    </div>
-                    <div style="font-size: 0.85rem; color: {COLOR_PALETTE['text_muted']};">
-                        Signal {signal_price} on {signal_date} · Awaiting entry
-                    </div>
-                </div>
-                """
-
-                st.html(pending_html)
-
-            except Exception:
-                pass
-
-
-def render_recent_results():
-    """Render recent results section with win-rate trends"""
-    render_section_header("RECENT RESULTS")
-
-    closed_pos_df = load_closed_positions()
-
-    if len(closed_pos_df) == 0:
-        st.html('<div class="no-signals">No closed positions yet</div>')
-        return
-
-    # Build trend data per strategy (last 10 results)
-    strategy_trends = {}
-
-    for strategy in ['A', 'B', 'C', 'D', 'E']:
-        strat_results = closed_pos_df[closed_pos_df['strategy'] == strategy].head(10)
-        if len(strat_results) > 0:
-            wins = len(strat_results[strat_results['result_status'] == 'WIN'])
-            win_rate = (wins / len(strat_results)) * 100 if len(strat_results) > 0 else 0
-
-            # Build dot sequence (oldest to newest)
-            dots_html = ''
-            for _, res_row in strat_results.iloc[::-1].iterrows():
-                result_status = safe_str(res_row.get('result_status', ''))
-                if result_status == 'WIN':
-                    dots_html += '<span class="dot dot-win"></span>'
-                elif result_status == 'LOSS':
-                    dots_html += '<span class="dot dot-loss"></span>'
-                else:
-                    dots_html += '<span class="dot dot-neutral"></span>'
-
-            strategy_trends[strategy] = {
-                'win_rate': win_rate,
-                'dots': dots_html,
-                'count': len(strat_results)
-            }
-
-    # Render trend header
-    if strategy_trends:
-        trend_html = '<div class="trend-header">'
-        for strategy in ['A', 'B', 'C', 'D', 'E']:
-            if strategy in strategy_trends:
-                data = strategy_trends[strategy]
-                color = get_strategy_color(strategy)
-                trend_html += f"""
-                <div class="trend-row">
-                    <span class="signal-badge" style="background-color: {color}">{strategy}</span>
-                    <div class="trend-dots">{data['dots']}</div>
-                    <span class="trend-rate">{data['win_rate']:.0f}%</span>
-                </div>
-                """
-        trend_html += '</div>'
-        st.html(trend_html)
-
-    # Render result rows
-    st.html('<div style="margin-top: 1rem;"></div>')
-
-    for _, row in closed_pos_df.head(20).iterrows():
-        try:
-            strategy = safe_str(row.get('strategy', ''))
-            ticker = safe_str(row.get('ticker', ''))
-            result_status = safe_str(row.get('result_status', ''))
-            result_pct = safe_float(row.get('result_pct', 0))
-            days_held = safe_float(row.get('days_held', 0))
-
-            color = get_strategy_color(strategy)
-            status_class = result_status.lower()
-
-            result_html = f"""
-            <div class="result-row">
-                <div class="result-left">
-                    <span class="signal-badge" style="background-color: {color}">{strategy}</span>
-                    <span class="result-ticker">{ticker}</span>
-                    <span class="result-status {status_class}">{result_status}</span>
-                </div>
-                <div class="result-right">
-                    {format_percent(result_pct)} · {int(days_held)}d
+def render_strategy_tab(key, tab_obj):
+    info = STRAT_INFO[key]
+    with tab_obj:
+        # Strategy info card
+        desc_html = ''.join(f'<div>{d}</div>' for d in info['desc'])
+        rules_html = ''.join(f'<div>{r}</div>' for r in info['rules'])
+        st.markdown(f'''<div class="rr-strat-info si-{key}">
+            <h3>{stag(key)} {info["title"]}</h3>
+            <div class="si-grid">
+                <div class="si-section"><div class="si-label">Entry Conditions</div>{desc_html}</div>
+                <div class="si-section"><div class="si-label">Exit Rules</div>{rules_html}</div>
+                <div class="si-section"><div class="si-label">Backtest</div>
+                    <div class="si-stat"><span class="big" style="color:var(--gold)">{info["bt"].split("(")[0].strip()}</span></div>
+                    <div style="color:var(--text-muted);font-size:0.85em;margin-top:4px">({info["bt"].split("(")[1] if "(" in info["bt"] else ""})</div>
                 </div>
             </div>
-            """
+        </div>''', unsafe_allow_html=True)
 
-            st.html(result_html)
+        # Today's signals
+        if not today_signals.empty and 'strategy' in today_signals.columns:
+            sig = today_signals[today_signals['strategy'] == key]
+        else:
+            sig = pd.DataFrame()
 
-        except Exception:
-            pass
+        if not sig.empty:
+            st.markdown(f'<div class="rr-legend" style="color:var(--gold)">Today — {len(sig)} signal{"s" if len(sig)>1 else ""} detected</div>', unsafe_allow_html=True)
+            avail = [c for c in info['cols'] if c in sig.columns]
+            st.dataframe(sig[avail].reset_index(drop=True), use_container_width=True, column_config=info['col_config'])
+        else:
+            st.markdown(f'<div class="rr-empty">No {STRAT_TAB.get(key, key)} signals today</div>', unsafe_allow_html=True)
 
+        # Recent 30d history
+        if not history.empty and 'strategy' in history.columns:
+            hist = history[history['strategy'] == key]
+            if not hist.empty:
+                cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=30)
+                recent = hist[hist['date'] >= cutoff]
+                if not recent.empty:
+                    st.markdown('<div class="rr-divider" style="margin:20px auto"></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="rr-legend">Recent 30 Days — {len(recent)} signals</div>', unsafe_allow_html=True)
+                    show = recent.sort_values('date', ascending=False).reset_index(drop=True)
+                    show['date'] = show['date'].dt.strftime('%Y-%m-%d')
+                    avail = [c for c in info['cols'] if c in show.columns]
+                    st.dataframe(show[avail], use_container_width=True, column_config=info['col_config'])
 
-def render_performance():
-    """Render comprehensive performance analytics with 8 sub-tabs"""
-    render_section_header("PERFORMANCE")
+# ─── Tab: Today's Picks ──────────────────────────────────────────────────────
+with tab_today:
+    if today_signals.empty:
+        st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'''<div class="rr-legend" style="color:var(--gold);font-size:0.9em;margin-bottom:16px">
+            Today — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> signal{"s" if len(today_signals)>1 else ""} detected
+        </div>''', unsafe_allow_html=True)
 
+        # Build the today table grouped by strategy
+        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+        html += '<th>Strategy</th><th>Target</th><th>Hold</th><th>Ticker</th>'
+        html += '<th>Price</th><th>TP Price</th><th>Backtest</th>'
+        html += '</tr></thead><tbody>'
+
+        for s_key in ['A', 'B', 'C', 'D', 'E']:
+            if 'strategy' not in today_signals.columns:
+                continue
+            s_sig = today_signals[today_signals['strategy'] == s_key]
+            if s_sig.empty:
+                continue
+            for idx, row in s_sig.iterrows():
+                tk = safe_str(row.get('ticker'))
+                pr = safe_float(row.get('price', 0))
+                tp = safe_float(row.get('tp_price', 0))
+                pr_h = f'${pr:.2f}' if pr > 0 else '—'
+                tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
+                tab_name = STRAT_TAB.get(s_key, s_key)
+
+                html += f'<tr>'
+                html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
+                html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
+                html += f'<td style="color:var(--text-secondary)">{STRAT_MAX_HOLD.get(s_key,"")}일</td>'
+                html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
+                html += f'<td>{pr_h}</td>'
+                html += f'<td>{tp_h}</td>'
+                html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
+                html += f'</tr>'
+
+        html += '</tbody></table></div>'
+        st.markdown(html, unsafe_allow_html=True)
+
+        # Strategy breakdown summary
+        st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+        strat_counts = today_signals.groupby('strategy').size() if 'strategy' in today_signals.columns else pd.Series(dtype=int)
+        cards_html = '<div class="rr-cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">'
+        for s_key in ['A', 'B', 'C', 'D', 'E']:
+            cnt = int(strat_counts.get(s_key, 0))
+            if cnt == 0:
+                continue
+            cards_html += f'''<div class="rr-card">
+                <div class="val" style="color:var(--text-primary)">{cnt}</div>
+                <div class="lbl">{STRAT_TAB.get(s_key, s_key)}</div>
+                <div style="font-size:0.68em;color:var(--text-muted);margin-top:4px">{STRAT_TP.get(s_key,"")} / {STRAT_MAX_HOLD.get(s_key,"")}일</div>
+            </div>'''
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+for k, t in [('A', tab_a), ('B', tab_b), ('C', tab_c), ('D', tab_d), ('E', tab_e)]:
+    render_strategy_tab(k, t)
+
+# ─── Tab: Performance ─────────────────────────────────────────────────────────
+with tab_history:
     open_pos = load_open_positions()
     closed_pos = load_closed_positions()
-    tracker = load_tracker_summary()
 
-    # Build all_records from both open and closed positions
+    # Data prep
     all_records = pd.DataFrame()
     frames = []
-
     if not open_pos.empty and 'strategy' in open_pos.columns:
         tmp = open_pos[['strategy', 'signal_date', 'status']].copy()
         tmp.rename(columns={'status': 'result'}, inplace=True)
         frames.append(tmp)
-
     if not closed_pos.empty and 'strategy' in closed_pos.columns:
         rc = 'result_status' if 'result_status' in closed_pos.columns else 'status'
         tmp = closed_pos[['strategy', 'signal_date', rc]].copy()
         tmp.rename(columns={rc: 'result'}, inplace=True)
         frames.append(tmp)
-
     if frames:
         all_records = pd.concat(frames, ignore_index=True)
         all_records['signal_date'] = pd.to_datetime(all_records['signal_date'], errors='coerce')
@@ -1287,879 +894,929 @@ def render_performance():
         all_records['date_str'] = all_records['signal_date'].dt.strftime('%m/%d')
         all_records['month_str'] = all_records['signal_date'].dt.strftime('%Y-%m')
 
-    # Create tabs for performance section
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-        "Daily Matrix", "Monthly Matrix", "Win Rates", "Active Pos",
-        "Closed Pos", "By Ticker", "P&L & MDD", "Analytics"
-    ])
-
-    with tab1:
-        render_daily_matrix(all_records)
-
-    with tab2:
-        render_monthly_matrix(all_records)
-
-    with tab3:
-        render_strategy_win_rates(closed_pos)
-
-    with tab4:
-        render_active_detailed(open_pos)
-
-    with tab5:
-        render_closed_detailed(closed_pos)
-
-    with tab6:
-        render_by_ticker(closed_pos)
-
-    with tab7:
-        render_pnl_mdd(closed_pos)
-
-    with tab8:
-        render_analytics_suite(closed_pos, open_pos)
-
-
-def render_daily_matrix(all_records):
-    """30-day daily matrix view"""
-    if all_records.empty:
-        st.markdown('<div class="rr-empty">No records for matrix</div>', unsafe_allow_html=True)
-        return
-
-    # Get last 30 days
-    end_date = all_records['signal_date'].max()
-    start_date = end_date - pd.Timedelta(days=30)
-    records_30 = all_records[(all_records['signal_date'] >= start_date) & (all_records['signal_date'] <= end_date)].copy()
-
-    if records_30.empty:
-        st.markdown('<div class="rr-empty">No data in last 30 days</div>', unsafe_allow_html=True)
-        return
-
-    # Build matrix
-    records_30['date_only'] = records_30['signal_date'].dt.date
-    matrix_data = []
-
-    for strategy in ['A', 'B', 'C', 'D', 'E']:
-        strat_records = records_30[records_30['strategy'] == strategy]
-        if not strat_records.empty:
-            row_data = {'Strategy': stag(strategy)}
-
-            for date in pd.date_range(start_date, end_date):
-                date_records = strat_records[strat_records['date_only'] == date.date()]
-
-                if len(date_records) > 0:
-                    wins = len(date_records[date_records['result'] == 'WIN'])
-                    losses = len(date_records[date_records['result'] == 'LOSS'])
-                    total = len(date_records)
-
-                    if losses > 0:
-                        cell = f"L {losses}"
-                        cls = "c-loss"
-                    elif wins == total:
-                        cell = f"W {wins}"
-                        cls = "c-win"
-                    elif wins > 0:
-                        cell = f"P {wins}"
-                        cls = "c-partial"
-                    else:
-                        cell = f"Act"
-                        cls = "c-pending"
-
-                    row_data[date.strftime('%m/%d')] = f'<span class="{cls}">{cell}</span>'
-                else:
-                    row_data[date.strftime('%m/%d')] = '<span class="c-none">—</span>'
-
-            matrix_data.append(row_data)
-
-    if matrix_data:
-        matrix_df = pd.DataFrame(matrix_data)
-        st.markdown(f'<div class="rr-table-wrap"><table class="rr-table">', unsafe_allow_html=True)
-
-        # Header
-        cols_html = '<tr>' + ''.join([f'<th>{col}</th>' for col in matrix_df.columns]) + '</tr>'
-        st.markdown(cols_html, unsafe_allow_html=True)
-
-        # Rows
-        for _, row in matrix_df.iterrows():
-            row_html = '<tr>'
-            for col in matrix_df.columns:
-                row_html += f'<td>{row[col]}</td>'
-            row_html += '</tr>'
-            st.markdown(row_html, unsafe_allow_html=True)
-
-        st.markdown('</table></div>', unsafe_allow_html=True)
-
-
-def render_monthly_matrix(all_records):
-    """Monthly matrix grouped by YYYY-MM"""
-    if all_records.empty:
-        st.markdown('<div class="rr-empty">No records for matrix</div>', unsafe_allow_html=True)
-        return
-
-    # Build matrix by month
-    matrix_data = []
-
-    for strategy in ['A', 'B', 'C', 'D', 'E']:
-        strat_records = all_records[all_records['strategy'] == strategy]
-        if not strat_records.empty:
-            row_data = {'Strategy': stag(strategy)}
-
-            for month in sorted(strat_records['month_str'].unique()):
-                month_records = strat_records[strat_records['month_str'] == month]
-                wins = len(month_records[month_records['result'] == 'WIN'])
-                losses = len(month_records[month_records['result'] == 'LOSS'])
-                total = len(month_records)
-
-                if losses > 0:
-                    cell = f"L {losses}"
-                    cls = "c-loss"
-                elif wins == total:
-                    cell = f"W {wins}"
-                    cls = "c-win"
-                elif wins > 0:
-                    cell = f"P {wins}"
-                    cls = "c-partial"
-                else:
-                    cell = f"Act"
-                    cls = "c-pending"
-
-                row_data[month] = f'<span class="{cls}">{cell}</span>'
-
-            matrix_data.append(row_data)
-
-    if matrix_data:
-        matrix_df = pd.DataFrame(matrix_data)
-        st.markdown(f'<div class="rr-table-wrap"><table class="rr-table">', unsafe_allow_html=True)
-
-        cols_html = '<tr>' + ''.join([f'<th>{col}</th>' for col in matrix_df.columns]) + '</tr>'
-        st.markdown(cols_html, unsafe_allow_html=True)
-
-        for _, row in matrix_df.iterrows():
-            row_html = '<tr>'
-            for col in matrix_df.columns:
-                row_html += f'<td>{row[col]}</td>'
-            row_html += '</tr>'
-            st.markdown(row_html, unsafe_allow_html=True)
-
-        st.markdown('</table></div>', unsafe_allow_html=True)
-
-
-def render_strategy_win_rates(closed_pos):
-    """Strategy win rates table with backtest WR"""
-    if closed_pos.empty:
-        st.markdown('<div class="rr-empty">No closed positions</div>', unsafe_allow_html=True)
-        return
-
-    table_rows = []
-
-    for strategy in ['A', 'B', 'C', 'D', 'E']:
-        strat_closed = closed_pos[closed_pos['strategy'] == strategy]
-        if not strat_closed.empty:
-            total = len(strat_closed)
-            wins = len(strat_closed[strat_closed['result_status'] == 'WIN'])
-            losses = len(strat_closed[strat_closed['result_status'] == 'LOSS'])
-            expired = len(strat_closed[strat_closed['result_status'] == 'EXPIRED'])
-            active = 0  # Placeholder
-            win_rate = (wins / total * 100) if total > 0 else 0
-
-            pcts = [safe_float(v) for v in strat_closed.get('result_pct', []) if safe_float(v) != 0]
-            avg_pnl = sum(pcts) / len(pcts) if pcts else 0
-
-            table_rows.append({
-                'Strategy': stag(strategy),
-                'Target': STRAT_TP.get(strategy, '—'),
-                'Total': total,
-                'Closed': total,
-                'Win': wins,
-                'Loss': losses,
-                'Expired': expired,
-                'Active': active,
-                'Win Rate': f'{win_rate:.1f}%',
-                'Backtest': STRAT_BT_WR.get(strategy, '—'),
-                'Avg P&L': f'{avg_pnl:+.2f}%'
-            })
-
-    if table_rows:
-        df = pd.DataFrame(table_rows)
-        st.markdown(f'<div class="rr-table-wrap"><table class="rr-table">', unsafe_allow_html=True)
-
-        cols_html = '<tr>' + ''.join([f'<th>{col}</th>' for col in df.columns]) + '</tr>'
-        st.markdown(cols_html, unsafe_allow_html=True)
-
-        for _, row in df.iterrows():
-            row_html = '<tr>'
-            for col in df.columns:
-                row_html += f'<td>{row[col]}</td>'
-            row_html += '</tr>'
-            st.markdown(row_html, unsafe_allow_html=True)
-
-        st.markdown('</table></div>', unsafe_allow_html=True)
-
-
-def render_active_detailed(open_pos):
-    """Detailed active positions table with filters"""
-    if open_pos.empty:
-        st.markdown('<div class="rr-empty">No active positions</div>', unsafe_allow_html=True)
-        return
-
-    col1, col2 = st.columns(2)
-    with col1:
-        strat_filter = st.selectbox("Filter by Strategy", ['All', 'A', 'B', 'C', 'D', 'E'], key='act_strat')
-    with col2:
-        sort_by = st.selectbox("Sort by", ['Date', 'P&L', 'Achievement'], key='act_sort')
-
-    filtered_pos = open_pos.copy()
-    if strat_filter != 'All':
-        filtered_pos = filtered_pos[filtered_pos['strategy'] == strat_filter]
-
-    if filtered_pos.empty:
-        st.markdown('<div class="rr-empty">No positions match filters</div>', unsafe_allow_html=True)
-        return
-
-    table_rows = []
-    for _, row in filtered_pos.iterrows():
-        strat = safe_str(row.get('strategy', ''))
-        ticker = safe_str(row.get('ticker', ''))
-        signal = safe_str(row.get('signal_date', ''))[:10]
-        entry = safe_float(row.get('entry_price', 0))
-        current = safe_float(row.get('current_price', 0))
-        pnl_pct = safe_float(row.get('change_pct', 0))
-        tp = safe_float(row.get('tp_price', 0))
-        peak = safe_float(row.get('peak_price', 0))
-        peak_date = safe_str(row.get('peak_date', ''))[:10]
-        ach = safe_float(row.get('achievement_pct', 0))
-        remaining = safe_float(row.get('remaining_pct', 0))
-        days = safe_float(row.get('days_held', 0))
-
-        table_rows.append({
-            'Strat': stag(strat),
-            'Ticker': ticker,
-            'Signal': signal,
-            'Entry': format_currency(entry),
-            'Price': format_currency(current),
-            'Current': format_currency(current),
-            'P&L': format_percent(pnl_pct),
-            'TP': format_currency(tp),
-            'Peak': format_currency(peak),
-            'Peak Date': peak_date,
-            'Achievement': f'{ach:.0f}%',
-            'Remaining': f'{remaining:.0f}%',
-            'Days': f'D{int(days)}'
-        })
-
-    if table_rows:
-        df = pd.DataFrame(table_rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-def render_closed_detailed(closed_pos):
-    """Detailed closed positions table with filters"""
-    if closed_pos.empty:
-        st.markdown('<div class="rr-empty">No closed positions</div>', unsafe_allow_html=True)
-        return
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        strat_filter = st.selectbox("Filter by Strategy", ['All', 'A', 'B', 'C', 'D', 'E'], key='cl_strat')
-    with col2:
-        result_filter = st.selectbox("Filter by Result", ['All', 'WIN', 'LOSS', 'EXPIRED'], key='cl_result')
-    with col3:
-        sort_by = st.selectbox("Sort by", ['Recent', 'P&L'], key='cl_sort')
-
-    filtered_pos = closed_pos.copy()
-    if strat_filter != 'All':
-        filtered_pos = filtered_pos[filtered_pos['strategy'] == strat_filter]
-    if result_filter != 'All':
-        rc = 'result_status' if 'result_status' in filtered_pos.columns else 'status'
-        filtered_pos = filtered_pos[filtered_pos[rc] == result_filter]
-
-    if filtered_pos.empty:
-        st.markdown('<div class="rr-empty">No positions match filters</div>', unsafe_allow_html=True)
-        return
-
-    table_rows = []
-    rc = 'result_status' if 'result_status' in filtered_pos.columns else 'status'
-
-    for _, row in filtered_pos.iterrows():
-        strat = safe_str(row.get('strategy', ''))
-        ticker = safe_str(row.get('ticker', ''))
-        signal = safe_str(row.get('signal_date', ''))[:10]
-        entry = safe_float(row.get('entry_price', 0))
-        result = safe_str(row.get(rc, ''))
-        close = safe_str(row.get('close_date', ''))[:10]
-        close_price = safe_float(row.get('close_price', 0))
-        pnl = safe_float(row.get('result_pct', 0))
-        tp_hit = safe_str(row.get('tp_hit', '')) or '—'
-        peak = safe_float(row.get('peak_price', 0))
-        peak_date = safe_str(row.get('peak_date', ''))[:10]
-        ach = safe_float(row.get('achievement_pct', 0))
-
-        table_rows.append({
-            'Strat': stag(strat),
-            'Ticker': ticker,
-            'Signal': signal,
-            'Entry': format_currency(entry),
-            'Price': format_currency(entry),
-            'Result': result,
-            'Close': close,
-            'Close$': format_currency(close_price),
-            'P&L': format_percent(pnl),
-            'TP Hit': tp_hit,
-            'Peak': format_currency(peak),
-            'Peak Date': peak_date,
-            'Ach%': f'{ach:.0f}%'
-        })
-
-    if table_rows:
-        df = pd.DataFrame(table_rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-def render_by_ticker(closed_pos):
-    """Group by ticker with win rates"""
-    if closed_pos.empty:
-        st.markdown('<div class="rr-empty">No closed positions</div>', unsafe_allow_html=True)
-        return
-
-    rc = 'result_status' if 'result_status' in closed_pos.columns else 'status'
-
-    ticker_stats = {}
-    for _, row in closed_pos.iterrows():
-        ticker = safe_str(row.get('ticker', ''))
-        result = safe_str(row.get(rc, ''))
-
-        if ticker not in ticker_stats:
-            ticker_stats[ticker] = {'total': 0, 'wins': 0}
-
-        ticker_stats[ticker]['total'] += 1
-        if result == 'WIN':
-            ticker_stats[ticker]['wins'] += 1
-
-    table_rows = []
-    for ticker in sorted(ticker_stats.keys()):
-        stats = ticker_stats[ticker]
-        win_rate = (stats['wins'] / stats['total'] * 100) if stats['total'] > 0 else 0
-        color = COLOR_PALETTE['green'] if win_rate >= 50 else COLOR_PALETTE['red']
-
-        table_rows.append({
-            'Ticker': ticker,
-            'Count': stats['total'],
-            'Wins': stats['wins'],
-            'Win Rate': f'{win_rate:.1f}%',
-            'Color': color
-        })
-
-    if table_rows:
-        for row in table_rows:
-            st.markdown(f"**{row['Ticker']}** | Count: {row['Count']} | Wins: {row['Wins']} | "
-                       f"<span style='color:{row['Color']}'>{row['Win Rate']}</span>", unsafe_allow_html=True)
-
-
-def render_pnl_mdd(closed_pos):
-    """P&L and Max Drawdown visualization with per-strategy charts"""
-    if closed_pos.empty or 'close_date' not in closed_pos.columns or 'result_pct' not in closed_pos.columns:
-        st.markdown('<div class="rr-empty">No closed positions for P&L</div>', unsafe_allow_html=True)
-        return
-
-    rc = 'result_status' if 'result_status' in closed_pos.columns else 'status'
-
-    pnl_df = closed_pos[['strategy', 'close_date', 'result_pct']].copy()
-    pnl_df['result_pct'] = pd.to_numeric(pnl_df['result_pct'], errors='coerce')
-    pnl_df['close_date'] = pd.to_datetime(pnl_df['close_date'], errors='coerce')
-    pnl_df = pnl_df.dropna(subset=['result_pct', 'close_date']).sort_values('close_date')
-
-    if pnl_df.empty:
-        st.markdown('<div class="rr-empty">No valid P&L data</div>', unsafe_allow_html=True)
-        return
-
-    strats_data = sorted(pnl_df['strategy'].unique())
-    sc = {'A': '#4a9e7d', 'B': '#4a7a9e', 'C': '#b8954a', 'D': '#9e4a5a', 'E': '#7a5aaf'}
-
-    # Build per-strategy cumulative P&L
-    chart_data = pd.DataFrame()
-    for s in strats_data:
-        sd = pnl_df[pnl_df['strategy'] == s].copy().sort_values('close_date')
-        sd[s] = sd['result_pct'].cumsum()
-        daily = sd.groupby('close_date')[s].last()
-        chart_data = daily.to_frame() if chart_data.empty else chart_data.join(daily, how='outer')
-
-    total = pnl_df.sort_values('close_date').copy()
-    total['Total'] = total['result_pct'].cumsum()
-    td = total.groupby('close_date')['Total'].last()
-    chart_data = chart_data.join(td, how='outer').sort_index().ffill().fillna(0)
-
-    # Calc MDD for total
-    tc = chart_data['Total'] if 'Total' in chart_data.columns else pd.Series(dtype=float)
-    tm = 0
-    tms = tme = None
-    tdd = pd.Series(dtype=float)
-    if not tc.empty:
-        start_idx = tc.index[0] - pd.Timedelta(days=1)
-        cs0 = pd.concat([pd.Series([0.0], index=[start_idx]), tc])
-        pk = cs0.cummax()
-        dd_s = cs0 - pk
-        tm = dd_s.min()
-        if tm < 0:
-            me = dd_s.idxmin()
-            tms = cs0.loc[:me].idxmax()
-            tme = me
-            tdd = dd_s.iloc[1:]
-        else:
-            tm = 0
-            tdd = pd.Series(0, index=tc.index)
-
-    # Per-strategy MDD
-    smdd = {}
-    for s in strats_data:
-        if s in chart_data.columns:
-            sv_series = chart_data[s]
-            if not sv_series.empty:
-                si = sv_series.index[0] - pd.Timedelta(days=1)
-                s0 = pd.concat([pd.Series([0.0], index=[si]), sv_series])
-                spk = s0.cummax()
-                sdd = s0 - spk
-                smv = sdd.min()
-                if smv < 0:
-                    sme = sdd.idxmin()
-                    sms = s0.loc[:sme].idxmax()
-                    smdd[s] = {'mdd': smv, 'start': sms, 'end': sme, 'dd': sdd.iloc[1:]}
-                else:
-                    smdd[s] = {'mdd': 0, 'start': None, 'end': None, 'dd': pd.Series(0, index=sv_series.index)}
-
-    # Summary metrics
-    tp_sum = pnl_df['result_pct'].sum()
-    ap = pnl_df['result_pct'].mean()
-    nt = len(pnl_df)
-    nw_profit = len(pnl_df[pnl_df['result_pct'] > 0])
-    tw = (nw_profit / nt * 100) if nt > 0 else 0
-
-    tc_ = '#5cc49a' if tp_sum > 0 else '#c46b7c' if tp_sum < 0 else '#4d5b72'
-    mc_ = '#c46b7c' if tm < -5 else '#b8954a' if tm < 0 else '#4d5b72'
-    wc_ = '#5cc49a' if tw >= 80 else '#b8954a' if tw > 0 else '#4d5b72'
-
-    st.markdown(f'''<div class="rr-stats">
-        <div class="rr-stat"><div class="s-label">Cumulative P&L</div><div class="s-value" style="color:{tc_}">{tp_sum:+.1f}%</div></div>
-        <div class="rr-stat"><div class="s-label">Avg per Trade</div><div class="s-value" style="color:{tc_}">{ap:+.2f}%</div></div>
-        <div class="rr-stat"><div class="s-label">Trades</div><div class="s-value" style="color:#8a9ab5">{nt}</div></div>
-        <div class="rr-stat"><div class="s-label">Profit Rate</div><div class="s-value" style="color:{wc_}">{tw:.0f}%</div></div>
-        <div class="rr-stat"><div class="s-label">Max Drawdown</div><div class="s-value" style="color:{mc_}">{tm:.1f}%</div></div>
+    strategies = ['A', 'B', 'C', 'D', 'E']
+    rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
+
+    # Aggregate
+    total_det = len(all_records)
+    total_closed = len(closed_pos) if not closed_pos.empty else 0
+    total_win = len(closed_pos[closed_pos[rs_col] == 'WIN']) if total_closed > 0 else 0
+    total_loss = len(closed_pos[closed_pos[rs_col] == 'LOSS']) if total_closed > 0 else 0
+    total_exp = len(closed_pos[closed_pos[rs_col] == 'EXPIRED']) if total_closed > 0 else 0
+    total_open = len(open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
+    wr = (total_win / total_closed * 100) if total_closed > 0 else 0
+
+    # Summary cards
+    wr_color = 'var(--green-bright)' if wr >= 80 else 'var(--amber)' if wr >= 50 else 'var(--red-bright)'
+    st.markdown(f'''<div class="rr-cards">
+        <div class="rr-card"><div class="val" style="color:var(--text-secondary)">{total_det}</div><div class="lbl">Detected</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--blue)">{total_open}</div><div class="lbl">Active</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--green-bright)">{total_win}</div><div class="lbl">Wins</div></div>
+        <div class="rr-card"><div class="val" style="color:var(--red-bright)">{total_loss + total_exp}</div><div class="lbl">Loss / Exp</div></div>
+        <div class="rr-card accent"><div class="val" style="color:var(--gold)">{wr:.1f}%</div><div class="lbl">Win Rate</div></div>
     </div>''', unsafe_allow_html=True)
 
-    if tms is not None and tme is not None:
-        ms_s = tms.strftime('%Y-%m-%d') if hasattr(tms, 'strftime') else str(tms)
-        me_s = tme.strftime('%Y-%m-%d') if hasattr(tme, 'strftime') else str(tme)
-        st.markdown(f'<div class="rr-legend" style="color:#c46b7c">MDD Period: {ms_s} → {me_s} ({tm:.1f}%p)</div>', unsafe_allow_html=True)
+    # Sub tabs
+    h_daily, h_monthly, h_winrate, h_active, h_closed_detail, h_ticker, h_pnl, h_analytics = st.tabs([
+        "Daily", "Monthly", "Strategy", "Active", "Closed", "By Ticker", "P&L", "Analytics"
+    ])
 
-    # Line chart: cumulative P&L
-    st.markdown('<div class="rr-legend">Cumulative P&L by Strategy + Total</div>', unsafe_allow_html=True)
-    cl = [sc.get(c, '#c9a96e') if c != 'Total' else '#c9a96e' for c in chart_data.columns]
-    st.line_chart(chart_data, color=cl if cl else None)
-
-    # Drawdown area chart
-    st.markdown('<div class="rr-legend" style="margin-top:16px">Drawdown — 0% = Peak, Negative = Loss from Peak</div>', unsafe_allow_html=True)
-    dd_c = pd.DataFrame()
-    for s in strats_data:
-        if s in smdd:
-            dd_c[s] = smdd[s]['dd']
-    if not tdd.empty:
-        dd_c['Total'] = tdd
-    dd_c = dd_c.sort_index().ffill().fillna(0)
-    dcl = [sc.get(c, '#c9a96e') if c != 'Total' else '#c9a96e' for c in dd_c.columns]
-    st.area_chart(dd_c, color=dcl if dcl else None)
-
-    # Strategy risk summary table
-    st.markdown('<div class="rr-legend" style="margin-top:16px">Strategy Risk Summary</div>', unsafe_allow_html=True)
-    sh = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-    sh += '<th>Strategy</th><th>Trades</th><th>Win%</th><th>Cum P&L</th><th>Avg</th>'
-    sh += '<th>Best</th><th>Worst</th><th style="color:#c46b7c">MDD</th><th>MDD Period</th>'
-    sh += '</tr></thead><tbody>'
-
-    for s in strats_data:
-        sp = pnl_df[pnl_df['strategy'] == s]['result_pct']
-        sn = len(sp)
-        sw = len(sp[sp > 0])
-        sr = (sw / sn * 100) if sn > 0 else 0
-        st_ = sp.sum()
-        sa = sp.mean()
-        smx = sp.max()
-        smn = sp.min()
-        stc = '#5cc49a' if st_ > 0 else '#c46b7c' if st_ < 0 else '#4d5b72'
-        swc = 'c-win' if sr >= 80 else 'c-partial' if sr > 0 else 'c-none'
-        si = smdd.get(s, {})
-        sm_val = si.get('mdd', 0)
-        sms_v = si.get('start')
-        sme_v = si.get('end')
-        smc = '#c46b7c' if sm_val < -5 else '#b8954a' if sm_val < 0 else '#4d5b72'
-        if sms_v and sme_v:
-            msr = f'{sms_v.strftime("%m/%d") if hasattr(sms_v, "strftime") else str(sms_v)[:5]}→{sme_v.strftime("%m/%d") if hasattr(sme_v, "strftime") else str(sme_v)[:5]}'
+    # ── 1) Daily Matrix ──
+    with h_daily:
+        if all_records.empty:
+            st.markdown('<div class="rr-empty">No data yet — run scanner first</div>', unsafe_allow_html=True)
         else:
-            msr = '—'
+            cutoff = all_records['signal_date'].max() - pd.Timedelta(days=30)
+            recent = all_records[all_records['signal_date'] >= cutoff].copy()
+            # Sort by actual date, not by mm/dd string (avoids year-boundary bug)
+            _date_map = recent.drop_duplicates('date_str').set_index('date_str')['signal_date']
+            date_order = sorted(recent['date_str'].unique(), key=lambda x: _date_map.get(x, pd.Timestamp.min))
 
-        sh += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td>{sn}</td>'
-        sh += f'<td class="{swc}">{sr:.0f}%</td>'
-        sh += f'<td style="color:{stc};font-weight:600">{st_:+.1f}%</td>'
-        sh += f'<td style="color:{stc}">{sa:+.2f}%</td>'
-        sh += f'<td class="c-win">{smx:+.1f}%</td>'
-        sh += f'<td class="c-loss">{smn:+.1f}%</td>'
-        sh += f'<td style="color:{smc};font-weight:600">{sm_val:.1f}%</td>'
-        sh += f'<td class="c-muted">{msr}</td></tr>'
+            det_g = recent.groupby(['strategy','date_str']).size().unstack(fill_value=0)
+            wins_r = recent[recent['result']=='WIN']
+            ach_g = wins_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not wins_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
+            loss_r = recent[recent['result'].isin(['LOSS','EXPIRED'])]
+            loss_g = loss_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not loss_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
+            prog_r = recent[recent['result'].isin(['OPEN','PENDING'])]
+            prog_g = prog_r.groupby(['strategy','date_str']).size().unstack(fill_value=0) if not prog_r.empty else pd.DataFrame(0,index=strategies,columns=date_order)
 
-    sh += '</tbody></table></div>'
-    st.markdown(sh, unsafe_allow_html=True)
+            for s in strategies:
+                for g in [det_g,ach_g,loss_g,prog_g]:
+                    if s not in g.index: g.loc[s]=0
+            for d in date_order:
+                for g in [det_g,ach_g,loss_g,prog_g]:
+                    if d not in g.columns: g[d]=0
 
-
-def render_analytics_suite(closed_pos, open_pos=None):
-    """Comprehensive analytics suite with luxury HTML tables"""
-    if closed_pos.empty or len(closed_pos) < 2:
-        st.markdown('<div class="rr-empty">Not enough closed positions for analytics</div>', unsafe_allow_html=True)
-        return
-
-    rc = 'result_status' if 'result_status' in closed_pos.columns else 'status'
-    strategies = ['A', 'B', 'C', 'D', 'E']
-
-    an_cp = closed_pos.copy()
-    an_cp['signal_date_dt'] = pd.to_datetime(an_cp.get('signal_date', ''), errors='coerce')
-    an_cp['entry_date_dt'] = pd.to_datetime(an_cp.get('entry_date', ''), errors='coerce')
-    an_cp['close_date_dt'] = pd.to_datetime(an_cp.get('close_date', ''), errors='coerce')
-    an_cp['result_pct_f'] = pd.to_numeric(an_cp.get('result_pct', 0), errors='coerce').fillna(0)
-    an_cp['days_held_f'] = pd.to_numeric(an_cp.get('days_held', 0), errors='coerce').fillna(0)
-    an_cp['signal_price_f'] = pd.to_numeric(an_cp.get('signal_price', 0), errors='coerce').fillna(0)
-    an_cp['entry_price_f'] = pd.to_numeric(an_cp.get('entry_price', 0), errors='coerce').fillna(0)
-    an_cp['max_ach_f'] = pd.to_numeric(an_cp.get('max_achievement_pct', 0), errors='coerce').fillna(0)
-
-    # ── 1) TIME-TO-TP ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">TP 도달 속도 (Time-to-TP)</div>', unsafe_allow_html=True)
-
-    wins = an_cp[an_cp[rc] == 'WIN'].copy()
-    if wins.empty:
-        st.markdown('<div class="rr-empty">No WIN positions yet</div>', unsafe_allow_html=True)
-    else:
-        wins['ttp_days'] = wins['days_held_f']
-        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-        html += '<th>Strategy</th><th>Wins</th><th>Avg Days</th><th>Median</th><th>Min</th><th>Max</th><th>1일 내 도달</th>'
-        html += '</tr></thead><tbody>'
-        for s in strategies:
-            sw = wins[wins['strategy'] == s]
-            if sw.empty:
-                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td>0</td><td colspan="5" class="c-muted">—</td></tr>'
-                continue
-            ttp = sw['ttp_days']
-            avg_d = ttp.mean(); med_d = ttp.median(); min_d = ttp.min(); max_d = ttp.max()
-            d1 = len(sw[ttp <= 1])
-            d1_pct = (d1 / len(sw) * 100) if len(sw) > 0 else 0
-            spd_color = '#5cc49a' if avg_d <= 2 else '#b8954a' if avg_d <= 5 else '#8a9ab5'
-            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td>'
-            html += f'<td>{len(sw)}</td>'
-            html += f'<td style="color:{spd_color};font-weight:700">{avg_d:.1f}일</td>'
-            html += f'<td>{med_d:.0f}일</td><td>{min_d:.0f}일</td><td>{max_d:.0f}일</td>'
-            html += f'<td style="color:#5cc49a">{d1} ({d1_pct:.0f}%)</td></tr>'
-        html += '</tbody></table></div>'
-        st.markdown(html, unsafe_allow_html=True)
-        st.markdown('<div class="rr-legend">빠를수록 자본 회전율이 높아져 복리 효과 극대화</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
-
-    # ── 2) EXPECTED VALUE ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">기대값 (Expected Value per Trade)</div>', unsafe_allow_html=True)
-
-    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-    html += '<th>Strategy</th><th>Win Rate</th><th>Avg Win</th><th>Avg Loss</th><th>EV</th><th>Profit Factor</th>'
-    html += '</tr></thead><tbody>'
-    for s in strategies:
-        sc_ = an_cp[an_cp['strategy'] == s]
-        if sc_.empty:
-            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td colspan="5" class="c-muted">—</td></tr>'
-            continue
-        nw_ = len(sc_[sc_[rc] == 'WIN'])
-        nl_ = len(sc_[sc_[rc].isin(['LOSS', 'EXPIRED'])])
-        nc_ = nw_ + nl_
-        wr_ = (nw_ / nc_ * 100) if nc_ > 0 else 0
-        w_pnl = sc_[sc_[rc] == 'WIN']['result_pct_f']
-        l_pnl = sc_[sc_[rc].isin(['LOSS', 'EXPIRED'])]['result_pct_f']
-        avg_w = w_pnl.mean() if len(w_pnl) > 0 else 0
-        avg_l = l_pnl.mean() if len(l_pnl) > 0 else 0
-        ev = (wr_ / 100) * avg_w + (1 - wr_ / 100) * avg_l
-        gross_w = w_pnl.sum() if len(w_pnl) > 0 else 0
-        gross_l = abs(l_pnl.sum()) if len(l_pnl) > 0 else 0
-        pf = (gross_w / gross_l) if gross_l > 0 else float('inf') if gross_w > 0 else 0
-        ev_c = '#5cc49a' if ev > 0 else '#c46b7c' if ev < 0 else '#4d5b72'
-        pf_c = '#5cc49a' if pf >= 2 else '#b8954a' if pf >= 1 else '#c46b7c'
-        pf_s = f'{pf:.2f}' if pf != float('inf') else '∞'
-        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td>'
-        html += f'<td>{wr_:.1f}%</td>'
-        html += f'<td class="c-win">{avg_w:+.2f}%</td>'
-        html += f'<td class="c-loss">{avg_l:+.2f}%</td>'
-        html += f'<td style="color:{ev_c};font-weight:700;font-size:1.1em">{ev:+.2f}%</td>'
-        html += f'<td style="color:{pf_c};font-weight:600">{pf_s}</td></tr>'
-    html += '</tbody></table></div>'
-    st.markdown(html, unsafe_allow_html=True)
-    st.markdown('<div class="rr-legend">EV = (승률 × 평균수익) + (패률 × 평균손실) | Profit Factor = 총이익 / 총손실 (≥2.0 우수)</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
-
-    # ── 3) DAY-OF-WEEK ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">요일별 신호 성과 (Day-of-Week)</div>', unsafe_allow_html=True)
-
-    dow_names = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri'}
-    an_cp['dow'] = an_cp['signal_date_dt'].dt.dayofweek
-    dow_valid = an_cp.dropna(subset=['dow'])
-
-    if dow_valid.empty:
-        st.markdown('<div class="rr-empty">No data</div>', unsafe_allow_html=True)
-    else:
-        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-        html += '<th>Day</th><th>Signals</th><th>Win</th><th>Loss</th><th>Win Rate</th><th>Avg P&L</th>'
-        html += '</tr></thead><tbody>'
-        for d_i in range(5):
-            d_data = dow_valid[dow_valid['dow'] == d_i]
-            if d_data.empty:
-                html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
-                continue
-            dw = len(d_data[d_data[rc] == 'WIN'])
-            dl = len(d_data[d_data[rc].isin(['LOSS', 'EXPIRED'])])
-            dc = dw + dl
-            dwr = (dw / dc * 100) if dc > 0 else 0
-            davg = d_data['result_pct_f'].mean()
-            wrc_ = 'c-win' if dwr >= 80 else 'c-partial' if dwr >= 50 else 'c-loss' if dc > 0 else 'c-none'
-            ac_ = 'c-win' if davg > 0 else 'c-loss' if davg < 0 else 'c-none'
-            html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td>'
-            html += f'<td>{len(d_data)}</td>'
-            html += f'<td class="c-win">{dw}</td><td class="c-loss">{dl}</td>'
-            html += f'<td class="{wrc_}">{dwr:.0f}%</td>'
-            html += f'<td class="{ac_}">{davg:+.2f}%</td></tr>'
-        html += '</tbody></table></div>'
-        st.markdown(html, unsafe_allow_html=True)
-        st.markdown('<div class="rr-legend">특정 요일에 승률이 현저히 낮으면 해당 요일 신호를 스킵하는 필터 고려</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
-
-    # ── 4) SLIPPAGE ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">슬리피지 (Signal vs Entry Price)</div>', unsafe_allow_html=True)
-
-    slip = an_cp[(an_cp['signal_price_f'] > 0) & (an_cp['entry_price_f'] > 0)].copy()
-    if slip.empty:
-        st.markdown('<div class="rr-empty">No slippage data</div>', unsafe_allow_html=True)
-    else:
-        slip['slip_pct'] = (slip['entry_price_f'] - slip['signal_price_f']) / slip['signal_price_f'] * 100
-        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-        html += '<th>Strategy</th><th>Trades</th><th>Avg Slip</th><th>Median</th><th>Max (불리)</th><th>Std Dev</th>'
-        html += '</tr></thead><tbody>'
-        for s in strategies:
-            ss = slip[slip['strategy'] == s]
-            if ss.empty:
-                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
-                continue
-            sl_data = ss['slip_pct']
-            avg_sl = sl_data.mean(); med_sl = sl_data.median()
-            max_sl = sl_data.max()
-            std_sl = sl_data.std() if len(sl_data) > 1 else 0.0
-            sc_c = '#5cc49a' if abs(avg_sl) < 1 else '#b8954a' if abs(avg_sl) < 3 else '#c46b7c'
-            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td>{len(ss)}</td>'
-            html += f'<td style="color:{sc_c};font-weight:600">{avg_sl:+.2f}%</td>'
-            html += f'<td>{med_sl:+.2f}%</td>'
-            html += f'<td class="c-loss">{max_sl:+.2f}%</td>'
-            html += f'<td class="c-muted">{std_sl:.2f}%</td></tr>'
-        html += '</tbody></table></div>'
-        st.markdown(html, unsafe_allow_html=True)
-        st.markdown('<div class="rr-legend">양수 = 시그널가보다 비싸게 매수 (불리) | 음수 = 시그널가보다 싸게 매수 (유리)</div>', unsafe_allow_html=True)
-        if abs(slip['slip_pct'].sum()) < 0.01:
-            st.markdown('<div class="rr-legend" style="color:#4d5b72;font-style:italic">※ 현재 시스템은 시그널가 = 진입가 (애프터마켓 종가 매수). 실거래 시 슬리피지 발생 가능.</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
-
-    # ── 5) WIN/LOSS STREAKS ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">연승·연패 분석 (Streak)</div>', unsafe_allow_html=True)
-
-    streak_df = an_cp.dropna(subset=['close_date_dt']).sort_values('close_date_dt').copy()
-    if len(streak_df) < 2:
-        st.markdown('<div class="rr-empty">Not enough data</div>', unsafe_allow_html=True)
-    else:
-        streak_df['is_win'] = (streak_df[rc] == 'WIN').astype(int)
-
-        def _calc_streaks(series):
-            max_w = max_l = cur_w = cur_l = 0
-            all_w = []; all_l = []
-            for v in series:
-                if v == 1:
-                    cur_w += 1; cur_l = 0; max_w = max(max_w, cur_w)
-                else:
-                    cur_l += 1; cur_w = 0; max_l = max(max_l, cur_l)
-                if cur_w > 0: all_w.append(cur_w)
-                if cur_l > 0: all_l.append(cur_l)
-            avg_w = sum(all_w) / len(all_w) if all_w else 0
-            avg_l = sum(all_l) / len(all_l) if all_l else 0
-            return max_w, max_l, avg_w, avg_l
-
-        o_mw, o_ml, o_aw, o_al = _calc_streaks(streak_df['is_win'])
-        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-        html += '<th>Strategy</th><th>Max 연승</th><th>Max 연패</th><th>Avg 연승</th><th>Avg 연패</th>'
-        html += '</tr></thead><tbody>'
-
-        ml_c = '#c46b7c' if o_ml >= 5 else '#b8954a' if o_ml >= 3 else '#8a9ab5'
-        html += f'<tr style="border-top:2px solid #9a7d4e"><td style="color:#c9a96e;font-weight:700">TOTAL</td>'
-        html += f'<td class="c-win" style="font-weight:700;font-size:1.1em">{o_mw}</td>'
-        html += f'<td style="color:{ml_c};font-weight:700;font-size:1.1em">{o_ml}</td>'
-        html += f'<td class="c-win">{o_aw:.1f}</td><td class="c-loss">{o_al:.1f}</td></tr>'
-
-        for s in strategies:
-            s_streak = streak_df[streak_df['strategy'] == s]
-            if len(s_streak) < 2:
-                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td><td colspan="4" class="c-muted">—</td></tr>'
-                continue
-            s_mw, s_ml, s_aw, s_al = _calc_streaks(s_streak['is_win'])
-            sml_c = '#c46b7c' if s_ml >= 5 else '#b8954a' if s_ml >= 3 else '#8a9ab5'
-            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s, "")}</td>'
-            html += f'<td class="c-win">{s_mw}</td><td style="color:{sml_c};font-weight:600">{s_ml}</td>'
-            html += f'<td class="c-win">{s_aw:.1f}</td><td class="c-loss">{s_al:.1f}</td></tr>'
-        html += '</tbody></table></div>'
-        st.markdown(html, unsafe_allow_html=True)
-        st.markdown('<div class="rr-legend">최대 연패가 크면 자금관리(켈리 기준 등) 재검토 필요 — 심리적 한계선 설정 참고</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
-
-    # ── 6) NEAR-MISS ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">아쉬운 실패 (Near-Miss Analysis)</div>', unsafe_allow_html=True)
-
-    non_wins = an_cp[an_cp[rc].isin(['LOSS', 'EXPIRED'])].copy()
-    if non_wins.empty:
-        st.markdown('<div class="rr-empty">No losses/expirations</div>', unsafe_allow_html=True)
-    else:
-        nm_80 = non_wins[non_wins['max_ach_f'] >= 80]
-        nm_50 = non_wins[(non_wins['max_ach_f'] >= 50) & (non_wins['max_ach_f'] < 80)]
-        nm_low = non_wins[non_wins['max_ach_f'] < 50]
-        total_nw = len(non_wins)
-
-        st.markdown(f'''<div class="rr-stats">
-            <div class="rr-stat"><div class="s-label">Total Loss/Exp</div><div class="s-value" style="color:#c46b7c">{total_nw}</div></div>
-            <div class="rr-stat"><div class="s-label">≥80% 도달 후 실패</div><div class="s-value" style="color:#b8954a">{len(nm_80)}</div></div>
-            <div class="rr-stat"><div class="s-label">50~80% 도달</div><div class="s-value" style="color:#8a9ab5">{len(nm_50)}</div></div>
-            <div class="rr-stat"><div class="s-label">&lt;50% (완전 실패)</div><div class="s-value" style="color:#c46b7c">{len(nm_low)}</div></div>
-        </div>''', unsafe_allow_html=True)
-
-        if not nm_80.empty:
-            nm_rate = len(nm_80) / total_nw * 100
-            st.markdown(f'<div class="rr-legend" style="color:#b8954a">Near-miss rate: {nm_rate:.0f}% — TP의 80% 이상 도달했지만 실패한 비율이 높으면 TP 하향 조정 검토</div>', unsafe_allow_html=True)
-
-            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Result</th><th>Max Ach%</th><th>Result P&L</th><th>Peak</th>'
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th>Strategy</th>'
+            for d in date_order: html += f'<th>{d}</th>'
             html += '</tr></thead><tbody>'
-            for _, row in nm_80.sort_values('max_ach_f', ascending=False).head(20).iterrows():
-                s_ = safe_str(row.get('strategy')); tk_ = safe_str(row.get('ticker'))
-                sd_ = safe_str(row.get('signal_date')); res_ = safe_str(row.get(rc))
-                ma_ = row['max_ach_f']; rp_ = row['result_pct_f']
-                mx_ = safe_str(row.get('max_price'))
-                html += f'<tr><td>{stag(s_)}</td><td style="font-weight:600">{tk_}</td><td>{sd_}</td>'
-                html += f'<td>{result_badge(res_)}</td>'
-                html += f'<td style="color:#b8954a;font-weight:700">{ma_:.0f}%</td>'
-                html += f'<td class="c-loss">{rp_:+.1f}%</td>'
-                html += f'<td>${mx_}</td></tr>'
+            for s in strategies:
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                for d in date_order:
+                    dv = int(det_g.loc[s,d]) if d in det_g.columns else 0
+                    av = int(ach_g.loc[s,d]) if d in ach_g.columns else 0
+                    lv = int(loss_g.loc[s,d]) if d in loss_g.columns else 0
+                    pv = int(prog_g.loc[s,d]) if d in prog_g.columns else 0
+                    html += f'<td>{cell_html(av,dv,lv,pv)}</td>'
+                html += '</tr>'
+            html += '</tbody></table></div>'
+
+            st.markdown(f'''<div class="rr-legend">
+                Last 30 days — <span class="c-win">Green = All TP</span> ·
+                <span class="c-loss">Red = Loss</span> ·
+                <span class="c-partial">Amber = Partial</span> ·
+                <span class="c-pending">Gray = Active</span>
+            </div>{html}''', unsafe_allow_html=True)
+
+    # ── 2) Monthly Matrix ──
+    with h_monthly:
+        if all_records.empty:
+            st.markdown('<div class="rr-empty">No data yet</div>', unsafe_allow_html=True)
+        else:
+            mo = sorted(all_records['month_str'].unique())
+            m_det = all_records.groupby(['strategy','month_str']).size().unstack(fill_value=0)
+            m_win = all_records[all_records['result']=='WIN']
+            m_ach = m_win.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_win.empty else pd.DataFrame(0,index=strategies,columns=mo)
+            m_l = all_records[all_records['result'].isin(['LOSS','EXPIRED'])]
+            m_lg = m_l.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_l.empty else pd.DataFrame(0,index=strategies,columns=mo)
+            m_p = all_records[all_records['result'].isin(['OPEN','PENDING'])]
+            m_pg = m_p.groupby(['strategy','month_str']).size().unstack(fill_value=0) if not m_p.empty else pd.DataFrame(0,index=strategies,columns=mo)
+
+            for s in strategies:
+                for g in [m_det,m_ach,m_lg,m_pg]:
+                    if s not in g.index: g.loc[s]=0
+            for m in mo:
+                for g in [m_det,m_ach,m_lg,m_pg]:
+                    if m not in g.columns: g[m]=0
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr><th>Strategy</th>'
+            for m in mo: html += f'<th>{m}</th>'
+            html += '</tr></thead><tbody>'
+            for s in strategies:
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                for m in mo:
+                    dv=int(m_det.loc[s,m]) if m in m_det.columns else 0
+                    av=int(m_ach.loc[s,m]) if m in m_ach.columns else 0
+                    lv=int(m_lg.loc[s,m]) if m in m_lg.columns else 0
+                    pv=int(m_pg.loc[s,m]) if m in m_pg.columns else 0
+                    html += f'<td>{cell_html(av,dv,lv,pv)}</td>'
+                html += '</tr>'
             html += '</tbody></table></div>'
             st.markdown(html, unsafe_allow_html=True)
 
-    st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+    # ── 3) Strategy Win Rates ──
+    with h_winrate:
+        html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+        html += '<th>Strategy</th><th>Target</th><th>Total</th><th>Closed</th>'
+        html += '<th>Win</th><th>Loss</th><th>Expired</th><th>Active</th>'
+        html += '<th>Win Rate</th><th>Backtest</th><th>Avg P&L</th>'
+        html += '</tr></thead><tbody>'
 
-    # ── 7) CONCURRENT POSITIONS ──
-    st.markdown('<div class="rr-legend" style="color:#c9a96e;font-size:0.95em;margin-bottom:12px">동시 포지션 수 (Concurrent Positions)</div>', unsafe_allow_html=True)
+        for s in strategies:
+            s_all = all_records[all_records['strategy']==s] if not all_records.empty else pd.DataFrame()
+            s_cl = closed_pos[closed_pos['strategy']==s] if not closed_pos.empty and 'strategy' in closed_pos.columns else pd.DataFrame()
+            s_op = open_pos[(open_pos['strategy']==s)&(open_pos['status'].isin(['OPEN','PENDING']))] if not open_pos.empty and 'strategy' in open_pos.columns and 'status' in open_pos.columns else pd.DataFrame()
 
-    pos_events = []
-    for _, row in an_cp.iterrows():
-        ed = row['entry_date_dt']
-        cd = row['close_date_dt']
-        if pd.isna(ed):
-            continue
-        pos_events.append({'open': ed, 'close': cd if pd.notna(cd) else pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+            nd=len(s_all); nc=len(s_cl)
+            nw = len(s_cl[s_cl[rs_col]=='WIN']) if nc>0 else 0
+            nl = len(s_cl[s_cl[rs_col]=='LOSS']) if nc>0 else 0
+            ne = len(s_cl[s_cl[rs_col]=='EXPIRED']) if nc>0 else 0
+            na = len(s_op)
+            sw = (nw/nc*100) if nc>0 else 0
+            avg = 0
+            if nc>0 and 'result_pct' in s_cl.columns:
+                avg = safe_float(pd.to_numeric(s_cl['result_pct'],errors='coerce').mean())
 
-    if open_pos is not None and not open_pos.empty and 'entry_date' in open_pos.columns:
-        for _, row in open_pos.iterrows():
-            ed = pd.to_datetime(row.get('entry_date', ''), errors='coerce')
-            if pd.isna(ed):
-                continue
-            pos_events.append({'open': ed, 'close': pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+            wrc = 'c-win' if sw>=80 else 'c-partial' if sw>0 else 'c-none'
+            rc = 'c-win' if avg>0 else 'c-loss' if avg<0 else 'c-none'
 
-    if not pos_events:
-        st.markdown('<div class="rr-empty">No position data</div>', unsafe_allow_html=True)
-    else:
-        all_dates = set()
-        for pe in pos_events:
-            try:
-                dr = pd.date_range(pe['open'], pe['close'], freq='B')
-                all_dates.update(dr)
-            except Exception:
-                pass
-        if all_dates:
-            all_dates = sorted(all_dates)
-            daily_counts = []
-            for dt in all_dates:
-                cnt = sum(1 for pe in pos_events if pe['open'] <= dt <= pe['close'])
-                daily_counts.append({'date': dt, 'count': cnt})
-            conc_df = pd.DataFrame(daily_counts).set_index('date')
+            html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+            html += f'<td style="color:var(--gold);font-weight:600">{STRAT_TP.get(s,"")}</td>'
+            html += f'<td>{nd}</td><td>{nc if nc>0 else "—"}</td>'
+            html += f'<td class="c-win">{nw if nw>0 else "—"}</td>'
+            html += f'<td class="{"c-loss" if nl>0 else "c-none"}">{nl if nl>0 else "—"}</td>'
+            html += f'<td class="{"c-partial" if ne>0 else "c-none"}">{ne if ne>0 else "—"}</td>'
+            html += f'<td class="{"st-open" if na>0 else "c-none"}">{na if na>0 else "—"}</td>'
+            html += f'<td class="{wrc}">{sw:.1f}%</td>' if nc>0 else '<td class="c-none">—</td>'
+            html += f'<td class="c-muted">{STRAT_BT_WR.get(s,"—")}</td>'
+            html += f'<td class="{rc}">{avg:+.1f}%</td>' if nc>0 else '<td class="c-none">—</td>'
+            html += '</tr>'
 
-            max_conc = conc_df['count'].max()
-            avg_conc = conc_df['count'].mean()
-            max_date = conc_df['count'].idxmax()
-            max_date_s = max_date.strftime('%Y-%m-%d') if hasattr(max_date, 'strftime') else str(max_date)
+        html += '</tbody></table></div>'
+        st.markdown(html, unsafe_allow_html=True)
 
-            mc_c = '#c46b7c' if max_conc >= 10 else '#b8954a' if max_conc >= 5 else '#5cc49a'
-            st.markdown(f'''<div class="rr-stats">
-                <div class="rr-stat"><div class="s-label">Max Concurrent</div><div class="s-value" style="color:{mc_c}">{max_conc}</div></div>
-                <div class="rr-stat"><div class="s-label">Avg Concurrent</div><div class="s-value" style="color:#8a9ab5">{avg_conc:.1f}</div></div>
-                <div class="rr-stat"><div class="s-label">Peak Date</div><div class="s-value" style="color:#8a9ab5;font-size:0.8em">{max_date_s}</div></div>
-            </div>''', unsafe_allow_html=True)
+    # ── 4) Active Positions ──
+    with h_active:
+        active = pd.DataFrame()
+        if not open_pos.empty and 'status' in open_pos.columns:
+            active = open_pos[open_pos['status'].isin(['PENDING','OPEN'])]
+        if not active.empty:
+            fa1, fa2, _ = st.columns([2,2,6])
+            with fa1:
+                astrats = sorted(active['strategy'].dropna().unique()) if 'strategy' in active.columns else []
+                af = st.selectbox('Strategy', ['All']+astrats, key='af')
+            with fa2:
+                asort = st.selectbox('Sort', ['Date (New)','Date (Old)','P&L High','P&L Low','Ach High'], key='as')
+            if af != 'All': active = active[active['strategy']==af]
+            if asort=='Date (New)': active=active.sort_values('signal_date',ascending=False)
+            elif asort=='Date (Old)': active=active.sort_values('signal_date',ascending=True)
+            elif asort in ('P&L High','P&L Low'):
+                active['_s']=pd.to_numeric(active.get('change_pct',0),errors='coerce').fillna(0)
+                active=active.sort_values('_s',ascending=(asort=='P&L Low'))
+            elif asort=='Ach High':
+                active['_s']=pd.to_numeric(active.get('achievement_pct',0),errors='coerce').fillna(0)
+                active=active.sort_values('_s',ascending=False)
 
-            st.markdown('<div class="rr-legend">동시 포지션 수 추이 — 자금 배분 및 리스크 노출 관리에 활용</div>', unsafe_allow_html=True)
-            st.area_chart(conc_df, color=['#c9a96e'])
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Entry</th>'
+            html += '<th>Price</th><th>Current</th><th>P&L</th>'
+            html += '<th>TP</th><th>Peak</th><th>Peak Date</th>'
+            html += '<th>Achievement</th><th>Remaining</th>'
+            html += '<th>Days</th><th>Status</th>'
+            html += '</tr></thead><tbody>'
+
+            for _, row in active.iterrows():
+                s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
+                sig_dt=safe_str(row.get('signal_date')); status=safe_str(row.get('status'))
+                is_p = (status=='PENDING')
+                sp = safe_float(safe_str(row.get('signal_price')))
+                ep_raw=safe_str(row.get('entry_price')); cp_raw=safe_str(row.get('current_price'))
+                tp_raw=safe_str(row.get('tp_price')); mx_raw=safe_str(row.get('max_price'))
+                mx_dt=safe_str(row.get('max_price_date'))
+                ach_raw=safe_str(row.get('achievement_pct')); chg_raw=safe_str(row.get('change_pct'))
+                dh=safe_str(row.get('days_held')); mh_raw=safe_str(row.get('max_hold'))
+                mh = mh_raw if mh_raw!='—' else str(STRAT_MAX_HOLD.get(s,''))
+
+                if is_p:
+                    ep_h=f'<span class="c-muted">${sp:.2f}</span>' if sp>0 else '<span class="c-muted">—</span>'
+                    cp_h=ep_h; chg_h='<span class="c-muted">WAIT</span>'
+                    mx_h='<span class="c-muted">—</span>'; mx_dt_h='<span class="c-muted">—</span>'
+                    ach_h='<span class="c-muted">—</span>'
+                    tp_f=safe_float(tp_raw)
+                    rem_h = f'<span class="c-muted">~{STRAT_TP.get(s,"")}</span>'
+                    days_h=f'<span class="c-muted">0/{mh}</span>'
+                    ent_dt_h='<span class="c-muted">WAIT</span>'
+                else:
+                    ent_dt_h=safe_str(row.get('entry_date'))
+                    if ep_raw=='—' and sp>0: ep_raw=f'{sp:.2f}'
+                    ep_h = f'${ep_raw}' if ep_raw!='—' else '—'
+                    if cp_raw=='—':
+                        fb=safe_float(ep_raw) if ep_raw!='—' else sp
+                        cp_h=f'<span class="c-muted">${fb:.2f}</span>' if fb>0 else '—'
+                        cp_raw=str(fb) if fb>0 else '—'
+                    else: cp_h=f'${cp_raw}'
+                    tp_h=f'${tp_raw}' if tp_raw!='—' else '—'
+                    mx_h=f'${mx_raw}' if mx_raw!='—' else '<span class="c-muted">—</span>'
+                    mx_dt_h=mx_dt
+                    chg_h=chg_html(chg_raw)
+
+                    ach_val=safe_float(ach_raw)
+                    ac='var(--green-bright)' if ach_val>=100 else 'var(--amber)' if ach_val>=50 else 'var(--red-bright)'
+                    ach_h=progress_bar(ach_val,ac) if ach_raw!='—' and ach_val>0 else '<span class="c-muted">—</span>'
+
+                    cf=safe_float(cp_raw); tf=safe_float(tp_raw)
+                    if cf>0 and tf>0:
+                        rp=(tf-cf)/cf*100
+                        rem_h=f'<span style="color:var(--blue);font-weight:500">+{rp:.1f}%</span>' if rp>0 else '<span class="c-win">HIT</span>'
+                    else: rem_h='—'
+                    # Expiration warning: color days based on usage ratio
+                    dh_i = safe_float(dh); mh_i = safe_float(mh)
+                    if dh!='—' and mh_i > 0:
+                        usage = dh_i / mh_i
+                        if usage >= 0.8:
+                            days_h = f'<span style="color:var(--red-bright);font-weight:700">{dh}/{mh}</span>'
+                        elif usage >= 0.6:
+                            days_h = f'<span style="color:var(--amber);font-weight:600">{dh}/{mh}</span>'
+                        else:
+                            days_h = f'{dh}/{mh}'
+                    else:
+                        days_h = f'{dh}/{mh}' if dh!='—' else '—'
+
+                st_cls = 'st-open' if status=='OPEN' else 'st-pending'
+                st_txt = 'OPEN' if status=='OPEN' else 'WAIT'
+
+                html += f'<tr><td>{stag(s)}</td><td style="font-weight:600;color:var(--text-primary)">{tk}</td>'
+                html += f'<td>{sig_dt}</td><td>{ent_dt_h}</td><td>{ep_h}</td><td>{cp_h}</td><td>{chg_h}</td>'
+                html += f'<td>{tp_raw if tp_raw!="—" else "—"}</td><td>{mx_h}</td><td>{mx_dt_h}</td>'
+                html += f'<td>{ach_h}</td><td>{rem_h}</td><td>{days_h}</td>'
+                html += f'<td class="{st_cls}">{st_txt}</td></tr>'
+
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+            st.markdown('<div class="rr-legend">Achievement = (Peak - Entry) / (TP - Entry) × 100 | Remaining = % from current to TP</div>', unsafe_allow_html=True)
+
+            # Expanders for detail
+            for _, row in active.iterrows():
+                tk=safe_str(row.get('ticker')); s=safe_str(row.get('strategy'))
+                status=safe_str(row.get('status')); st_kr='OPEN' if status=='OPEN' else 'WAIT'
+                with st.expander(f"[{STRAT_TAB.get(s, s)}] {tk} — {st_kr}", expanded=False):
+                    d1,d2,d3=st.columns(3)
+                    sp=safe_float(safe_str(row.get('signal_price')))
+                    ep=safe_float(safe_str(row.get('entry_price')))
+                    cp=safe_float(safe_str(row.get('current_price')))
+                    tp=safe_float(safe_str(row.get('tp_price')))
+                    sl=safe_float(safe_str(row.get('sl_price')))
+                    mx=safe_float(safe_str(row.get('max_price')))
+                    mn=safe_float(safe_str(row.get('min_price')))
+                    cv=safe_float(safe_str(row.get('change_pct')))
+                    av=safe_float(safe_str(row.get('achievement_pct')))
+                    dh=safe_str(row.get('days_held'))
+                    mh_r=safe_str(row.get('max_hold'))
+                    mh=mh_r if mh_r!='—' else str(STRAT_MAX_HOLD.get(s,''))
+                    with d1:
+                        st.markdown(f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)} ({STRAT_KR.get(s,'')})\n- Date: {safe_str(row.get('signal_date'))}\n- Price: ${sp:.2f}" if sp>0 else f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)}\n- Date: {safe_str(row.get('signal_date'))}\n- Price: —")
+                    with d2:
+                        if status=='PENDING':
+                            st.markdown(f"**Entry**\n- Status: Waiting\n- TP: ${tp:.2f}" + (f"\n- SL: ${sl:.2f}" if sl>0 else "\n- SL: None"))
+                        else:
+                            st.markdown(f"**Position**\n- Entry: ${ep:.2f}\n- Current: ${cp:.2f}\n- P&L: {cv:+.1f}%")
+                    with d3:
+                        if status!='PENDING':
+                            st.markdown(f"**Tracking**\n- Days: {dh}/{mh}\n- Peak: ${mx:.2f}\n- Low: ${mn:.2f}\n- Achievement: {av:.0f}%")
+                        else:
+                            st.markdown(f"**Tracking**\n- Days: 0/{mh}\n- Target: {STRAT_TP.get(s,'')}")
         else:
-            st.markdown('<div class="rr-empty">No date range data</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rr-empty">No active positions</div>', unsafe_allow_html=True)
 
+    # ── 5) Closed Positions ──
+    with h_closed_detail:
+        if not closed_pos.empty and 'strategy' in closed_pos.columns:
+            cp_s = closed_pos.copy()
+            fc1,fc2,fc3,_=st.columns([2,2,2,4])
+            with fc1:
+                cs=sorted(cp_s['strategy'].dropna().unique())
+                cf=st.selectbox('Strategy',['All']+list(cs),key='cf')
+            with fc2:
+                ro=['All']
+                if rs_col in cp_s.columns: ro+=sorted(cp_s[rs_col].dropna().unique())
+                cr=st.selectbox('Result',ro,key='cr')
+            with fc3:
+                cso=st.selectbox('Sort',['Close (New)','Close (Old)','P&L High','P&L Low'],key='cso')
+            if cf!='All': cp_s=cp_s[cp_s['strategy']==cf]
+            if cr!='All': cp_s=cp_s[cp_s[rs_col]==cr]
+            cp_s['_cd']=pd.to_datetime(cp_s.get('close_date',''),errors='coerce')
+            if cso=='Close (New)': cp_s=cp_s.sort_values('_cd',ascending=False)
+            elif cso=='Close (Old)': cp_s=cp_s.sort_values('_cd',ascending=True)
+            elif cso in ('P&L High','P&L Low'):
+                cp_s['_rp']=pd.to_numeric(cp_s.get('result_pct',0),errors='coerce').fillna(0)
+                cp_s=cp_s.sort_values('_rp',ascending=(cso=='P&L Low'))
 
-# ============================================================================
-# PAGE LAYOUT
-# ============================================================================
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Entry</th><th>Price</th>'
+            html += '<th>Result</th><th>Close</th><th>Close $</th><th>P&L</th>'
+            html += '<th>TP Hit</th><th>Peak</th><th>Peak Date</th><th>Ach%</th>'
+            html += '</tr></thead><tbody>'
 
-def main():
-    """Main page layout"""
-    # Page config
-    st.set_page_config(
-        page_title="Surge Scanner",
-        page_icon="📈",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
+            for _, row in cp_s.iterrows():
+                s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
+                sig_dt=safe_str(row.get('signal_date')); ent_dt=safe_str(row.get('entry_date'))
+                ent_pr=safe_str(row.get('entry_price')); result=safe_str(row.get(rs_col,'status'))
+                close_dt=safe_str(row.get('close_date')); close_pr=safe_str(row.get('close_price'))
+                rp_raw=safe_str(row.get('result_pct')); tp_hit=safe_str(row.get('tp_hit_date'))
+                mx=safe_str(row.get('max_price')); mx_dt=safe_str(row.get('max_price_date'))
+                ma_raw=safe_str(row.get('max_achievement_pct'))
 
-    # Inject custom CSS
-    st.html(get_custom_css())
+                res_h=result_badge(result)
+                rp_h=chg_html(rp_raw)
 
-    # Hide streamlit default UI elements
-    st.html("""
-    <style>
-        .stDeployButton { display: none; }
-        header[data-testid="stHeader"] { display: none; }
-        footer { display: none; }
-        #MainMenu { display: none; }
-    </style>
-    """)
+                tp_h = f'<span class="c-win">{tp_hit}</span>' if tp_hit!='—' else '<span class="c-muted">—</span>'
 
-    # Page sections
-    render_header()
-    render_todays_signals()
-    render_active_positions()
-    render_recent_results()
-    render_performance()
+                if tp_hit=='—' and mx!='—':
+                    mx_h=f'<span style="color:var(--amber);font-weight:600">${mx}</span>'
+                    mx_dt_h=f'<span style="color:var(--amber)">{mx_dt}</span>'
+                else:
+                    mx_h=f'${mx}' if mx!='—' else '—'
+                    mx_dt_h=mx_dt
 
-    # Footer
-    st.html(f"""
-    <div style="text-align: center; padding: 2rem 1rem; color: {COLOR_PALETTE['text_muted']}; font-size: 0.8rem; margin-top: 2rem; border-top: 1px solid {COLOR_PALETTE['border_subtle']};">
-        Surge Scanner · Last updated {datetime.now(tz=KST).strftime('%Y-%m-%d %H:%M:%S')} KST
-    </div>
-    """)
+                ma_val=safe_float(ma_raw)
+                if ma_raw!='—' and ma_val>0:
+                    ac='var(--green-bright)' if ma_val>=100 else 'var(--amber)' if ma_val>=50 else 'var(--red-bright)'
+                    ma_h=f'<span style="color:{ac};font-weight:600">{ma_val:.0f}%</span>'
+                else: ma_h='—'
 
-    # ── Sidebar ──
-    with st.sidebar:
-        st.markdown(f'''<div style="text-align:center;padding:16px 0">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:1.2em;color:{COLOR_PALETTE['text_primary']};letter-spacing:0.1em">SURGE</div>
-            <div style="font-family:'Cormorant Garamond',serif;font-size:0.9em;color:{COLOR_PALETTE['gold']};letter-spacing:0.15em">SCANNER</div>
-        </div>''', unsafe_allow_html=True)
-        st.divider()
+                ep_h=f'${ent_pr}' if ent_pr!='—' else '—'
+                cp_h=f'${close_pr}' if close_pr!='—' else '—'
 
-        st.markdown("""
+                html += f'<tr><td>{stag(s)}</td><td style="font-weight:600">{tk}</td>'
+                html += f'<td>{sig_dt}</td><td>{ent_dt}</td><td>{ep_h}</td>'
+                html += f'<td>{res_h}</td><td>{close_dt}</td><td>{cp_h}</td><td>{rp_h}</td>'
+                html += f'<td>{tp_h}</td><td>{mx_h}</td><td>{mx_dt_h}</td><td>{ma_h}</td></tr>'
+
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="rr-empty">No closed positions</div>', unsafe_allow_html=True)
+
+    # ── 6) By Ticker ──
+    with h_ticker:
+        tk_rows=[]
+        if not closed_pos.empty and 'ticker' in closed_pos.columns:
+            for _, row in closed_pos.iterrows():
+                result=safe_str(row.get(rs_col,'status'))
+                tk_rows.append({'ticker':safe_str(row.get('ticker')),'strategy':safe_str(row.get('strategy')),
+                    'signal_date':safe_str(row.get('signal_date')),'entry_date':safe_str(row.get('entry_date')),
+                    'entry_price':safe_str(row.get('entry_price')),'tp_price':safe_str(row.get('tp_price')),
+                    'current_price':safe_str(row.get('close_price')),'max_price':safe_str(row.get('max_price')),
+                    'max_price_date':safe_str(row.get('max_price_date')),'result':result,
+                    'result_pct':safe_str(row.get('result_pct')),'tp_hit_date':safe_str(row.get('tp_hit_date')),
+                    'max_ach':safe_str(row.get('max_achievement_pct')),'close_date':safe_str(row.get('close_date')),
+                    'is_open':False,'signal_price':'—'})
+        if not open_pos.empty and 'ticker' in open_pos.columns:
+            for _, row in open_pos.iterrows():
+                status=safe_str(row.get('status'))
+                tk_rows.append({'ticker':safe_str(row.get('ticker')),'strategy':safe_str(row.get('strategy')),
+                    'signal_date':safe_str(row.get('signal_date')),'entry_date':safe_str(row.get('entry_date')),
+                    'entry_price':safe_str(row.get('entry_price')),'signal_price':safe_str(row.get('signal_price')),
+                    'tp_price':safe_str(row.get('tp_price')),'current_price':safe_str(row.get('current_price')),
+                    'max_price':safe_str(row.get('max_price')),'max_price_date':safe_str(row.get('max_price_date')),
+                    'result':status,'result_pct':safe_str(row.get('change_pct')),'tp_hit_date':'—',
+                    'max_ach':safe_str(row.get('achievement_pct')),'close_date':'—','is_open':True})
+
+        if not tk_rows:
+            st.markdown('<div class="rr-empty">No tracked tickers</div>', unsafe_allow_html=True)
+        else:
+            ft1,ft2,_=st.columns([2,2,6])
+            with ft1:
+                tks=sorted(set(r['strategy'] for r in tk_rows if r['strategy']!='—'))
+                tf=st.selectbox('Strategy',['All']+tks,key='tf')
+            with ft2:
+                ts=st.selectbox('Sort',['Recent','Name','Count','Win Rate'],key='ts')
+            filtered = tk_rows if tf=='All' else [r for r in tk_rows if r['strategy']==tf]
+            tg=defaultdict(list)
+            for r in filtered:
+                if r['ticker']!='—': tg[r['ticker']].append(r)
+            for t in tg: tg[t].sort(key=lambda x:x['signal_date'],reverse=True)
+
+            if ts=='Recent': st_list=sorted(tg.items(),key=lambda x:x[1][0]['signal_date'] if x[1] else '',reverse=True)
+            elif ts=='Name': st_list=sorted(tg.items(),key=lambda x:x[0])
+            elif ts=='Count': st_list=sorted(tg.items(),key=lambda x:len(x[1]),reverse=True)
+            elif ts=='Win Rate':
+                def _wr(item):
+                    w=sum(1 for p in item[1] if p['result']=='WIN')
+                    c=sum(1 for p in item[1] if p['result'] in ('WIN','LOSS','EXPIRED'))
+                    return (w/c*100) if c>0 else 0
+                st_list=sorted(tg.items(),key=_wr,reverse=True)
+            else: st_list=sorted(tg.items(),key=lambda x:x[1][0]['signal_date'] if x[1] else '',reverse=True)
+
+            st.markdown(f'<div class="rr-legend">{len(st_list)} tickers</div>', unsafe_allow_html=True)
+
+            html=''
+            for tk,positions in st_list:
+                nt=len(positions)
+                nw=sum(1 for p in positions if p['result']=='WIN')
+                nl=sum(1 for p in positions if p['result']=='LOSS')
+                ne=sum(1 for p in positions if p['result']=='EXPIRED')
+                na=sum(1 for p in positions if p['result'] in ('OPEN','PENDING'))
+                nc=nw+nl+ne
+                tw=(nw/nc*100) if nc>0 else 0
+                badges=' '.join(stag(s_) for s_ in sorted(set(p['strategy'] for p in positions if p['strategy']!='—')))
+                wc='var(--green-bright)' if tw>=80 else 'var(--amber)' if tw>0 else 'var(--text-muted)'
+
+                parts=[]
+                if nw>0: parts.append(f'<span class="c-win">{nw}W</span>')
+                if nl>0: parts.append(f'<span class="c-loss">{nl}L</span>')
+                if ne>0: parts.append(f'<span class="c-partial">{ne}E</span>')
+                if na>0: parts.append(f'<span class="st-open">{na}A</span>')
+                sm=' / '.join(parts) if parts else '—'
+
+                html += f'''<div class="tk-header">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="tk-name">{tk}</span>{badges}
+                    </div>
+                    <div class="tk-meta"><span>{nt}</span><span>{sm}</span>
+                        <span style="color:{wc};font-weight:600">{tw:.0f}%</span>
+                    </div>
+                </div>'''
+
+                html += '<table class="rr-table" style="margin-bottom:0"><thead><tr>'
+                html += '<th>Strat</th><th>Signal</th><th>Entry</th><th>Price</th>'
+                html += '<th>Result</th><th>P&L</th><th>TP Hit</th><th>Peak</th><th>Peak Date</th><th>Ach%</th>'
+                html += '</tr></thead><tbody>'
+
+                for p in positions:
+                    s_=p['strategy']; res=p['result']; rp=p['result_pct']
+                    tp_hit=p['tp_hit_date']; mx=p['max_price']; mx_dt=p['max_price_date']; ma=p['max_ach']
+                    ep=p['entry_price']; sig_pr=p.get('signal_price','—'); sp_f=safe_float(sig_pr)
+                    is_pend=(res=='PENDING')
+
+                    if is_pend:
+                        ed_h='<span class="c-muted">WAIT</span>'
+                        ep_h=f'<span class="c-muted">${sp_f:.2f}</span>' if sp_f>0 else '<span class="c-muted">—</span>'
+                        rp_h='<span class="c-muted">—</span>'; tp_h='<span class="c-muted">—</span>'
+                        mx_h='<span class="c-muted">—</span>'; mxd_h='<span class="c-muted">—</span>'
+                        ach_h='<span class="c-muted">—</span>'
+                    else:
+                        ed_h=p['entry_date'] if p['entry_date']!='—' else '<span class="c-muted">—</span>'
+                        if ep=='—' and sp_f>0: ep=f'{sp_f:.2f}'
+                        ep_h=f'${ep}' if ep!='—' else '<span class="c-muted">—</span>'
+                        rp_h=chg_html(rp)
+                        tp_h=f'<span class="c-win">{tp_hit}</span>' if tp_hit!='—' else '<span class="c-muted">—</span>'
+                        if mx!='—':
+                            if tp_hit=='—':
+                                mx_h=f'<span style="color:var(--amber);font-weight:600">${mx}</span>'
+                                mxd_h=f'<span style="color:var(--amber)">{mx_dt}</span>'
+                            else: mx_h=f'${mx}'; mxd_h=mx_dt
+                        else: mx_h='<span class="c-muted">—</span>'; mxd_h='<span class="c-muted">—</span>'
+                        mav=safe_float(ma)
+                        if ma!='—' and mav>0:
+                            ac='var(--green-bright)' if mav>=100 else 'var(--amber)' if mav>=50 else 'var(--red-bright)'
+                            ach_h=progress_bar(mav,ac)
+                        else: ach_h='<span class="c-muted">—</span>'
+
+                    html += f'<tr><td>{stag(s_)}</td><td>{p["signal_date"]}</td><td>{ed_h}</td><td>{ep_h}</td>'
+                    html += f'<td>{result_badge(res)}</td><td>{rp_h}</td><td>{tp_h}</td>'
+                    html += f'<td>{mx_h}</td><td>{mxd_h}</td><td>{ach_h}</td></tr>'
+                html += '</tbody></table>'
+
+            st.markdown(html, unsafe_allow_html=True)
+
+    # ── 7) P&L Chart ──
+    with h_pnl:
+        if closed_pos.empty or 'close_date' not in closed_pos.columns or 'result_pct' not in closed_pos.columns:
+            st.markdown('<div class="rr-empty">No closed positions for P&L</div>', unsafe_allow_html=True)
+        else:
+            pnl_df = closed_pos[['strategy','close_date','result_pct']].copy()
+            pnl_df['result_pct']=pd.to_numeric(pnl_df['result_pct'],errors='coerce')
+            pnl_df=pnl_df.dropna(subset=['result_pct','close_date'])
+            pnl_df['close_date']=pd.to_datetime(pnl_df['close_date'],errors='coerce')
+            pnl_df=pnl_df.dropna(subset=['close_date']).sort_values('close_date')
+
+            if pnl_df.empty:
+                st.markdown('<div class="rr-empty">No valid P&L data</div>', unsafe_allow_html=True)
+            else:
+                strats_data=sorted(pnl_df['strategy'].unique())
+                sc={'A':'#4a9e7d','B':'#4a7a9e','C':'#b8954a','D':'#9e4a5a','E':'#7a5aaf'}
+
+                chart_data=pd.DataFrame()
+                for s in strats_data:
+                    sd=pnl_df[pnl_df['strategy']==s].copy().sort_values('close_date')
+                    sd[s]=sd['result_pct'].cumsum()
+                    daily=sd.groupby('close_date')[s].last()
+                    chart_data=daily.to_frame() if chart_data.empty else chart_data.join(daily,how='outer')
+
+                total=pnl_df.sort_values('close_date').copy()
+                total['Total']=total['result_pct'].cumsum()
+                td=total.groupby('close_date')['Total'].last()
+                chart_data=chart_data.join(td,how='outer').sort_index().ffill().fillna(0)
+
+                def calc_mdd(cs):
+                    # Prepend 0 as starting point so initial losses count as drawdown
+                    start_idx = cs.index[0] - pd.Timedelta(days=1) if len(cs) > 0 else cs.index[0]
+                    cs0 = pd.concat([pd.Series([0.0], index=[start_idx]), cs])
+                    pk=cs0.cummax(); dd=cs0-pk; mv=dd.min()
+                    if mv==0: return 0,None,None,pd.Series(0,index=cs.index)
+                    me=dd.idxmin(); ms=cs0.loc[:me].idxmax()
+                    # Return dd aligned to original index (drop the prepended zero)
+                    return mv,ms,me,dd.iloc[1:]
+
+                tc=chart_data['Total'] if 'Total' in chart_data.columns else pd.Series(dtype=float)
+                tm,tms,tme,tdd = calc_mdd(tc) if not tc.empty else (0,None,None,pd.Series(dtype=float))
+
+                smdd={}
+                for s in strats_data:
+                    if s in chart_data.columns:
+                        sv,ss,se,sd=calc_mdd(chart_data[s])
+                        smdd[s]={'mdd':sv,'start':ss,'end':se,'dd':sd}
+
+                tp=pnl_df['result_pct'].sum(); ap=pnl_df['result_pct'].mean()
+                nt=len(pnl_df); nw_profit=len(pnl_df[pnl_df['result_pct']>0])
+                tw=(nw_profit/nt*100) if nt>0 else 0
+                tc_='var(--green-bright)' if tp>0 else 'var(--red-bright)' if tp<0 else 'var(--text-muted)'
+                mc_='var(--red-bright)' if tm<-5 else 'var(--amber)' if tm<0 else 'var(--text-muted)'
+                wc_='var(--green-bright)' if tw>=80 else 'var(--amber)' if tw>0 else 'var(--text-muted)'
+
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Cumulative P&L</div><div class="s-value" style="color:{tc_}">{tp:+.1f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Avg per Trade</div><div class="s-value" style="color:{tc_}">{ap:+.2f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Trades</div><div class="s-value" style="color:var(--text-secondary)">{nt}</div></div>
+                    <div class="rr-stat"><div class="s-label">Profit Rate</div><div class="s-value" style="color:{wc_}">{tw:.0f}%</div></div>
+                    <div class="rr-stat"><div class="s-label">Max Drawdown</div><div class="s-value" style="color:{mc_}">{tm:.1f}%</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if tms is not None and tme is not None:
+                    ms_s=tms.strftime('%Y-%m-%d') if hasattr(tms,'strftime') else str(tms)
+                    me_s=tme.strftime('%Y-%m-%d') if hasattr(tme,'strftime') else str(tme)
+                    st.markdown(f'<div class="rr-legend" style="color:var(--red-bright)">MDD Period: {ms_s} → {me_s} ({tm:.1f}%p)</div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="rr-legend">Cumulative P&L by Strategy + Total</div>', unsafe_allow_html=True)
+                cl=[sc.get(c,'#c9a96e') if c!='Total' else '#c9a96e' for c in chart_data.columns]
+                st.line_chart(chart_data, color=cl if cl else None)
+
+                st.markdown('<div class="rr-legend" style="margin-top:16px">Drawdown — 0% = Peak, Negative = Loss from Peak</div>', unsafe_allow_html=True)
+                dd_c=pd.DataFrame()
+                for s in strats_data:
+                    if s in smdd: dd_c[s]=smdd[s]['dd']
+                if not tdd.empty: dd_c['Total']=tdd
+                dd_c=dd_c.sort_index().ffill().fillna(0)
+                dcl=[sc.get(c,'#c9a96e') if c!='Total' else '#c9a96e' for c in dd_c.columns]
+                st.area_chart(dd_c, color=dcl if dcl else None)
+
+                # Risk summary table
+                st.markdown('<div class="rr-legend" style="margin-top:16px">Strategy Risk Summary</div>', unsafe_allow_html=True)
+                sh='<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                sh+='<th>Strategy</th><th>Trades</th><th>Win%</th><th>Cum P&L</th><th>Avg</th>'
+                sh+='<th>Best</th><th>Worst</th><th style="color:var(--red-bright)">MDD</th><th>MDD Period</th>'
+                sh+='</tr></thead><tbody>'
+
+                for s in strats_data:
+                    sp=pnl_df[pnl_df['strategy']==s]['result_pct']
+                    sn=len(sp); sw=len(sp[sp>0]); sr=(sw/sn*100) if sn>0 else 0
+                    st_=sp.sum(); sa=sp.mean(); smx=sp.max(); smn=sp.min()
+                    stc='var(--green-bright)' if st_>0 else 'var(--red-bright)' if st_<0 else 'var(--text-muted)'
+                    swc='c-win' if sr>=80 else 'c-partial' if sr>0 else 'c-none'
+                    si=smdd.get(s,{})
+                    sm=si.get('mdd',0); sms=si.get('start'); sme=si.get('end')
+                    smc='var(--red-bright)' if sm<-5 else 'var(--amber)' if sm<0 else 'var(--text-muted)'
+                    if sms and sme:
+                        msr=f'{sms.strftime("%m/%d") if hasattr(sms,"strftime") else str(sms)[:5]}→{sme.strftime("%m/%d") if hasattr(sme,"strftime") else str(sme)[:5]}'
+                    else: msr='—'
+
+                    sh+=f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{sn}</td>'
+                    sh+=f'<td class="{swc}">{sr:.0f}%</td>'
+                    sh+=f'<td style="color:{stc};font-weight:600">{st_:+.1f}%</td>'
+                    sh+=f'<td style="color:{stc}">{sa:+.2f}%</td>'
+                    sh+=f'<td class="c-win">{smx:+.1f}%</td>'
+                    sh+=f'<td class="c-loss">{smn:+.1f}%</td>'
+                    sh+=f'<td style="color:{smc};font-weight:600">{sm:.1f}%</td>'
+                    sh+=f'<td class="c-muted">{msr}</td></tr>'
+
+                sh+='</tbody></table></div>'
+                st.markdown(sh, unsafe_allow_html=True)
+
+    # ── 8) Analytics ──
+    with h_analytics:
+        if closed_pos.empty or len(closed_pos) < 2:
+            st.markdown('<div class="rr-empty">Not enough closed positions for analytics</div>', unsafe_allow_html=True)
+        else:
+            an_cp = closed_pos.copy()
+            an_cp['signal_date_dt'] = pd.to_datetime(an_cp['signal_date'], errors='coerce')
+            an_cp['entry_date_dt'] = pd.to_datetime(an_cp.get('entry_date', ''), errors='coerce')
+            an_cp['close_date_dt'] = pd.to_datetime(an_cp.get('close_date', ''), errors='coerce')
+            an_cp['tp_hit_date_dt'] = pd.to_datetime(an_cp.get('tp_hit_date', ''), errors='coerce')
+            an_cp['result_pct_f'] = pd.to_numeric(an_cp.get('result_pct', 0), errors='coerce').fillna(0)
+            an_cp['days_held_f'] = pd.to_numeric(an_cp.get('days_held', 0), errors='coerce').fillna(0)
+            an_cp['signal_price_f'] = pd.to_numeric(an_cp.get('signal_price', 0), errors='coerce').fillna(0)
+            an_cp['entry_price_f'] = pd.to_numeric(an_cp.get('entry_price', 0), errors='coerce').fillna(0)
+            an_cp['max_ach_f'] = pd.to_numeric(an_cp.get('max_achievement_pct', 0), errors='coerce').fillna(0)
+            an_rs = rs_col
+
+            # ─────────────────────────────────────────
+            # 1) TIME-TO-TP — TP 도달 소요일 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">TP 도달 속도 (Time-to-TP)</div>', unsafe_allow_html=True)
+
+            wins = an_cp[an_cp[an_rs] == 'WIN'].copy()
+            if wins.empty:
+                st.markdown('<div class="rr-empty">No WIN positions yet</div>', unsafe_allow_html=True)
+            else:
+                # days_held_f is already trading days from tracker (close_date==tp_hit_date for WIN)
+                # Do NOT use (tp_hit_date - entry_date).dt.days — that gives calendar days (Fri→Mon=3, not 1)
+                wins['ttp_days'] = wins['days_held_f']
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Wins</th><th>Avg Days to TP</th><th>Median</th><th>Min</th><th>Max</th><th>1일 내 도달</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    sw = wins[wins['strategy'] == s]
+                    if sw.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="5" class="c-muted">—</td></tr>'
+                        continue
+                    ttp = sw['ttp_days']
+                    avg_d = ttp.mean(); med_d = ttp.median(); min_d = ttp.min(); max_d = ttp.max()
+                    d1 = len(sw[ttp <= 1])
+                    d1_pct = (d1 / len(sw) * 100) if len(sw) > 0 else 0
+                    spd_color = 'var(--green-bright)' if avg_d <= 2 else 'var(--amber)' if avg_d <= 5 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td>{len(sw)}</td>'
+                    html += f'<td style="color:{spd_color};font-weight:700">{avg_d:.1f}일</td>'
+                    html += f'<td>{med_d:.0f}일</td><td>{min_d:.0f}일</td><td>{max_d:.0f}일</td>'
+                    html += f'<td style="color:var(--green-bright)">{d1} ({d1_pct:.0f}%)</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">빠를수록 자본 회전율이 높아져 복리 효과 극대화</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 2) EXPECTED VALUE — 전략별 기대값
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">기대값 (Expected Value per Trade)</div>', unsafe_allow_html=True)
+
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strategy</th><th>Win Rate</th><th>Avg Win</th><th>Avg Loss</th><th>EV</th><th>Profit Factor</th>'
+            html += '</tr></thead><tbody>'
+            for s in strategies:
+                sc_ = an_cp[an_cp['strategy'] == s]
+                if sc_.empty:
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="5" class="c-muted">—</td></tr>'
+                    continue
+                nw_ = len(sc_[sc_[an_rs] == 'WIN']); nl_ = len(sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])])
+                nc_ = nw_ + nl_
+                wr_ = (nw_ / nc_ * 100) if nc_ > 0 else 0
+                w_pnl = sc_[sc_[an_rs] == 'WIN']['result_pct_f']
+                l_pnl = sc_[sc_[an_rs].isin(['LOSS', 'EXPIRED'])]['result_pct_f']
+                avg_w = w_pnl.mean() if len(w_pnl) > 0 else 0
+                avg_l = l_pnl.mean() if len(l_pnl) > 0 else 0
+                ev = (wr_ / 100) * avg_w + (1 - wr_ / 100) * avg_l
+                gross_w = w_pnl.sum() if len(w_pnl) > 0 else 0
+                gross_l = abs(l_pnl.sum()) if len(l_pnl) > 0 else 0
+                pf = (gross_w / gross_l) if gross_l > 0 else float('inf') if gross_w > 0 else 0
+                ev_c = 'var(--green-bright)' if ev > 0 else 'var(--red-bright)' if ev < 0 else 'var(--text-muted)'
+                pf_c = 'var(--green-bright)' if pf >= 2 else 'var(--amber)' if pf >= 1 else 'var(--red-bright)'
+                pf_s = f'{pf:.2f}' if pf != float('inf') else '∞'
+                html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                html += f'<td>{wr_:.1f}%</td>'
+                html += f'<td class="c-win">{avg_w:+.2f}%</td>'
+                html += f'<td class="c-loss">{avg_l:+.2f}%</td>'
+                html += f'<td style="color:{ev_c};font-weight:700;font-size:1.1em">{ev:+.2f}%</td>'
+                html += f'<td style="color:{pf_c};font-weight:600">{pf_s}</td></tr>'
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+            st.markdown('<div class="rr-legend">EV = (승률 × 평균수익) + (패률 × 평균손실) | Profit Factor = 총이익 / 총손실 (≥2.0 우수)</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 3) DAY-OF-WEEK ANALYSIS — 요일별 성과
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">요일별 신호 성과 (Day-of-Week)</div>', unsafe_allow_html=True)
+
+            dow_names = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri'}
+            an_cp['dow'] = an_cp['signal_date_dt'].dt.dayofweek
+            dow_valid = an_cp.dropna(subset=['dow'])
+
+            if dow_valid.empty:
+                st.markdown('<div class="rr-empty">No data</div>', unsafe_allow_html=True)
+            else:
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Day</th><th>Signals</th><th>Win</th><th>Loss</th><th>Win Rate</th><th>Avg P&L</th>'
+                html += '</tr></thead><tbody>'
+                for d_i in range(5):
+                    d_data = dow_valid[dow_valid['dow'] == d_i]
+                    if d_data.empty:
+                        html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    dw = len(d_data[d_data[an_rs] == 'WIN'])
+                    dl = len(d_data[d_data[an_rs].isin(['LOSS', 'EXPIRED'])])
+                    dc = dw + dl
+                    dwr = (dw / dc * 100) if dc > 0 else 0
+                    davg = d_data['result_pct_f'].mean()
+                    wrc_ = 'c-win' if dwr >= 80 else 'c-partial' if dwr >= 50 else 'c-loss' if dc > 0 else 'c-none'
+                    ac_ = 'c-win' if davg > 0 else 'c-loss' if davg < 0 else 'c-none'
+                    html += f'<tr><td style="font-weight:600">{dow_names[d_i]}</td>'
+                    html += f'<td>{len(d_data)}</td>'
+                    html += f'<td class="c-win">{dw}</td><td class="c-loss">{dl}</td>'
+                    html += f'<td class="{wrc_}">{dwr:.0f}%</td>'
+                    html += f'<td class="{ac_}">{davg:+.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">특정 요일에 승률이 현저히 낮으면 해당 요일 신호를 스킵하는 필터 고려</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 4) SLIPPAGE — 시그널가 vs 진입가 괴리
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">슬리피지 (Signal vs Entry Price)</div>', unsafe_allow_html=True)
+
+            slip = an_cp[(an_cp['signal_price_f'] > 0) & (an_cp['entry_price_f'] > 0)].copy()
+            if slip.empty:
+                st.markdown('<div class="rr-empty">No slippage data</div>', unsafe_allow_html=True)
+            else:
+                slip['slip_pct'] = (slip['entry_price_f'] - slip['signal_price_f']) / slip['signal_price_f'] * 100
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Trades</th><th>Avg Slip</th><th>Median</th><th>Max (불리)</th><th>Std Dev</th>'
+                html += '</tr></thead><tbody>'
+                for s in strategies:
+                    ss = slip[slip['strategy'] == s]
+                    if ss.empty:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>0</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    sl_data = ss['slip_pct']
+                    avg_sl = sl_data.mean(); med_sl = sl_data.median()
+                    # Max unfavorable = max positive slip (bought higher than signal)
+                    max_sl = sl_data.max()
+                    std_sl = sl_data.std() if len(sl_data) > 1 else 0.0
+                    sc_ = 'var(--green-bright)' if abs(avg_sl) < 1 else 'var(--amber)' if abs(avg_sl) < 3 else 'var(--red-bright)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td>{len(ss)}</td>'
+                    html += f'<td style="color:{sc_};font-weight:600">{avg_sl:+.2f}%</td>'
+                    html += f'<td>{med_sl:+.2f}%</td>'
+                    html += f'<td class="c-loss">{max_sl:+.2f}%</td>'
+                    html += f'<td class="c-muted">{std_sl:.2f}%</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">양수 = 시그널가보다 비싸게 매수 (불리) | 음수 = 시그널가보다 싸게 매수 (유리)</div>', unsafe_allow_html=True)
+                # Check if all slippage is 0 (system sets entry=signal by design)
+                if abs(slip['slip_pct'].sum()) < 0.01:
+                    st.markdown('<div class="rr-legend" style="color:var(--text-muted);font-style:italic">※ 현재 시스템은 시그널가 = 진입가 (애프터마켓 종가 매수). 실거래 시 슬리피지 발생 가능.</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 5) WIN/LOSS STREAK — 연승/연패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">연승·연패 분석 (Streak)</div>', unsafe_allow_html=True)
+
+            streak_df = an_cp.dropna(subset=['close_date_dt']).sort_values('close_date_dt').copy()
+            if len(streak_df) < 2:
+                st.markdown('<div class="rr-empty">Not enough data</div>', unsafe_allow_html=True)
+            else:
+                streak_df['is_win'] = (streak_df[an_rs] == 'WIN').astype(int)
+                # Calculate streaks
+                def calc_streaks(series):
+                    max_w = max_l = cur_w = cur_l = 0
+                    all_w = []; all_l = []
+                    for v in series:
+                        if v == 1:
+                            cur_w += 1; cur_l = 0
+                            max_w = max(max_w, cur_w)
+                        else:
+                            cur_l += 1; cur_w = 0
+                            max_l = max(max_l, cur_l)
+                        if cur_w > 0: all_w.append(cur_w)
+                        if cur_l > 0: all_l.append(cur_l)
+                    avg_w = sum(all_w) / len(all_w) if all_w else 0
+                    avg_l = sum(all_l) / len(all_l) if all_l else 0
+                    return max_w, max_l, avg_w, avg_l
+
+                # Overall
+                o_mw, o_ml, o_aw, o_al = calc_streaks(streak_df['is_win'])
+
+                html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                html += '<th>Strategy</th><th>Max 연승</th><th>Max 연패</th><th>Avg 연승</th><th>Avg 연패</th>'
+                html += '</tr></thead><tbody>'
+
+                # Overall row
+                ml_c = 'var(--red-bright)' if o_ml >= 5 else 'var(--amber)' if o_ml >= 3 else 'var(--text-secondary)'
+                html += f'<tr style="border-top:2px solid var(--gold-dim)"><td style="color:var(--gold);font-weight:700">TOTAL</td>'
+                html += f'<td class="c-win" style="font-weight:700;font-size:1.1em">{o_mw}</td>'
+                html += f'<td style="color:{ml_c};font-weight:700;font-size:1.1em">{o_ml}</td>'
+                html += f'<td class="c-win">{o_aw:.1f}</td><td class="c-loss">{o_al:.1f}</td></tr>'
+
+                for s in strategies:
+                    s_streak = streak_df[streak_df['strategy'] == s]
+                    if len(s_streak) < 2:
+                        html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td><td colspan="4" class="c-muted">—</td></tr>'
+                        continue
+                    s_mw, s_ml, s_aw, s_al = calc_streaks(s_streak['is_win'])
+                    sml_c = 'var(--red-bright)' if s_ml >= 5 else 'var(--amber)' if s_ml >= 3 else 'var(--text-secondary)'
+                    html += f'<tr><td>{stag(s)} {STRAT_KR.get(s,"")}</td>'
+                    html += f'<td class="c-win">{s_mw}</td><td style="color:{sml_c};font-weight:600">{s_ml}</td>'
+                    html += f'<td class="c-win">{s_aw:.1f}</td><td class="c-loss">{s_al:.1f}</td></tr>'
+                html += '</tbody></table></div>'
+                st.markdown(html, unsafe_allow_html=True)
+                st.markdown('<div class="rr-legend">최대 연패가 크면 자금관리(켈리 기준 등) 재검토 필요 — 심리적 한계선 설정 참고</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 6) NEAR-MISS — TP 근접 후 실패 분석
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">아쉬운 실패 (Near-Miss Analysis)</div>', unsafe_allow_html=True)
+
+            non_wins = an_cp[an_cp[an_rs].isin(['LOSS', 'EXPIRED'])].copy()
+            if non_wins.empty:
+                st.markdown('<div class="rr-empty">No losses/expirations</div>', unsafe_allow_html=True)
+            else:
+                nm_80 = non_wins[non_wins['max_ach_f'] >= 80]
+                nm_50 = non_wins[(non_wins['max_ach_f'] >= 50) & (non_wins['max_ach_f'] < 80)]
+                nm_low = non_wins[non_wins['max_ach_f'] < 50]
+
+                total_nw = len(non_wins)
+                st.markdown(f'''<div class="rr-stats">
+                    <div class="rr-stat"><div class="s-label">Total Loss/Exp</div><div class="s-value" style="color:var(--red-bright)">{total_nw}</div></div>
+                    <div class="rr-stat"><div class="s-label">≥80% 도달 후 실패</div><div class="s-value" style="color:var(--amber)">{len(nm_80)}</div></div>
+                    <div class="rr-stat"><div class="s-label">50~80% 도달</div><div class="s-value" style="color:var(--text-secondary)">{len(nm_50)}</div></div>
+                    <div class="rr-stat"><div class="s-label">&lt;50% (완전 실패)</div><div class="s-value" style="color:var(--red-bright)">{len(nm_low)}</div></div>
+                </div>''', unsafe_allow_html=True)
+
+                if not nm_80.empty:
+                    nm_rate = len(nm_80) / total_nw * 100
+                    st.markdown(f'<div class="rr-legend" style="color:var(--amber)">Near-miss rate: {nm_rate:.0f}% — TP의 80% 이상 도달했지만 실패한 비율이 높으면 TP 하향 조정 검토</div>', unsafe_allow_html=True)
+
+                    # Show the near-miss details
+                    html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+                    html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Result</th><th>Max Ach%</th><th>Result P&L</th><th>Peak</th>'
+                    html += '</tr></thead><tbody>'
+                    for _, row in nm_80.sort_values('max_ach_f', ascending=False).head(20).iterrows():
+                        s_ = safe_str(row.get('strategy')); tk_ = safe_str(row.get('ticker'))
+                        sd_ = safe_str(row.get('signal_date')); res_ = safe_str(row.get(an_rs))
+                        ma_ = row['max_ach_f']; rp_ = row['result_pct_f']
+                        mx_ = safe_str(row.get('max_price'))
+                        html += f'<tr><td>{stag(s_)}</td><td style="font-weight:600">{tk_}</td><td>{sd_}</td>'
+                        html += f'<td>{result_badge(res_)}</td>'
+                        html += f'<td style="color:var(--amber);font-weight:700">{ma_:.0f}%</td>'
+                        html += f'<td class="c-loss">{rp_:+.1f}%</td>'
+                        html += f'<td>${mx_}</td></tr>'
+                    html += '</tbody></table></div>'
+                    st.markdown(html, unsafe_allow_html=True)
+
+            st.markdown('<div class="rr-divider" style="margin:28px auto"></div>', unsafe_allow_html=True)
+
+            # ─────────────────────────────────────────
+            # 7) CONCURRENT POSITIONS — 동시 포지션 수
+            # ─────────────────────────────────────────
+            st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">동시 포지션 수 (Concurrent Positions)</div>', unsafe_allow_html=True)
+
+            # Build timeline from all positions (open + closed)
+            pos_events = []
+            for df_src, is_closed in [(an_cp, True)]:
+                for _, row in df_src.iterrows():
+                    ed = row['entry_date_dt']
+                    cd = row['close_date_dt'] if is_closed else pd.NaT
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': cd if pd.notna(cd) else pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+            # Include currently open positions
+            if not open_pos.empty and 'entry_date' in open_pos.columns:
+                for _, row in open_pos.iterrows():
+                    ed = pd.to_datetime(row.get('entry_date', ''), errors='coerce')
+                    if pd.isna(ed):
+                        continue
+                    pos_events.append({'open': ed, 'close': pd.Timestamp.now(), 'strategy': safe_str(row.get('strategy'))})
+
+            if not pos_events:
+                st.markdown('<div class="rr-empty">No position data</div>', unsafe_allow_html=True)
+            else:
+                # Generate daily concurrent count
+                all_dates = set()
+                for pe in pos_events:
+                    dr = pd.date_range(pe['open'], pe['close'], freq='B')  # business days
+                    all_dates.update(dr)
+                if all_dates:
+                    all_dates = sorted(all_dates)
+                    daily_counts = []
+                    for dt in all_dates:
+                        cnt = sum(1 for pe in pos_events if pe['open'] <= dt <= pe['close'])
+                        daily_counts.append({'date': dt, 'count': cnt})
+                    conc_df = pd.DataFrame(daily_counts).set_index('date')
+
+                    max_conc = conc_df['count'].max()
+                    avg_conc = conc_df['count'].mean()
+                    max_date = conc_df['count'].idxmax()
+                    max_date_s = max_date.strftime('%Y-%m-%d') if hasattr(max_date, 'strftime') else str(max_date)
+
+                    mc_c = 'var(--red-bright)' if max_conc >= 10 else 'var(--amber)' if max_conc >= 5 else 'var(--green-bright)'
+                    st.markdown(f'''<div class="rr-stats">
+                        <div class="rr-stat"><div class="s-label">Max Concurrent</div><div class="s-value" style="color:{mc_c}">{max_conc}</div></div>
+                        <div class="rr-stat"><div class="s-label">Avg Concurrent</div><div class="s-value" style="color:var(--text-secondary)">{avg_conc:.1f}</div></div>
+                        <div class="rr-stat"><div class="s-label">Peak Date</div><div class="s-value" style="color:var(--text-secondary);font-size:0.8em">{max_date_s}</div></div>
+                    </div>''', unsafe_allow_html=True)
+
+                    st.markdown('<div class="rr-legend">동시 포지션 수 추이 — 자금 배분 및 리스크 노출 관리에 활용</div>', unsafe_allow_html=True)
+                    st.area_chart(conc_df, color=['#c9a96e'])
+                else:
+                    st.markdown('<div class="rr-empty">No date range data</div>', unsafe_allow_html=True)
+
+# ─── Sidebar ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown('''<div style="text-align:center;padding:16px 0">
+        <div style="font-family:var(--font-display);font-size:1.2em;color:var(--text-primary);letter-spacing:0.1em">SURGE</div>
+        <div style="font-family:var(--font-display);font-size:0.9em;color:var(--gold);letter-spacing:0.15em">SCANNER</div>
+    </div>''', unsafe_allow_html=True)
+    st.divider()
+
+    st.markdown("""
 | Name | WR | Hold |
 |------|-----|------|
 | 5%5일a | 90.1% | 5d |
@@ -2170,26 +1827,19 @@ def main():
 
 ---
 Auto-scan via GitHub Actions
-        """)
-        st.divider()
-
-        tracker_info = load_tracker_summary()
-        if tracker_info:
-            st.markdown(f"**Last tracked:** {tracker_info.get('last_tracked', 'N/A')}")
-            st.markdown(f"Active: {tracker_info.get('open_count', 0)} | Pending: {tracker_info.get('pending_count', 0)} | Closed: {tracker_info.get('closed_count', 0)}")
-        if st.button("Refresh"):
-            st.cache_data.clear()
-            st.rerun()
-        st.divider()
-
-        st.markdown("**Auto Refresh**")
-        ar = st.toggle("Enable", value=False, key='ar')
-        ri = st.select_slider("Interval", options=[1, 2, 3, 5, 10, 15, 30], value=5, key='ri')
-        st.caption(f"{'Active' if ar else 'Paused'} — {ri}min")
-        if ar:
-            import streamlit.components.v1 as components
-            components.html(f"""<script>setTimeout(function(){{ window.parent.location.reload(); }}, {ri*60*1000});</script>""", height=0)
-
-
-if __name__ == "__main__":
-    main()
+    """)
+    st.divider()
+    if tracker_info:
+        st.markdown(f"**Last tracked:** {tracker_info.get('last_tracked', 'N/A')}")
+        st.markdown(f"Active: {tracker_info.get('open_count',0)} | Pending: {tracker_info.get('pending_count',0)} | Closed: {tracker_info.get('closed_count',0)}")
+    if st.button("Refresh"):
+        st.cache_data.clear()
+        st.rerun()
+    st.divider()
+    st.markdown("**Auto Refresh**")
+    ar = st.toggle("Enable", value=False, key='ar')
+    ri = st.select_slider("Interval", options=[1,2,3,5,10,15,30], value=5, key='ri')
+    st.caption(f"{'Active' if ar else 'Paused'} — {ri}min")
+    if ar:
+        import streamlit.components.v1 as components
+        components.html(f"""<script>setTimeout(function(){{ window.parent.location.reload(); }}, {ri*60*1000});</script>""", height=0)
