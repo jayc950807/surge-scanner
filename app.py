@@ -9,10 +9,15 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import glob
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-KST = timezone(timedelta(hours=9))
+# shared_config에서 공통 상수/함수 import (없으면 로컬 fallback)
+try:
+    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES
+except ImportError:
+    KST = timezone(timedelta(hours=9))
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -527,7 +532,7 @@ def load_latest_scan():
 
 @st.cache_data(ttl=300)
 def load_today_signals():
-    import glob
+    """가장 최근 시그널 파일 로드 (날짜 하드코딩 대신 glob 최신 파일)"""
     files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
     if files:
         df = pd.read_csv(files[0])
