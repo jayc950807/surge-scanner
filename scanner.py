@@ -49,19 +49,34 @@ import json
 import argparse
 from datetime import datetime, timedelta, timezone
 
-warnings.filterwarnings('ignore')
+# Import from shared_config
+from shared_config import (
+    KST,
+    LEVERAGED_ETF,
+    MIN_PRICE,
+    MIN_VOLUME,
+    BATCH_SIZE,
+    BATCH_DELAY,
+    STRATEGY_CONFIG,
+    calc_rsi_wilder,
+    get_all_tickers,
+    download_batch,
+    extract_ticker_df,
+    get_expected_trading_date,
+    is_us_trading_day,
+    is_us_dst,
+)
 
-# 한국 표준시 (KST = UTC+9)
-KST = timezone(timedelta(hours=9))
+warnings.filterwarnings('ignore')
 
 # ─── yfinance 데이터 갱신 대기 ────────────────────────────────────────────────
 
 def wait_for_market_data(max_retries=10, retry_interval=180):
     """
     yfinance 종가 데이터가 당일 거래일로 업데이트될 때까지 대기.
-    UTC 기준으로 마지막 거래일을 계산:
-    - UTC 20:30 이후 & 평일: 당일 미국 장마감 후 → 오늘이 기대 거래일
-    - 그 외: 가장 최근 평일 (어제 또는 지난 금요일)
+    DST를 고려한 미국 장마감 시각 판단:
+    - EDT (summer): 장마감 = UTC 20:00 → 데이터 기대 = UTC 20:30 이후
+    - EST (winter): 장마감 = UTC 21:00 → 데이터 기대 = UTC 21:30 이후
     최대 10회 × 3분 = 30분 대기. (yfinance 데이터 갱신 지연 대응)
     """
     print(f"\n{'='*80}")
@@ -71,19 +86,20 @@ def wait_for_market_data(max_retries=10, retry_interval=180):
     now_utc = datetime.now(timezone.utc)
     today_utc = now_utc.date()
 
-    # 미국 장마감: EDT 16:00=UTC 20:00 / EST 16:00=UTC 21:00
-    # UTC 20:30 이후면 장마감 후 데이터 반영 시작 (EDT 기준 30분 여유)
-    market_closed = now_utc.hour > 20 or (now_utc.hour == 20 and now_utc.minute >= 30)
+    # DST 여부에 따라 장마감 시각 결정
+    if is_us_dst(today_utc):
+        close_hour, close_min = 20, 30   # EDT: UTC 20:30 이후
+    else:
+        close_hour, close_min = 21, 30   # EST: UTC 21:30 이후
 
-    if market_closed and today_utc.weekday() < 5:
-        # 장마감 후 + 평일 → 오늘이 거래일
+    market_closed = (now_utc.hour > close_hour or
+                     (now_utc.hour == close_hour and now_utc.minute >= close_min))
+
+    # expected_date 결정: 공휴일 고려
+    if market_closed and is_us_trading_day(today_utc):
         expected_date = today_utc
     else:
-        # 아직 장중이거나 주말 → 가장 최근 평일 (전 거래일)
-        d = today_utc - timedelta(days=1)
-        while d.weekday() >= 5:  # 주말이면 더 뒤로
-            d -= timedelta(days=1)
-        expected_date = d
+        expected_date = get_expected_trading_date()
 
     print(f"  UTC 시간: {now_utc.strftime('%Y-%m-%d %H:%M')} UTC")
     print(f"  기대 거래일: {expected_date}")
@@ -169,39 +185,7 @@ E_VOL_MIN        = 200000     # 20일 평균 거래량 >= 20만주
 E_TAKE_PROFIT    = 0.10       # +10%
 E_MAX_HOLD_DAYS  = 30
 
-# === Common filters ===
-MIN_PRICE      = 1.0
-MIN_VOLUME     = 10000       # 20일 평균거래량 기준
-BATCH_SIZE     = 80
-BATCH_DELAY    = 1.5
-
-# === Exclude leveraged ETFs ===
-LEVERAGED_ETF = {
-    'TQQQ','SQQQ','UPRO','SPXU','UDOW','SDOW','QLD','QID','SSO','SDS',
-    'LABU','LABD','NUGT','DUST','JNUG','JDST','FNGU','FNGD','SOXL','SOXS',
-    'TNA','TZA','SPXS','SPXL','TECL','TECS','FAS','FAZ','ERX','ERY',
-    'CURE','UVXY','SVXY','VXX','VIXY','TVIX','UCO','SCO','BOIL','KOLD',
-    'UNG','DGAZ','UGAZ','AGQ','ZSL','USLV','DSLV','GDXU','GDXD',
-    'YANG','YINN','CWEB','EDC','EDZ','MEXX','RETL','DRIP','GUSH',
-    'NAIL','DRV','DPST','BNKU','WEBL','WEBS','MSTZ','MSTU',
-    'TSLL','TSDD','NVDL','NVDS','CONL','CONY','BITX','BITU',
-}
-
 # ─── Helper Functions ─────────────────────────────────────────────────────────
-
-def calc_rsi_wilder(close_series, period=7):
-    """Wilder RSI (SMA seed + Wilder smoothing) — 백테스트와 동일"""
-    delta = close_series.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = (-delta).where(delta < 0, 0.0)
-    avg_gain = gain.rolling(window=period, min_periods=period).mean()
-    avg_loss = loss.rolling(window=period, min_periods=period).mean()
-    for i in range(period, len(close_series)):
-        avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (period-1) + gain.iloc[i]) / period
-        avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (period-1) + loss.iloc[i]) / period
-    rs = avg_gain / avg_loss.replace(0, 1e-10)
-    return 100 - (100 / (1 + rs))
-
 
 def calc_consec_down(close_series):
     """연속 하락일 수 (현재 시점 기준 역방향 카운트)"""
@@ -215,94 +199,6 @@ def calc_consec_down(close_series):
         else:
             break
     return count
-
-
-def extract_ticker_df(data, tk, batch_size):
-    """yfinance 반환값에서 특정 티커의 DataFrame을 안전하게 추출.
-    yfinance 2.51+ 에서는 단일/복수 티커 모두 MultiIndex 컬럼을 반환할 수 있음.
-    """
-    if data is None or data.empty:
-        return None
-
-    cols = data.columns
-
-    # Case 1: 단일 인덱스 (단일 티커이거나 구버전 yfinance)
-    if not isinstance(cols, pd.MultiIndex):
-        if batch_size == 1:
-            return data.dropna(how='all')
-        return None
-
-    # Case 2: MultiIndex 컬럼
-    level_values = [set(cols.get_level_values(i)) for i in range(cols.nlevels)]
-
-    # 티커가 어느 레벨에 있는지 탐지
-    ticker_level = None
-    for i, vals in enumerate(level_values):
-        if tk in vals:
-            ticker_level = i
-            break
-
-    if ticker_level is None:
-        return None
-
-    try:
-        df = data.xs(tk, level=ticker_level, axis=1)
-        df = df.dropna(how='all')
-        return df if len(df) > 0 else None
-    except (KeyError, TypeError):
-        return None
-
-
-def get_all_tickers():
-    """NASDAQ/NYSE/AMEX 전체 상장 종목 수집"""
-    tickers = set()
-    urls = [
-        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt",
-        "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
-        "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
-    ]
-    for url in urls:
-        try:
-            resp = requests.get(url, timeout=15)
-            if resp.status_code == 200:
-                for line in resp.text.strip().split('\n')[1:]:
-                    parts = line.split('|')
-                    if len(parts) >= 2:
-                        sym = parts[1].strip() if 'nasdaqtraded' in url else parts[0].strip()
-                        if sym and sym.isalpha() and 1 <= len(sym) <= 5 and sym != 'Symbol':
-                            tickers.add(sym)
-                print(f"  [{url.split('/')[-1]}] {len(tickers)} tickers")
-        except Exception as e:
-            print(f"  Warning: {url.split('/')[-1]}: {e}")
-
-    if len(tickers) < 1000:
-        try:
-            resp = requests.get("https://www.sec.gov/files/company_tickers.json",
-                              headers={"User-Agent": "SurgeScanner/2.0 scanner@example.com"}, timeout=15)
-            if resp.status_code == 200:
-                for item in resp.json().values():
-                    sym = item.get('ticker', '').strip()
-                    if sym and 1 <= len(sym) <= 5 and sym.isalpha():
-                        tickers.add(sym)
-        except:
-            pass
-
-    tickers -= LEVERAGED_ETF
-    tickers = {t for t in tickers if not t.endswith('W') and not any(c.isdigit() for c in t)}
-    print(f"  Total: {len(tickers)} tickers")
-    return sorted(tickers)
-
-
-def download_batch(tickers, period='60d'):
-    """yfinance 배치 다운로드 (재시도 포함)"""
-    for attempt in range(3):
-        try:
-            data = yf.download(' '.join(tickers), period=period,
-                             group_by='ticker', progress=False, threads=True, timeout=30)
-            return data
-        except:
-            if attempt < 2: time.sleep(3)
-    return None
 
 
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
@@ -361,7 +257,8 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 # E 후보: Price $3~$10 + AvgVol >= 20만
                 if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
                     candidates.add(tk)
-            except:
+            except Exception as e:
+                print(f"  Warning: {tk} processing failed: {e}")
                 continue
         time.sleep(BATCH_DELAY)
 
@@ -370,10 +267,10 @@ def phase1_rsi_filter(all_tickers, strat_str):
     return candidates
 
 
-# ─── Unified Phase 2: 한 번의 다운로드로 A/B/C 동시 체크 ────────────────────
+# ─── Unified Phase 2: 한 번의 다운로드로 A/B/C/D/E 동시 체크 ────────────────────
 
 def phase2_check_all(candidates, strat_str):
-    """Phase 2: 120d 데이터를 한 번만 받아서 A/B/C/D 조건을 모두 체크"""
+    """Phase 2: 120d 데이터를 한 번만 받아서 A/B/C/D/E 조건을 모두 체크"""
     print(f"\n{'='*80}")
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
@@ -434,21 +331,29 @@ def phase2_check_all(candidates, strat_str):
                     continue
 
                 # ── 공통 계산 (한 번만) ──
-                rsi7 = calc_rsi_wilder(close, 7)
-                rsi7_val = float(rsi7.iloc[-1])
-                if pd.isna(rsi7_val):
-                    continue
-
-                intra = (h_last - l_last) / o_last
+                intra = (h_last - l_last) / l_last  # FIX #4: low-based for consistency with backtest
                 consec = calc_consec_down(close)
 
                 low5_min = float(low.iloc[-5:].min()) if n >= 5 else None
                 dist_low5 = (c_last - low5_min) / max(low5_min, 0.01) if low5_min else None
 
+                # ── RSI7 계산: A/B/C만 필요, D/E는 필요 없음 ──
+                rsi7_val = None
+                if run_a or run_b or run_c:
+                    rsi7 = calc_rsi_wilder(close, 7)
+                    if not pd.isna(rsi7.iloc[-1]):
+                        rsi7_val = float(rsi7.iloc[-1])
+                    else:
+                        # RSI7이 NaN인 경우: A/B/C는 스킵, D/E는 계속
+                        if run_a or run_b or run_c:
+                            if not (run_d or run_e):
+                                continue
+                            # A/B/C를 못하지만 D/E는 계속하기 위해 pass
+
                 # ══════════════════════════════════════════════
                 # Strategy A: Intra>20% + Ret3d<-15% + Down>5 + DistLow5<5% + RSI7<20
                 # ══════════════════════════════════════════════
-                if run_a and rsi7_val < A_RSI7_THRESH:
+                if run_a and rsi7_val is not None and rsi7_val < A_RSI7_THRESH:
                     if (intra > A_INTRA_THRESH and
                         n >= 4 and
                         consec > A_CONSEC_DOWN and
@@ -479,7 +384,7 @@ def phase2_check_all(candidates, strat_str):
                 # ══════════════════════════════════════════════
                 # Strategy B: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
                 # ══════════════════════════════════════════════
-                if run_b and rsi7_val < B_RSI7_THRESH and intra > B_INTRA_THRESH:
+                if run_b and rsi7_val is not None and rsi7_val < B_RSI7_THRESH and intra > B_INTRA_THRESH:
                     # ATR ratio
                     tr_arr = np.maximum(
                         high.values - low.values,
@@ -508,6 +413,7 @@ def phase2_check_all(candidates, strat_str):
                                     # RevGrowth (API 호출 — 가장 마지막에)
                                     try:
                                         info = yf.Ticker(tk).info
+                                        time.sleep(0.3)  # FIX #3: avoid rate limiting
                                         rev_growth = info.get('revenueGrowth', None)
                                         if rev_growth is not None and rev_growth > 0:
                                             tp_price = round(c_last * (1 + B_TAKE_PROFIT), 2)
@@ -530,13 +436,13 @@ def phase2_check_all(candidates, strat_str):
                                             print(f"    ★ [B] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
                                                   f"RSI14={rsi14_val:.1f} ATR={atr_ratio:.1f} "
                                                   f"Intra={intra*100:.0f}% MA20={ma20_pos*100:.1f}%")
-                                    except:
-                                        pass
+                                    except Exception as e:
+                                        print(f"    Warning: {tk} info fetch failed: {e}")
 
                 # ══════════════════════════════════════════════
                 # Strategy C: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3 + DistLow5<3%
                 # ══════════════════════════════════════════════
-                if run_c and rsi7_val < C_RSI7_THRESH and intra > C_INTRA_THRESH:
+                if run_c and rsi7_val is not None and rsi7_val < C_RSI7_THRESH and intra > C_INTRA_THRESH:
                     if (n >= 3 and
                         consec > C_CONSEC_DOWN and
                         dist_low5 is not None and dist_low5 < C_DIST_LOW5):
@@ -629,7 +535,8 @@ def phase2_check_all(candidates, strat_str):
                                           f"Down={consec}d Vol={avg_vol/1000:.0f}K "
                                           f"TP=${tp_price:.2f}")
 
-            except:
+            except Exception as e:
+                print(f"  Warning: {tk} phase2 processing failed: {e}")
                 continue
         time.sleep(BATCH_DELAY)
 
