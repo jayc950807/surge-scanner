@@ -42,6 +42,13 @@ START_DATE  = "2020-04-01"
 END_DATE    = "2025-04-01"
 SAMPLE_SIZE = int(os.environ.get("SAMPLE_SIZE", 2000))  # 탐색 티커 수
 
+# 실전 필터 (페니스톡/저유동성 제외)
+MIN_PRICE         = 2.0        # 전일 종가 $2 이상
+MIN_DOLLAR_VOL    = 500_000    # 전일 평균 거래대금 $50만 이상
+# 수익률 클리핑 (극단값 오염 방지)
+RET_CLIP_UP       = 300.0      # +300% 초과는 300%로 캡
+RET_CLIP_DOWN     = -95.0      # -95% 이하는 -95%로 플로어
+
 
 # ═══════════════════════════════════════════════════════
 #  데이터 도구
@@ -224,6 +231,15 @@ def scan_events(all_data):
                         row = df.iloc[pos]
                         prev = df.iloc[pos-1]  # 전일 (signal day의 전일 지표)
 
+                        # ── 실전 필터 (페니스톡/저유동성 제외) ──
+                        if not np.isfinite(prev['Close']) or prev['Close'] < MIN_PRICE:
+                            continue
+                        prev_avg_vol20 = prev.get('avg_vol_20d', np.nan)
+                        if np.isfinite(prev_avg_vol20):
+                            prev_dollar_vol = prev_avg_vol20 * prev['Close']
+                            if prev_dollar_vol < MIN_DOLLAR_VOL:
+                                continue
+
                         # 전일 기준 지표 수집 (실전에서 관찰 가능한 것만)
                         ind = {
                             'event_type': etype,
@@ -259,24 +275,28 @@ def scan_events(all_data):
                             '$50+'
                         )
 
-                        # D+1 ~ D+5 결과 (백테스트용)
-                        for n in [1, 2, 3, 5]:
-                            if pos + n < len(df):
-                                future = df.iloc[pos + n]
-                                ind[f'post_{n}d_ret'] = round(float((future['Close'] / row['Close'] - 1) * 100), 2)
-                            if pos + 1 < len(df) and n <= 5:
-                                post_slice = df.iloc[pos+1:pos+1+n]
-                                if len(post_slice) > 0:
-                                    ind[f'post_{n}d_max_up'] = round(float((post_slice['High'].max() / row['Close'] - 1) * 100), 2)
-                                    ind[f'post_{n}d_max_down'] = round(float((post_slice['Low'].min() / row['Close'] - 1) * 100), 2)
+                        def _clip(x):
+                            return max(RET_CLIP_DOWN, min(RET_CLIP_UP, float(x)))
 
-                        # D+1 Open (실전 진입가) 기준 수익
+                        # D+1 ~ D+5 결과 (백테스트용) — D+1 Open 진입 기준으로 통일
                         if pos + 1 < len(df):
                             next_open = df.iloc[pos+1]['Open']
-                            ind['next_open_gap'] = round(float((next_open / row['Close'] - 1) * 100), 2)
-                            for n in [1, 3, 5]:
-                                if pos + 1 + n < len(df):
-                                    ind[f'post_d1open_{n}d_ret'] = round(float((df.iloc[pos+1+n]['Close'] / next_open - 1) * 100), 2)
+                            if np.isfinite(next_open) and next_open > 0:
+                                ind['next_open_gap'] = round(_clip((next_open / row['Close'] - 1) * 100), 2)
+                                for n in [1, 2, 3, 5]:
+                                    if pos + 1 + n - 1 < len(df):
+                                        end_close = df.iloc[pos + n]['Close'] if n == 1 else df.iloc[pos + n]['Close']
+                                        # 실전 기준: D+1 Open 매수 → D+n Close 청산
+                                        exit_idx = pos + n
+                                        if exit_idx < len(df):
+                                            exit_close = df.iloc[exit_idx]['Close']
+                                            ind[f'post_{n}d_ret'] = round(_clip((exit_close / next_open - 1) * 100), 2)
+                                    if pos + 1 + n <= len(df):
+                                        # 보유 기간 중 장중 최고/최저 (D+1 Open 기준)
+                                        hold_slice = df.iloc[pos+1:pos+1+n]
+                                        if len(hold_slice) > 0:
+                                            ind[f'post_{n}d_max_up'] = round(_clip((hold_slice['High'].max() / next_open - 1) * 100), 2)
+                                            ind[f'post_{n}d_max_down'] = round(_clip((hold_slice['Low'].min() / next_open - 1) * 100), 2)
 
                         events[etype].append(ind)
 
@@ -359,32 +379,42 @@ def discover_patterns(df_all):
         feature_names = list(X_with_type.columns)
 
         try:
-            # Random Forest
-            rf = RandomForestClassifier(n_estimators=100, max_depth=5,
+            # Random Forest — class_weight='balanced' 로 33% 편향 교정
+            # f1_macro로 평가해 "전부 0" 베이스라인을 무력화
+            rf = RandomForestClassifier(n_estimators=150, max_depth=6,
                                          min_samples_leaf=max(5, len(y_profit)//50),
+                                         class_weight='balanced',
                                          random_state=42, n_jobs=-1)
-            scores = cross_val_score(rf, X_with_type, y_profit, cv=5, scoring='accuracy')
+            scores = cross_val_score(rf, X_with_type, y_profit, cv=5, scoring='f1_macro')
+            acc_scores = cross_val_score(rf, X_with_type, y_profit, cv=5, scoring='accuracy')
             rf.fit(X_with_type, y_profit)
             importances = pd.Series(rf.feature_importances_, index=feature_names).nlargest(15)
 
             # Decision Tree (해석 가능한 규칙)
-            dt = DecisionTreeClassifier(max_depth=4, min_samples_leaf=max(5, len(y_profit)//30), random_state=42)
-            dt_scores = cross_val_score(dt, X_with_type, y_profit, cv=5, scoring='accuracy')
+            dt = DecisionTreeClassifier(max_depth=4,
+                                         min_samples_leaf=max(5, len(y_profit)//30),
+                                         class_weight='balanced',
+                                         random_state=42)
+            dt_scores = cross_val_score(dt, X_with_type, y_profit, cv=5, scoring='f1_macro')
             dt.fit(X_with_type, y_profit)
             tree_text = export_text(dt, feature_names=feature_names, max_depth=4)
 
+            # 중앙값/트림평균으로 극단값 오염 방지
+            pos_s = y_series[y_series > 0]
+            neg_s = y_series[y_series <= 0]
             patterns.append({
                 'name': f'profit_predict_{target_col}',
                 'type': 'profit_prediction',
                 'target': target_col,
                 'total_samples': len(y_profit),
                 'base_win_rate': round(float(y_profit.mean() * 100), 1),
-                'rf_accuracy': round(float(scores.mean() * 100), 1),
-                'dt_accuracy': round(float(dt_scores.mean() * 100), 1),
+                'rf_f1_macro': round(float(scores.mean()), 3),
+                'rf_accuracy': round(float(acc_scores.mean() * 100), 1),
+                'dt_f1_macro': round(float(dt_scores.mean()), 3),
                 'top_features': {k: round(v, 4) for k, v in importances.items()},
                 'tree_rules': tree_text[:1500],
-                'avg_profit_when_positive': round(float(y_series[y_series > 0].mean()), 2),
-                'avg_loss_when_negative': round(float(y_series[y_series <= 0].mean()), 2),
+                'median_profit_when_positive': round(float(pos_s.median()), 2) if len(pos_s) > 0 else 0,
+                'median_loss_when_negative': round(float(neg_s.median()), 2) if len(neg_s) > 0 else 0,
             })
         except Exception as e:
             log.warning(f"    패턴 분석 실패 ({target_col}): {e}")
@@ -402,16 +432,20 @@ def discover_patterns(df_all):
             s = sub[target].dropna()
             if len(s) < 10:
                 continue
+            # 5% 트림 평균 (상하위 5% 제거)으로 극단값 오염 방지
+            lo, hi = s.quantile(0.05), s.quantile(0.95)
+            trimmed = s[(s >= lo) & (s <= hi)]
+            trim_mean = float(trimmed.mean()) if len(trimmed) > 0 else float(s.median())
             profitability.append({
                 'event_type': etype,
                 'horizon': target,
                 'count': len(s),
                 'win_rate': round(float((s > 0).mean() * 100), 1),
-                'mean_ret': round(float(s.mean()), 2),
                 'median_ret': round(float(s.median()), 2),
-                'avg_win': round(float(s[s > 0].mean()), 2) if (s > 0).any() else 0,
-                'avg_loss': round(float(s[s <= 0].mean()), 2) if (s <= 0).any() else 0,
-                'ev': round(float(s.mean()), 2),
+                'trim_mean_ret': round(trim_mean, 2),
+                'avg_win': round(float(s[s > 0].median()), 2) if (s > 0).any() else 0,
+                'avg_loss': round(float(s[s <= 0].median()), 2) if (s <= 0).any() else 0,
+                'ev': round(trim_mean, 2),  # EV = 트림 평균 기준
             })
 
     profitability.sort(key=lambda x: x['ev'], reverse=True)
@@ -443,18 +477,23 @@ def discover_patterns(df_all):
                         'count': len(s),
                     })
             else:
-                # IQR 대비 전체 범위가 좁은지
-                q25, q75 = s.quantile(0.25), s.quantile(0.75)
-                total_range = s.max() - s.min()
-                if total_range > 0:
-                    iqr_ratio = (q75 - q25) / total_range
-                    if iqr_ratio < 0.15:  # IQR이 전체의 15% 이내 → 강한 집중
+                # 변동계수(CV) 기반 집중도: |median|이 0에 가까우면 IQR/median 사용
+                # 극단값 영향 제거를 위해 max-min 대신 p05~p95 범위 사용
+                q05, q25, q50, q75, q95 = s.quantile([0.05, 0.25, 0.5, 0.75, 0.95]).values
+                robust_range = q95 - q05
+                iqr = q75 - q25
+                if robust_range > 1e-9:
+                    iqr_ratio = iqr / robust_range
+                    # 집중도: IQR이 p05~p95 범위의 40% 이내 (현실적 기준)
+                    if iqr_ratio < 0.40:
                         concentration.append({
                             'event_type': etype, 'indicator': col,
                             'type': 'concentrated',
-                            'median': round(float(s.median()), 2),
-                            'q25': round(float(q25), 2),
-                            'q75': round(float(q75), 2),
+                            'median': round(float(q50), 3),
+                            'q25': round(float(q25), 3),
+                            'q75': round(float(q75), 3),
+                            'p05': round(float(q05), 3),
+                            'p95': round(float(q95), 3),
                             'iqr_ratio': round(float(iqr_ratio * 100), 1),
                             'count': len(s),
                         })
@@ -507,113 +546,153 @@ def discover_patterns(df_all):
 #  Phase 5: 전략 후보 생성
 # ═══════════════════════════════════════════════════════
 
+def _backtest_single(sub, tp_pct, sl_pct, max_hold):
+    """단일 TP/SL/hold 조합 백테스트. 각 거래의 PnL 리스트와 메타 반환."""
+    trades = []
+    for _, row in sub.iterrows():
+        if pd.isna(row.get('next_open_gap')):
+            continue
+        hit_tp_day = None
+        hit_sl_day = None
+        for n in [1, 2, 3, 5]:
+            if n > max_hold:
+                break
+            max_up = row.get(f'post_{n}d_max_up')
+            max_dn = row.get(f'post_{n}d_max_down')
+            if pd.isna(max_up) or pd.isna(max_dn):
+                continue
+            if hit_tp_day is None and max_up >= tp_pct:
+                hit_tp_day = n
+            if hit_sl_day is None and max_dn <= sl_pct:
+                hit_sl_day = n
+        # 결정 규칙: 같은 날 동시 도달 시 SL 우선(보수적)
+        if hit_sl_day is not None and hit_tp_day is not None:
+            pnl = sl_pct if hit_sl_day <= hit_tp_day else tp_pct
+            outcome = 'sl' if hit_sl_day <= hit_tp_day else 'tp'
+        elif hit_tp_day is not None:
+            pnl, outcome = tp_pct, 'tp'
+        elif hit_sl_day is not None:
+            pnl, outcome = sl_pct, 'sl'
+        else:
+            # 만기 청산: 가장 가까운 post_{n}d_ret 사용 (D+1 Open 기준이므로 정확)
+            ret_key = f'post_{min(max_hold, 5)}d_ret'
+            ret = row.get(ret_key)
+            if pd.isna(ret):
+                continue
+            pnl, outcome = float(ret), 'exp'
+        trades.append({'pnl': pnl, 'outcome': outcome, 'year': int(row.get('year', 0))})
+    return trades
+
+
 def build_strategies(df_all, patterns):
-    """유망 패턴 → 실전 전략으로 변환 + 백테스트"""
+    """유망 패턴 → 실전 전략으로 변환 + 백테스트 (중복 제거 + train/test 분리)"""
     strategies = []
 
-    # 수익성 랭킹에서 유망한 이벤트 유형 추출
     ranking = next((p for p in patterns if p['name'] == 'profitability_ranking'), None)
     if not ranking:
         return strategies
 
+    # 이벤트 타입별로 가장 좋은 horizon 1개만 선택 (중복 제거)
+    seen_etypes = set()
+    candidate_etypes = []
     for entry in ranking['data']:
-        if entry['ev'] <= 0 or entry['count'] < 20:
+        if entry['event_type'] in seen_etypes:
             continue
+        if entry['ev'] <= 0 or entry['count'] < 30:
+            continue
+        seen_etypes.add(entry['event_type'])
+        candidate_etypes.append(entry['event_type'])
 
-        etype = entry['event_type']
-        horizon = entry['horizon']
+    tp_range = [5, 8, 10, 15, 20, 30, 50]
+    sl_range = [-5, -10, -15, -20, -30]
+    hold_range = [3, 5, 10]
+
+    for etype in candidate_etypes:
         sub = df_all[df_all['event_type'] == etype].copy()
-        target = sub[horizon].dropna()
-        if len(target) < 20:
+        sub = sub.sort_values('date')  # 시간순 정렬
+        if len(sub) < 40:
             continue
 
-        # TP/SL 최적화: 다양한 조합 테스트
-        best_strategy = None
-        best_ev = -999
+        # Train/Test 분리 (80/20, 시간순 — look-ahead bias 방지)
+        split = int(len(sub) * 0.7)
+        train, test = sub.iloc[:split], sub.iloc[split:]
 
-        tp_range = [3, 5, 8, 10, 15, 20, 30, 50]
-        sl_range = [-5, -10, -15, -20, -30]
-        hold_range = [3, 5, 10, 15, 30]
-
-        for tp_pct in tp_range:
-            for sl_pct in sl_range:
-                for max_hold in hold_range:
-                    # 간단 백테스트
-                    wins = losses = expired = 0
-                    total_pnl = 0
-
-                    for _, row in sub.iterrows():
-                        # D+1 Open 진입 시뮬레이션
-                        if 'next_open_gap' not in row or pd.isna(row.get('next_open_gap')):
-                            continue
-
-                        # post_Xd_max_up/down으로 TP/SL 체크
-                        hit_tp = False
-                        hit_sl = False
-
-                        for n in [1, 2, 3, 5]:
-                            max_up_key = f'post_{n}d_max_up'
-                            max_down_key = f'post_{n}d_max_down'
-                            if max_up_key in row and not pd.isna(row.get(max_up_key)):
-                                if row[max_up_key] >= tp_pct:
-                                    hit_tp = True
-                                if row[max_down_key] <= sl_pct:
-                                    hit_sl = True
-
-                            if n >= max_hold:
-                                break
-
-                        if hit_sl and hit_tp:
-                            # 보수적: SL 우선
-                            losses += 1
-                            total_pnl += sl_pct
-                        elif hit_tp:
-                            wins += 1
-                            total_pnl += tp_pct
-                        elif hit_sl:
-                            losses += 1
-                            total_pnl += sl_pct
-                        else:
-                            # 만기 — 마지막 가격으로 청산
-                            ret_key = f'post_{min(max_hold, 5)}d_ret'
-                            if ret_key in row and not pd.isna(row.get(ret_key)):
-                                ret = row[ret_key]
-                                total_pnl += ret
-                                if ret > 0:
-                                    wins += 1
-                                else:
-                                    losses += 1
-                            expired += 1
-
-                    total_trades = wins + losses
-                    if total_trades < 10:
+        # Train에서 최적 TP/SL 탐색
+        best = None
+        best_ev = -1e9
+        for tp in tp_range:
+            for sl in sl_range:
+                for h in hold_range:
+                    tr = _backtest_single(train, tp, sl, h)
+                    if len(tr) < 15:
                         continue
-
-                    wr = wins / total_trades * 100
-                    ev = total_pnl / total_trades
-
+                    ev = np.mean([t['pnl'] for t in tr])
                     if ev > best_ev:
                         best_ev = ev
-                        best_strategy = {
-                            'event_type': etype,
-                            'tp_pct': tp_pct,
-                            'sl_pct': sl_pct,
-                            'max_hold': max_hold,
-                            'wins': wins,
-                            'losses': losses,
-                            'expired': expired,
-                            'total_trades': total_trades,
-                            'win_rate': round(wr, 1),
-                            'ev_per_trade': round(ev, 2),
-                            'total_pnl': round(total_pnl, 2),
-                            'sharpe_like': round(ev / max(np.std([tp_pct]*wins + [sl_pct]*losses), 1), 3),
-                        }
+                        best = (tp, sl, h)
 
-        if best_strategy and best_strategy['ev_per_trade'] > 0 and best_strategy['win_rate'] >= 45:
-            strategies.append(best_strategy)
+        if best is None:
+            continue
+        tp, sl, h = best
 
-    strategies.sort(key=lambda x: x['ev_per_trade'], reverse=True)
-    return strategies[:20]
+        # Test에서 out-of-sample 검증
+        test_trades = _backtest_single(test, tp, sl, h)
+        train_trades = _backtest_single(train, tp, sl, h)
+        all_trades = _backtest_single(sub, tp, sl, h)
+
+        if len(all_trades) < 20:
+            continue
+
+        # 연도별 분해
+        yearly = defaultdict(lambda: {'wins': 0, 'losses': 0, 'pnl': 0.0})
+        for t in all_trades:
+            y = t['year']
+            if t['pnl'] > 0:
+                yearly[y]['wins'] += 1
+            else:
+                yearly[y]['losses'] += 1
+            yearly[y]['pnl'] += t['pnl']
+        yearly_out = {}
+        for y, d in sorted(yearly.items()):
+            n = d['wins'] + d['losses']
+            yearly_out[y] = {
+                'n': n,
+                'win_rate': round(d['wins']/n*100, 1) if n else 0,
+                'total_pnl': round(d['pnl'], 1),
+                'ev': round(d['pnl']/n, 2) if n else 0,
+            }
+
+        def _summ(trades):
+            if not trades:
+                return None
+            pnls = [t['pnl'] for t in trades]
+            wins = sum(1 for p in pnls if p > 0)
+            return {
+                'n': len(trades),
+                'win_rate': round(wins/len(trades)*100, 1),
+                'ev': round(float(np.mean(pnls)), 2),
+                'median_pnl': round(float(np.median(pnls)), 2),
+                'total_pnl': round(float(np.sum(pnls)), 1),
+                'std': round(float(np.std(pnls)), 2),
+            }
+
+        train_sum = _summ(train_trades)
+        test_sum = _summ(test_trades)
+        all_sum = _summ(all_trades)
+
+        # 필터: OOS EV > 0 + 전체 승률 40%+
+        if test_sum is None or test_sum['ev'] <= 0 or all_sum['win_rate'] < 40:
+            continue
+
+        strategies.append({
+            'event_type': etype,
+            'tp_pct': tp, 'sl_pct': sl, 'max_hold': h,
+            'all': all_sum, 'train': train_sum, 'test': test_sum,
+            'yearly': yearly_out,
+        })
+
+    strategies.sort(key=lambda x: x['test']['ev'], reverse=True)
+    return strategies[:10]
 
 
 # ═══════════════════════════════════════════════════════
@@ -651,13 +730,13 @@ def generate_report(event_counts, df_all, patterns, strategies):
                 a(f"| {year} | {cnt} |")
 
     # 3. 수익성 랭킹
-    a("\n## 3. 이벤트 유형별 수익성")
+    a("\n## 3. 이벤트 유형별 수익성 (트림평균 기준, 극단값 제거)")
     ranking = next((p for p in patterns if p['name'] == 'profitability_ranking'), None)
     if ranking:
-        a("\n| 이벤트 | 기간 | 건수 | 승률 | 평균수익 | EV |")
-        a("|--------|------|------|------|----------|-----|")
+        a("\n| 이벤트 | 기간 | 건수 | 승률 | 중앙값 | 트림평균(EV) |")
+        a("|--------|------|------|------|--------|------|")
         for r in ranking['data'][:30]:
-            a(f"| {r['event_type']} | {r['horizon']} | {r['count']} | {r['win_rate']}% | {r['mean_ret']}% | {r['ev']} |")
+            a(f"| {r['event_type']} | {r['horizon']} | {r['count']} | {r['win_rate']}% | {r['median_ret']}% | {r['trim_mean_ret']}% |")
 
     # 4. 지표 집중도 (공통점)
     a("\n## 4. 핵심 공통점 (지표 집중도)")
@@ -673,14 +752,14 @@ def generate_report(event_counts, df_all, patterns, strategies):
             a(f"| {f['event_type']} | {f['indicator']} | {f['type']} | {detail} |")
 
     # 5. ML 패턴 발견
-    a("\n## 5. ML 자동 패턴 발견")
+    a("\n## 5. ML 자동 패턴 발견 (class_weight='balanced' 적용)")
     for p in patterns:
         if p['type'] == 'profit_prediction':
             a(f"\n### {p['target']} 수익 예측")
             a(f"- 샘플: {p['total_samples']}건 | 기본 승률: {p['base_win_rate']}%")
-            a(f"- Random Forest 정확도: {p['rf_accuracy']}%")
-            a(f"- Decision Tree 정확도: {p['dt_accuracy']}%")
-            a(f"- 수익 시 평균: +{p['avg_profit_when_positive']}% | 손실 시 평균: {p['avg_loss_when_negative']}%")
+            a(f"- Random Forest F1(macro): {p['rf_f1_macro']} | 정확도: {p['rf_accuracy']}%")
+            a(f"- Decision Tree F1(macro): {p['dt_f1_macro']}")
+            a(f"- 수익 시 중앙값: +{p['median_profit_when_positive']}% | 손실 시 중앙값: {p['median_loss_when_negative']}%")
             a(f"\n**중요 지표 Top 10:**\n")
             a("| 지표 | 중요도 |")
             a("|------|--------|")
@@ -703,26 +782,35 @@ def generate_report(event_counts, df_all, patterns, strategies):
             a("\n모든 연도에서 일관된 패턴은 발견되지 않았습니다.")
 
     # 7. 전략 후보
-    a("\n## 7. 발견된 전략 후보")
+    a("\n## 7. 발견된 전략 후보 (Train/Test 분리 + 연도별 분해)")
     if strategies:
-        for i, s in enumerate(strategies[:10], 1):
+        for i, s in enumerate(strategies, 1):
             desc = EVENT_TYPES.get(s['event_type'], {}).get('desc', s['event_type'])
             a(f"\n### 전략 {i}: {desc}")
             a(f"- 진입: {desc} 발생 후 **D+1 시가**에 매수")
             a(f"- 익절: +{s['tp_pct']}% | 손절: {s['sl_pct']}% | 최대 보유: {s['max_hold']}일")
-            a(f"- 백테스트: {s['total_trades']}건, 승률 {s['win_rate']}%, EV {s['ev_per_trade']}%/거래")
-            a(f"- 승: {s['wins']} | 패: {s['losses']} | 만기: {s['expired']}")
-            a(f"- 총 P&L: {s['total_pnl']}%")
+            a(f"- **전체**: {s['all']['n']}건, 승률 {s['all']['win_rate']}%, EV {s['all']['ev']}%/거래, 총 {s['all']['total_pnl']}%")
+            a(f"- **Train(70%)**: {s['train']['n']}건, 승률 {s['train']['win_rate']}%, EV {s['train']['ev']}%")
+            a(f"- **Test(30%, OOS)**: {s['test']['n']}건, 승률 {s['test']['win_rate']}%, EV {s['test']['ev']}%")
+            a(f"\n**연도별 성과:**")
+            a("| 연도 | 거래 | 승률 | EV | 누적 |")
+            a("|------|------|------|-----|------|")
+            for y, d in s['yearly'].items():
+                a(f"| {y} | {d['n']} | {d['win_rate']}% | {d['ev']}% | {d['total_pnl']}% |")
     else:
-        a("\nEV > 0이고 승률 45%+ 인 전략이 발견되지 않았습니다.")
+        a("\n**OOS(out-of-sample) EV > 0 이면서 전체 승률 40%+ 인 전략이 발견되지 않았습니다.**")
+        a("\n→ 이는 단순 이벤트 기반 전략이 실제로 시장에서 통하지 않는다는 신호입니다. 추가 지표 조합이 필요합니다.")
 
     # 8. 한계점
     a("\n## 8. 한계점 및 주의사항")
     a(f"\n- 샘플 종목 {SAMPLE_SIZE}개로 제한 — 전체 시장 대비 편향 가능")
     a("- 생존자 편향: 상장폐지 종목 미포함")
-    a("- D+1 시가 진입 시뮬레이션이지만, 실제 슬리피지/스프레드 미반영")
+    a(f"- 페니스톡 필터 적용: 전일 종가 < ${MIN_PRICE} OR 거래대금 < ${MIN_DOLLAR_VOL:,} 제외")
+    a(f"- 수익률 클리핑: [{RET_CLIP_DOWN}%, +{RET_CLIP_UP}%] — 극단값 오염 방지")
+    a("- D+1 시가 진입 + D+n 종가 청산 (실전 시뮬레이션)")
+    a("- 실제 슬리피지/스프레드 미반영 (저가 종목일수록 실제 수익 낮아짐)")
     a("- TP/SL은 일봉 기준 — 장중 동시 도달 시 보수적(SL 우선) 처리")
-    a("- 과적합 위험: 특히 소수 이벤트(30건 미만)의 결과는 신뢰도 낮음")
+    a("- Train(70%) / Test(30%) 시간순 분리로 look-ahead bias 방지")
 
     return "\n".join(lines)
 
