@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "event_type": "bb_crash_below",
+    "tp_pct": 50,
+    "sl_pct": -20,
+    "max_hold": 5,
+    "wins": 131,
+    "losses": 128,
+    "expired": 208,
+    "total_trades": 259,
+    "win_rate": 50.6,
+    "ev_per_trade": 4.15,
+    "total_pnl": 1075.95,
+    "sharpe_like": 0.119
+  },
+  {
+    "event_type": "bb_crash_below",
+    "tp_pct": 50,
+    "sl_pct": -20,
+    "max_hold": 5,
+    "wins": 131,
+    "losses": 128,
+    "expired": 208,
+    "total_trades": 259,
+    "win_rate": 50.6,
+    "ev_per_trade": 4.15,
+    "total_pnl": 1075.95,
+    "sharpe_like": 0.119
+  },
+  {
+    "event_type": "bb_crash_below",
+    "tp_pct": 50,
+    "sl_pct": -20,
+    "max_hold": 5,
+    "wins": 131,
+    "losses": 128,
+    "expired": 208,
+    "total_trades": 259,
+    "win_rate": 50.6,
+    "ev_per_trade": 4.15,
+    "total_pnl": 1075.95,
+    "sharpe_like": 0.119
+  }
+]
