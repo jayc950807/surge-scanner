@@ -1,0 +1,54 @@
+name: Surge Window Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: "탐색 종목 수 (10000 = 전수, 3~5시간)"
+        required: false
+        default: "10000"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas numpy lxml html5lib
+
+      - name: Run surge window analysis
+        env:
+          SAMPLE_SIZE: ${{ github.event.inputs.sample_size }}
+        run: python surge_window_analysis.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: surge-window-results
+          path: data/
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "surge window analysis ($(date +%Y-%m-%d))"
+          git push
+
+      - name: Step Summary
+        if: always()
+        run: |
+          if [ -f data/surge_window_report.md ]; then
+            head -500 data/surge_window_report.md >> $GITHUB_STEP_SUMMARY
+          fi
