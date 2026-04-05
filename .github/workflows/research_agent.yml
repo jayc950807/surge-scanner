@@ -3,14 +3,10 @@ name: "Autonomous Research Agent"
 on:
   workflow_dispatch:
     inputs:
-      max_cycles:
-        description: "연구 사이클 수 (1회당 ~5분, API비용 ~$0.5)"
+      sample_size:
+        description: "탐색 종목 수 (많을수록 정확, 시간 증가)"
         required: false
-        default: "8"
-      focus:
-        description: "연구 주제 (비워두면 자유 탐색)"
-        required: false
-        default: ""
+        default: "2000"
 
 jobs:
   research:
@@ -26,12 +22,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install anthropic yfinance pandas numpy scikit-learn lxml html5lib
+        run: pip install yfinance pandas numpy scikit-learn lxml html5lib
 
-      - name: Run Research Agent
+      - name: Run Research Agent (LLM-Free)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MAX_CYCLES: ${{ github.event.inputs.max_cycles }}
+          SAMPLE_SIZE: ${{ github.event.inputs.sample_size }}
         run: python research_agent.py 2>&1 | tee research_agent_output.log
 
       - name: Upload artifacts
@@ -41,10 +36,9 @@ jobs:
           name: research-results-${{ github.run_number }}
           path: |
             data/research_report.md
-            data/research_log.json
-            data/research_knowledge.json
+            data/research_events.csv
+            data/research_patterns.json
             data/research_strategies.json
-            data/research_datasets/
             research_agent.log
             research_agent_output.log
 
@@ -53,26 +47,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/research_report.md data/research_log.json data/research_knowledge.json data/research_strategies.json data/research_datasets/ || true
-          git diff --cached --quiet || git commit -m "research: autonomous agent report ($(date +%Y-%m-%d))"
+          git add data/research_report.md data/research_events.csv data/research_patterns.json data/research_strategies.json || true
+          git diff --cached --quiet || git commit -m "research: auto-analysis report ($(date +%Y-%m-%d))"
           git push || echo "Push failed"
 
       - name: Step Summary
         if: always()
         run: |
           if [ -f data/research_report.md ]; then
-            echo "## Autonomous Research Report" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            head -200 data/research_report.md >> $GITHUB_STEP_SUMMARY
-            TOTAL_LINES=$(wc -l < data/research_report.md)
-            if [ "$TOTAL_LINES" -gt 200 ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "*(리포트가 200줄을 초과하여 잘렸습니다. 전체 리포트는 Artifacts에서 다운로드하세요.)*" >> $GITHUB_STEP_SUMMARY
-            fi
+            cat data/research_report.md >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "### Agent Log (last 40 lines)" >> $GITHUB_STEP_SUMMARY
+          echo "### Log (last 30 lines)" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -40 research_agent_output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No log available" >> $GITHUB_STEP_SUMMARY
+          tail -30 research_agent_output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No log" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
