@@ -15,9 +15,19 @@ from collections import defaultdict
 
 # shared_config에서 공통 상수/함수 import (없으면 로컬 fallback)
 try:
-    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES
+    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES, is_us_dst
 except ImportError:
     KST = timezone(timedelta(hours=9))
+    def is_us_dst(dt_date):
+        from datetime import date as _d
+        year = dt_date.year
+        mar1 = _d(year, 3, 1)
+        days_to_sun = (6 - mar1.weekday()) % 7
+        dst_start = mar1 + timedelta(days=days_to_sun + 7)
+        nov1 = _d(year, 11, 1)
+        days_to_sun2 = (6 - nov1.weekday()) % 7
+        dst_end = nov1 + timedelta(days=days_to_sun2)
+        return dst_start <= dt_date < dst_end
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -633,6 +643,69 @@ def result_badge(r):
     cls, txt = m.get(r, ('c-muted', r))
     return f'<span class="{cls}">{txt}</span>'
 
+def us_to_kst(us_date_str):
+    """미국 거래일(YYYY-MM-DD) → 한국 날짜/시간 변환.
+    미국 장마감 4:00 PM ET 기준으로 KST 변환.
+    EDT(서머타임): +13h → 익일 05:00 KST
+    EST(겨울):     +14h → 익일 06:00 KST
+    """
+    if not us_date_str or us_date_str in ('—', 'nan', 'None', ''):
+        return '—'
+    try:
+        from datetime import date as _d
+        dt = datetime.strptime(str(us_date_str)[:10], '%Y-%m-%d')
+        d = dt.date() if hasattr(dt, 'date') else dt
+        if is_us_dst(d):
+            kst_dt = dt + timedelta(hours=13)  # EDT +13h
+        else:
+            kst_dt = dt + timedelta(hours=14)  # EST +14h
+        return kst_dt.strftime('%m/%d %H:%M KST')
+    except Exception:
+        return str(us_date_str)
+
+def us_to_kst_date(us_date_str):
+    """미국 거래일 → 한국 날짜만 (YYYY-MM-DD)"""
+    if not us_date_str or us_date_str in ('—', 'nan', 'None', ''):
+        return '—'
+    try:
+        from datetime import date as _d
+        dt = datetime.strptime(str(us_date_str)[:10], '%Y-%m-%d')
+        d = dt.date() if hasattr(dt, 'date') else dt
+        if is_us_dst(d):
+            kst_dt = dt + timedelta(hours=13)
+        else:
+            kst_dt = dt + timedelta(hours=14)
+        return kst_dt.strftime('%Y-%m-%d')
+    except Exception:
+        return str(us_date_str)
+
+def us_to_kst_short(us_date_str):
+    """미국 거래일 → 한국 날짜 짧은형 (MM/DD)"""
+    if not us_date_str or us_date_str in ('—', 'nan', 'None', ''):
+        return '—'
+    try:
+        from datetime import date as _d
+        dt = datetime.strptime(str(us_date_str)[:10], '%Y-%m-%d')
+        d = dt.date() if hasattr(dt, 'date') else dt
+        if is_us_dst(d):
+            kst_dt = dt + timedelta(hours=13)
+        else:
+            kst_dt = dt + timedelta(hours=14)
+        return kst_dt.strftime('%m/%d')
+    except Exception:
+        return str(us_date_str)
+
+def calc_sell_date_kst(us_date_str, hold_days):
+    """미국 탐지일 + hold_days 영업일 후의 KST 날짜 계산 (매도 예정일)"""
+    if not us_date_str or us_date_str in ('—', 'nan', 'None', ''):
+        return '—'
+    try:
+        dt = pd.to_datetime(us_date_str)
+        sell_dt_us = dt + pd.offsets.BDay(hold_days)
+        return us_to_kst_short(sell_dt_us.strftime('%Y-%m-%d'))
+    except Exception:
+        return '—'
+
 # ─── Header ───────────────────────────────────────────────────────────────────
 scan_info = load_latest_scan()
 tracker_info = load_tracker_summary()
@@ -819,9 +892,10 @@ def render_strategy_tab(key, tab_obj):
 _closed_for_today = load_closed_positions()
 _today_sells = pd.DataFrame()
 if not _closed_for_today.empty and 'close_date' in _closed_for_today.columns:
-    _closed_for_today['_cd'] = pd.to_datetime(_closed_for_today['close_date'], errors='coerce')
+    # close_date(미국 날짜)를 KST로 변환 후 오늘(KST)과 비교
+    _closed_for_today['_cd_kst'] = _closed_for_today['close_date'].apply(us_to_kst_date)
     _today_dt = datetime.now(KST).strftime('%Y-%m-%d')
-    _today_sells = _closed_for_today[_closed_for_today['_cd'].dt.strftime('%Y-%m-%d') == _today_dt]
+    _today_sells = _closed_for_today[_closed_for_today['_cd_kst'] == _today_dt]
 
 with tab_today:
     # ── Today's Sells (매도) ──
@@ -872,8 +946,8 @@ with tab_today:
 
         # Build the today table grouped by strategy
         html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-        html += '<th>Strategy</th><th>Target</th><th>Hold</th><th>Ticker</th>'
-        html += '<th>Price</th><th>TP Price</th><th>Backtest</th>'
+        html += '<th>Strategy</th><th>Target</th><th>Ticker</th>'
+        html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>Backtest</th>'
         html += '</tr></thead><tbody>'
 
         for s_key in ['A', 'B', 'C', 'D', 'E']:
@@ -886,17 +960,19 @@ with tab_today:
                 tk = safe_str(row.get('ticker'))
                 pr = safe_float(row.get('price', 0))
                 tp = safe_float(row.get('tp_price', 0))
+                sig_date = safe_str(row.get('date'))
+                mh = STRAT_MAX_HOLD.get(s_key, 5)
                 pr_h = f'${pr:.2f}' if pr > 0 else '—'
                 tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
-                tab_name = STRAT_TAB.get(s_key, s_key)
+                sell_by = calc_sell_date_kst(sig_date, mh)
 
                 html += f'<tr>'
                 html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
                 html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
-                html += f'<td style="color:var(--text-secondary)">{STRAT_MAX_HOLD.get(s_key,"")}일</td>'
                 html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
                 html += f'<td>{pr_h}</td>'
                 html += f'<td>{tp_h}</td>'
+                html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
                 html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
                 html += f'</tr>'
 
@@ -943,8 +1019,12 @@ with tab_history:
         all_records = pd.concat(frames, ignore_index=True)
         all_records['signal_date'] = pd.to_datetime(all_records['signal_date'], errors='coerce')
         all_records = all_records.dropna(subset=['signal_date'])
-        all_records['date_str'] = all_records['signal_date'].dt.strftime('%m/%d')
-        all_records['month_str'] = all_records['signal_date'].dt.strftime('%Y-%m')
+        # 미국 거래일 → KST 날짜로 변환하여 표시
+        all_records['_sd_str'] = all_records['signal_date'].dt.strftime('%Y-%m-%d')
+        all_records['date_str'] = all_records['_sd_str'].apply(us_to_kst_short)
+        all_records['month_str'] = all_records['_sd_str'].apply(
+            lambda x: us_to_kst_date(x)[:7] if us_to_kst_date(x) != '—' else '—'
+        )
 
     strategies = ['A', 'B', 'C', 'D', 'E']
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
@@ -1131,7 +1211,7 @@ with tab_history:
                 active=active.sort_values('_s',ascending=False)
 
             html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>Entry</th>'
+            html += '<th>Strat</th><th>Ticker</th><th>Signal</th><th>매도기한</th>'
             html += '<th>Price</th><th>Current</th><th>P&L</th>'
             html += '<th>TP</th><th>Peak</th><th>Peak Date</th>'
             html += '<th>Achievement</th><th>Remaining</th>'
@@ -1140,15 +1220,20 @@ with tab_history:
 
             for _, row in active.iterrows():
                 s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
-                sig_dt=safe_str(row.get('signal_date')); status=safe_str(row.get('status'))
+                sig_dt=us_to_kst_short(safe_str(row.get('signal_date'))); status=safe_str(row.get('status'))
                 is_p = (status=='PENDING')
                 sp = safe_float(safe_str(row.get('signal_price')))
                 ep_raw=safe_str(row.get('entry_price')); cp_raw=safe_str(row.get('current_price'))
                 tp_raw=safe_str(row.get('tp_price')); mx_raw=safe_str(row.get('max_price'))
-                mx_dt=safe_str(row.get('max_price_date'))
+                mx_dt=us_to_kst_short(safe_str(row.get('max_price_date')))
                 ach_raw=safe_str(row.get('achievement_pct')); chg_raw=safe_str(row.get('change_pct'))
                 dh=safe_str(row.get('days_held')); mh_raw=safe_str(row.get('max_hold'))
                 mh = mh_raw if mh_raw!='—' else str(STRAT_MAX_HOLD.get(s,''))
+
+                # 매도기한 계산 (signal_date + max_hold 영업일)
+                _sig_raw = safe_str(row.get('signal_date'))
+                _mh_i = int(safe_float(mh)) if mh != '—' else STRAT_MAX_HOLD.get(s, 5)
+                sell_by_h = calc_sell_date_kst(_sig_raw, _mh_i)
 
                 if is_p:
                     ep_h=f'<span class="c-muted">${sp:.2f}</span>' if sp>0 else '<span class="c-muted">—</span>'
@@ -1158,9 +1243,7 @@ with tab_history:
                     tp_f=safe_float(tp_raw)
                     rem_h = f'<span class="c-muted">~{STRAT_TP.get(s,"")}</span>'
                     days_h=f'<span class="c-muted">0/{mh}</span>'
-                    ent_dt_h='<span class="c-muted">WAIT</span>'
                 else:
-                    ent_dt_h=safe_str(row.get('entry_date'))
                     if ep_raw=='—' and sp>0: ep_raw=f'{sp:.2f}'
                     ep_h = f'${ep_raw}' if ep_raw!='—' else '—'
                     if cp_raw=='—':
@@ -1199,7 +1282,7 @@ with tab_history:
                 st_txt = 'OPEN' if status=='OPEN' else 'WAIT'
 
                 html += f'<tr><td>{stag(s)}</td><td style="font-weight:600;color:var(--text-primary)">{tk}</td>'
-                html += f'<td>{sig_dt}</td><td>{ent_dt_h}</td><td>{ep_h}</td><td>{cp_h}</td><td>{chg_h}</td>'
+                html += f'<td>{sig_dt}</td><td style="color:var(--red-bright);font-weight:600">{sell_by_h}</td><td>{ep_h}</td><td>{cp_h}</td><td>{chg_h}</td>'
                 html += f'<td>{tp_raw if tp_raw!="—" else "—"}</td><td>{mx_h}</td><td>{mx_dt_h}</td>'
                 html += f'<td>{ach_h}</td><td>{rem_h}</td><td>{days_h}</td>'
                 html += f'<td class="{st_cls}">{st_txt}</td></tr>'
@@ -1272,11 +1355,11 @@ with tab_history:
 
             for _, row in cp_s.iterrows():
                 s=safe_str(row.get('strategy')); tk=safe_str(row.get('ticker'))
-                sig_dt=safe_str(row.get('signal_date')); ent_dt=safe_str(row.get('entry_date'))
+                sig_dt=us_to_kst_short(safe_str(row.get('signal_date'))); ent_dt=us_to_kst_short(safe_str(row.get('entry_date')))
                 ent_pr=safe_str(row.get('entry_price')); result=safe_str(row.get(rs_col,'status'))
-                close_dt=safe_str(row.get('close_date')); close_pr=safe_str(row.get('close_price'))
-                rp_raw=safe_str(row.get('result_pct')); tp_hit=safe_str(row.get('tp_hit_date'))
-                mx=safe_str(row.get('max_price')); mx_dt=safe_str(row.get('max_price_date'))
+                close_dt=us_to_kst_short(safe_str(row.get('close_date'))); close_pr=safe_str(row.get('close_price'))
+                rp_raw=safe_str(row.get('result_pct')); tp_hit=us_to_kst_short(safe_str(row.get('tp_hit_date')))
+                mx=safe_str(row.get('max_price')); mx_dt=us_to_kst_short(safe_str(row.get('max_price_date')))
                 ma_raw=safe_str(row.get('max_achievement_pct'))
 
                 res_h=result_badge(result)
@@ -1398,7 +1481,7 @@ with tab_history:
 
                 for p in positions:
                     s_=p['strategy']; res=p['result']; rp=p['result_pct']
-                    tp_hit=p['tp_hit_date']; mx=p['max_price']; mx_dt=p['max_price_date']; ma=p['max_ach']
+                    tp_hit=us_to_kst_short(p['tp_hit_date']); mx=p['max_price']; mx_dt=us_to_kst_short(p['max_price_date']); ma=p['max_ach']
                     ep=p['entry_price']; sig_pr=p.get('signal_price','—'); sp_f=safe_float(sig_pr)
                     is_pend=(res=='PENDING')
 
@@ -1409,7 +1492,7 @@ with tab_history:
                         mx_h='<span class="c-muted">—</span>'; mxd_h='<span class="c-muted">—</span>'
                         ach_h='<span class="c-muted">—</span>'
                     else:
-                        ed_h=p['entry_date'] if p['entry_date']!='—' else '<span class="c-muted">—</span>'
+                        ed_h=us_to_kst_short(p['entry_date']) if p['entry_date']!='—' else '<span class="c-muted">—</span>'
                         if ep=='—' and sp_f>0: ep=f'{sp_f:.2f}'
                         ep_h=f'${ep}' if ep!='—' else '<span class="c-muted">—</span>'
                         rp_h=chg_html(rp)
@@ -1426,7 +1509,7 @@ with tab_history:
                             ach_h=progress_bar(mav,ac)
                         else: ach_h='<span class="c-muted">—</span>'
 
-                    html += f'<tr><td>{stag(s_)}</td><td>{p["signal_date"]}</td><td>{ed_h}</td><td>{ep_h}</td>'
+                    html += f'<tr><td>{stag(s_)}</td><td>{us_to_kst_short(p["signal_date"])}</td><td>{ed_h}</td><td>{ep_h}</td>'
                     html += f'<td>{result_badge(res)}</td><td>{rp_h}</td><td>{tp_h}</td>'
                     html += f'<td>{mx_h}</td><td>{mxd_h}</td><td>{ach_h}</td></tr>'
                 html += '</tbody></table>'
