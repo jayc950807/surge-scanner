@@ -27,6 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Shared Imports ──────────────────────────────────────────────────────────
+import os as _os; sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'core'))
 from shared_config import (
     LEVERAGED_ETF,
     calc_rsi_wilder,
