@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run optimizer
-        run: python backtest_optimizer.py 2>&1 | tee optimizer_output.log
+        run: python strategy_search/backtest_optimizer.py 2>&1 | tee optimizer_output.log
 
       - name: Summary
         if: always()
