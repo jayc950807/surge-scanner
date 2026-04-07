@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run explorer
-        run: python explorer.py 2>&1 | tee explorer_output.log
+        run: python strategy_search/explorer.py 2>&1 | tee explorer_output.log
 
       - name: Summary
         if: always()
