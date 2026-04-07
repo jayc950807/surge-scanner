@@ -27,7 +27,7 @@ jobs:
       - name: Run Research Agent (LLM-Free)
         env:
           SAMPLE_SIZE: ${{ github.event.inputs.sample_size }}
-        run: python research_agent.py 2>&1 | tee research_agent_output.log
+        run: python research/research_agent.py 2>&1 | tee research_agent_output.log
 
       - name: Upload artifacts
         if: always()
