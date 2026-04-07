@@ -582,13 +582,15 @@ def load_closed_positions():
     return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-STRAT_TAB = {'A': '5%5일a', 'B': '15%10일', 'C': '5%5일b', 'D': '20%30일', 'E': '10%30일'}
-STRAT_NAMES = {'A': '5%5일a · 급락반등', 'B': '15%10일 · 고수익', 'C': '5%5일b · 과매도', 'D': '20%30일 · 초저가', 'E': '10%30일 · 속반등'}
+STRAT_TAB = {'A': 'A_5%5일', 'B': 'D_15%10일', 'C': 'B_5%5일', 'D': 'E_20%30일', 'E': 'C_10%30일'}
+STRAT_NAMES = {'A': 'A_5%5일 · 급락반등', 'B': 'D_15%10일 · 고수익', 'C': 'B_5%5일 · 과매도', 'D': 'E_20%30일 · 초저가', 'E': 'C_10%30일 · 속반등'}
 STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등'}
 STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%'}
 STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10}
 STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%'}
 STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30}
+# 탭 표시 순서: TP% 오름차순, 동일 TP%일 때 보유일 오름차순
+STRAT_ORDER = ['A', 'C', 'E', 'B', 'D']
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def safe_str(val, fb='—'):
@@ -736,14 +738,14 @@ history = load_history()
 _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-tab_today, tab_a, tab_b, tab_c, tab_d, tab_e, tab_history = st.tabs([
-    _today_label, "5%5일a", "15%10일", "5%5일b", "20%30일", "10%30일", "Performance"
+tab_today, tab_a, tab_c, tab_e, tab_b, tab_d, tab_history = st.tabs([
+    _today_label, "A_5%5일", "B_5%5일", "C_10%30일", "D_15%10일", "E_20%30일", "Performance"
 ])
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
 STRAT_INFO = {
     'A': {
-        'title': '5%5일a — 급락반등',
+        'title': 'A_5%5일 — 급락반등',
         'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
         'bt': '90.1% (236/262)',
@@ -763,7 +765,7 @@ STRAT_INFO = {
         },
     },
     'B': {
-        'title': '15%10일 — 고수익',
+        'title': 'D_15%10일 — 고수익',
         'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
         'bt': '90.3% (28/31)',
@@ -784,7 +786,7 @@ STRAT_INFO = {
         },
     },
     'C': {
-        'title': '5%5일b — 과매도',
+        'title': 'B_5%5일 — 과매도',
         'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
         'bt': '86.9% (542/624)',
@@ -804,7 +806,7 @@ STRAT_INFO = {
         },
     },
     'D': {
-        'title': '20%30일 — 초저가',
+        'title': 'E_20%30일 — 초저가',
         'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
         'bt': '97.7% (127/130)',
@@ -822,7 +824,7 @@ STRAT_INFO = {
         },
     },
     'E': {
-        'title': '10%30일 — 속반등',
+        'title': 'C_10%30일 — 속반등',
         'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
         'bt': '91.0% (273/300)',
@@ -950,7 +952,7 @@ with tab_today:
         html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>Backtest</th>'
         html += '</tr></thead><tbody>'
 
-        for s_key in ['A', 'B', 'C', 'D', 'E']:
+        for s_key in STRAT_ORDER:
             if 'strategy' not in today_signals.columns:
                 continue
             s_sig = today_signals[today_signals['strategy'] == s_key]
@@ -983,7 +985,7 @@ with tab_today:
         st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
         strat_counts = today_signals.groupby('strategy').size() if 'strategy' in today_signals.columns else pd.Series(dtype=int)
         cards_html = '<div class="rr-cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">'
-        for s_key in ['A', 'B', 'C', 'D', 'E']:
+        for s_key in STRAT_ORDER:
             cnt = int(strat_counts.get(s_key, 0))
             if cnt == 0:
                 continue
@@ -995,7 +997,7 @@ with tab_today:
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
 
-for k, t in [('A', tab_a), ('B', tab_b), ('C', tab_c), ('D', tab_d), ('E', tab_e)]:
+for k, t in [('A', tab_a), ('C', tab_c), ('E', tab_e), ('B', tab_b), ('D', tab_d)]:
     render_strategy_tab(k, t)
 
 # ─── Tab: Performance ─────────────────────────────────────────────────────────
@@ -1026,7 +1028,7 @@ with tab_history:
             lambda x: us_to_kst_date(x)[:7] if us_to_kst_date(x) != '—' else '—'
         )
 
-    strategies = ['A', 'B', 'C', 'D', 'E']
+    strategies = STRAT_ORDER  # ['A', 'C', 'E', 'B', 'D'] — TP% 오름차순
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
     # Aggregate — 대소문자 무관 매칭
@@ -2455,11 +2457,11 @@ with st.sidebar:
     st.markdown("""
 | Name | WR | Hold |
 |------|-----|------|
-| 5%5일a | 90.1% | 5d |
-| 15%10일 | 90.3% | 10d |
-| 5%5일b | 86.9% | 5d |
-| 20%30일 | 97.7% | 30d |
-| 10%30일 | 91.0% | 30d |
+| A_5%5일 | 90.1% | 5d |
+| B_5%5일 | 86.9% | 5d |
+| C_10%30일 | 91.0% | 30d |
+| D_15%10일 | 90.3% | 10d |
+| E_20%30일 | 97.7% | 30d |
 
 ---
 Auto-scan via GitHub Actions
