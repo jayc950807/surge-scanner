@@ -42,7 +42,7 @@ jobs:
       - name: Run scanner
         id: scanner
         run: |
-          python scanner.py 2>&1 | tee scanner_output.log
+          python core/scanner.py 2>&1 | tee scanner_output.log
           echo "scanner_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
       - name: Run position tracker
@@ -50,12 +50,12 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.reverify }}" = "YES" ]; then
             echo "🔄 전체 히스토리 재검증 모드"
-            python tracker.py --reverify
+            python core/tracker.py --reverify
           elif [ "${{ github.event.inputs.reset_tracker }}" = "YES" ]; then
             echo "🔄 포지션 전체 리셋 모드"
-            python tracker.py --reset
+            python core/tracker.py --reset
           else
-            python tracker.py
+            python core/tracker.py
           fi
 
       - name: Summary
