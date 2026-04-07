@@ -117,16 +117,22 @@ def fetch_price_data(ticker, start_date, end_date=None):
 
 def get_entry_for_signal(ticker, signal_date):
     """
-    signal_date 다음 거래일의 시가를 조회하여 entry_date와 entry_price를 반환.
+    signal_date 당일 종가로 진입 — entry_date = signal_date, entry_price = 종가.
+    종가 확정 후 바로 매수하는 전략이므로 D+0 종가 기준.
     동일 티커/날짜 복수 전략 시 동일한 진입가를 보장함.
-    Fix #1: Proper exception handling with logging.
     """
     try:
-        next_day = pd.to_datetime(signal_date) + timedelta(days=1)
-        hist = fetch_price_data(ticker, next_day.strftime('%Y-%m-%d'))
+        hist = fetch_price_data(ticker, signal_date)
         if hist is not None and len(hist) > 0:
+            # signal_date 당일 데이터 찾기
+            sig_dt = pd.to_datetime(signal_date).strftime('%Y-%m-%d')
+            for dt, row in hist.iterrows():
+                if dt.strftime('%Y-%m-%d') == sig_dt:
+                    entry_price = float(row['Close'])
+                    return sig_dt, entry_price
+            # 당일 데이터 못 찾으면 가장 가까운 데이터 사용
             entry_date = hist.index[0].strftime('%Y-%m-%d')
-            entry_price = float(hist['Open'].iloc[0])
+            entry_price = float(hist['Close'].iloc[0])
             return entry_date, entry_price
     except Exception as e:
         logging.warning(f"get_entry_for_signal({ticker}, {signal_date}) failed: {e}")
@@ -480,10 +486,9 @@ def update_open_positions():
         if hist is None or hist.empty:
             continue
 
-        # 진입일 이후의 데이터만 (진입일 다음날부터 추적)
+        # 진입일 종가에 매수했으므로, 다음 거래일부터 추적
         entry_dt = pd.to_datetime(entry_date)
-        # 진입일 시가에 매수했으므로, 진입일의 나머지 시간도 추적 대상
-        hist_tracking = hist[hist.index >= entry_dt]
+        hist_tracking = hist[hist.index > entry_dt]
 
         if hist_tracking.empty:
             continue
