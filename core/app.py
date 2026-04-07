@@ -1310,7 +1310,7 @@ with tab_history:
                     mh_r=safe_str(row.get('max_hold'))
                     mh=mh_r if mh_r!='—' else str(STRAT_MAX_HOLD.get(s,''))
                     with d1:
-                        st.markdown(f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)} ({STRAT_KR.get(s,'')})\n- Date: {safe_str(row.get('signal_date'))}\n- Price: ${sp:.2f}" if sp>0 else f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)}\n- Date: {safe_str(row.get('signal_date'))}\n- Price: —")
+                        st.markdown(f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)} ({STRAT_KR.get(s,'')})\n- Date: {us_to_kst_short(safe_str(row.get('signal_date')))}\n- Price: ${sp:.2f}" if sp>0 else f"**Signal**\n- Strategy: {STRAT_TAB.get(s,s)}\n- Date: {us_to_kst_short(safe_str(row.get('signal_date')))}\n- Price: —")
                     with d2:
                         if status=='PENDING':
                             st.markdown(f"**Entry**\n- Status: Waiting\n- TP: ${tp:.2f}" + (f"\n- SL: ${sl:.2f}" if sl>0 else "\n- SL: None"))
@@ -1886,7 +1886,7 @@ with tab_history:
                     html += '</tr></thead><tbody>'
                     for _, row in nm_80.sort_values('max_ach_f', ascending=False).head(20).iterrows():
                         s_ = safe_str(row.get('strategy')); tk_ = safe_str(row.get('ticker'))
-                        sd_ = safe_str(row.get('signal_date')); res_ = safe_str(row.get(an_rs))
+                        sd_ = us_to_kst_short(safe_str(row.get('signal_date'))); res_ = safe_str(row.get(an_rs))
                         ma_ = row['max_ach_f']; rp_ = row['result_pct_f']
                         mx_ = safe_str(row.get('max_price'))
                         html += f'<tr><td>{stag(s_)}</td><td style="font-weight:600">{tk_}</td><td>{sd_}</td>'
