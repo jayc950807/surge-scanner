@@ -30,7 +30,7 @@ jobs:
       - name: Run surge window analysis
         env:
           SAMPLE_SIZE: ${{ github.event.inputs.sample_size }}
-        run: python surge_window_analysis.py
+        run: python research/surge_window_analysis.py
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
