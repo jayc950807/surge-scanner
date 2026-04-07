@@ -910,10 +910,9 @@ with tab_history:
         total_win = int((_rs_upper == 'WIN').sum())
         total_loss = int((_rs_upper == 'LOSS').sum())
         total_exp = int((_rs_upper == 'EXPIRED').sum())
-              total_trailing = int((_rs_upper == 'TRAILING').sum())
-
+        total_trailing = int((_rs_upper == 'TRAILING').sum())
     else:
-total_closed = total_win = total_loss = total_exp = total_trailing = 0
+        total_closed = total_win = total_loss = total_exp = total_trailing = 0
     total_fail = total_loss + total_exp + total_trailing  # EXPIRED, TRAILING도 실패로 간주
     total_open = len(open_pos[open_pos['status'].str.upper().isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
     # 승률: Win / (Win + Loss + Expired) — EXPIRED는 실패로 간주
@@ -1033,7 +1032,7 @@ total_closed = total_win = total_loss = total_exp = total_trailing = 0
             nd=len(s_all); nc=len(s_cl)
             _s_rs = s_cl[rs_col].astype(str).str.upper() if nc>0 else pd.Series(dtype=str)
             nw = int((_s_rs=='WIN').sum()) if nc>0 else 0
-           nl = int((_s_rs=='LOSS').sum()) if nc>0 else 0
+            nl = int((_s_rs=='LOSS').sum()) if nc>0 else 0
             ne = int((_s_rs=='EXPIRED').sum()) if nc>0 else 0
             nt = int((_s_rs=='TRAILING').sum()) if nc>0 else 0
             na = len(s_op)
