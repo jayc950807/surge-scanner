@@ -629,7 +629,7 @@ def chg_html(val_raw):
 
 def result_badge(r):
     m = {'WIN': ('st-win', 'WIN'), 'LOSS': ('st-loss', 'LOSS'), 'EXPIRED': ('st-expired', 'EXP'),
-         'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
+         'TRAILING': ('st-loss', 'TRAIL'), 'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
     cls, txt = m.get(r, ('c-muted', r))
     return f'<span class="{cls}">{txt}</span>'
 
@@ -815,12 +815,59 @@ def render_strategy_tab(key, tab_obj):
                     st.dataframe(show[avail], use_container_width=True, column_config=info['col_config'])
 
 # ─── Tab: Today's Picks ──────────────────────────────────────────────────────
+# Pre-load closed positions for today's sell section
+_closed_for_today = load_closed_positions()
+_today_sells = pd.DataFrame()
+if not _closed_for_today.empty and 'close_date' in _closed_for_today.columns:
+    _closed_for_today['_cd'] = pd.to_datetime(_closed_for_today['close_date'], errors='coerce')
+    _today_dt = datetime.now(KST).strftime('%Y-%m-%d')
+    _today_sells = _closed_for_today[_closed_for_today['_cd'].dt.strftime('%Y-%m-%d') == _today_dt]
+
 with tab_today:
+    # ── Today's Sells (매도) ──
+    if not _today_sells.empty:
+        _sell_rs = 'result_status' if 'result_status' in _today_sells.columns else 'status'
+        st.markdown(f'''<div class="rr-legend" style="color:var(--red-bright);font-size:0.9em;margin-bottom:16px">
+            SELL Today — <span style="font-weight:700;font-size:1.1em">{len(_today_sells)}</span> 종목 매도
+        </div>''', unsafe_allow_html=True)
+        sell_html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+        sell_html += '<th>Strategy</th><th>Ticker</th><th>Entry</th><th>Close $</th>'
+        sell_html += '<th>P&L</th><th>Result</th><th>Days</th><th>Peak</th>'
+        sell_html += '</tr></thead><tbody>'
+        for _, sr in _today_sells.iterrows():
+            s_ = safe_str(sr.get('strategy'))
+            tk_ = safe_str(sr.get('ticker'))
+            ep_ = safe_str(sr.get('entry_price'))
+            cp_ = safe_str(sr.get('close_price'))
+            rp_ = safe_str(sr.get('result_pct'))
+            res_ = safe_str(sr.get(_sell_rs))
+            dh_ = safe_str(sr.get('days_held'))
+            mx_ = safe_str(sr.get('max_price'))
+            ep_h = f'${ep_}' if ep_ != '—' else '—'
+            cp_h = f'${cp_}' if cp_ != '—' else '—'
+            rp_v = safe_float(rp_)
+            rp_cls = 'c-win' if rp_v > 0 else 'c-loss' if rp_v < 0 else 'c-muted'
+            rp_h = f'<span class="{rp_cls}">{rp_v:+.1f}%</span>' if rp_ != '—' else '—'
+            res_h = result_badge(res_)
+            mx_h = f'${mx_}' if mx_ != '—' else '—'
+            sell_html += f'<tr>'
+            sell_html += f'<td>{stag(s_)}</td>'
+            sell_html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk_}</td>'
+            sell_html += f'<td>{ep_h}</td><td>{cp_h}</td>'
+            sell_html += f'<td>{rp_h}</td><td>{res_h}</td>'
+            sell_html += f'<td>{dh_}일</td><td>{mx_h}</td>'
+            sell_html += f'</tr>'
+        sell_html += '</tbody></table></div>'
+        st.markdown(sell_html, unsafe_allow_html=True)
+        st.markdown('<div class="rr-divider" style="margin:24px auto"></div>', unsafe_allow_html=True)
+
+    # ── Today's Buys (매수) ──
     if today_signals.empty:
-        st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
+        if _today_sells.empty:
+            st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'''<div class="rr-legend" style="color:var(--gold);font-size:0.9em;margin-bottom:16px">
-            Today — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> signal{"s" if len(today_signals)>1 else ""} detected
+        st.markdown(f'''<div class="rr-legend" style="color:var(--green-bright);font-size:0.9em;margin-bottom:16px">
+            BUY Today — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> 종목 매수
         </div>''', unsafe_allow_html=True)
 
         # Build the today table grouped by strategy
