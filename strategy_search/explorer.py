@@ -30,7 +30,8 @@ from datetime import datetime
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 from shared_config import (
     calc_rsi_wilder,
     get_all_tickers,
