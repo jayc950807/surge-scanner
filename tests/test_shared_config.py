@@ -13,7 +13,8 @@ import pytest
 import pandas as pd
 import numpy as np
 from datetime import date, datetime, timezone, timedelta
-
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 from shared_config import (
     KST, LEVERAGED_ETF, STRATEGY_CONFIG, STRATEGY_NAMES,
     MIN_PRICE, MIN_VOLUME,
