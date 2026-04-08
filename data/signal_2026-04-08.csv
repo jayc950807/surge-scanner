@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg
+C,AUUD,2026-04-08,06:56 KST,3.68,25.5,21.5,-17.5,4.0,0.0,3.86,2.94,,,,
+D,HKIT,2026-04-08,06:56 KST,1.33,,36.9,,,,1.6,,21.4,-54.1,30.0,
+E,JTAI,2026-04-08,06:56 KST,5.71,,107.2,,5.0,,6.28,,,-66.8,30.0,432282.0
