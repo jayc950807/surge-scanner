@@ -30,7 +30,7 @@ jobs:
       - name: Run precision check
         env:
           SAMPLE_SIZE: ${{ github.event.inputs.sample_size }}
-        run: python research/surge_precision_check.py
+        run: python research/precision_check_fg.py
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
