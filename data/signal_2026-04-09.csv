@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,ret5d,vol_avg,hold_days
+C,SNOU,2026-04-09,06:54 KST,13.26,13.5,26.0,-23.0,5,1.22,13.92,10.61,,,
+C,NBIZ,2026-04-09,06:54 KST,5.81,25.3,22.3,-17.6,5,0.35,6.1,4.65,,,
+E,NBIZ,2026-04-09,06:54 KST,5.81,,22.3,,5,,6.39,,-47.0,1620903.0,30.0
