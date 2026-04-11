@@ -11,9 +11,11 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 240
     permissions:
       contents: write
+    env:
+      PYTHONUNBUFFERED: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +32,7 @@ jobs:
       - name: Run OHLCV collector
         env:
           MAX_TICKERS: ${{ github.event.inputs.max_tickers }}
-        run: python research/data_collection/collect_raw_ohlcv.py
+        run: python -u research/data_collection/collect_raw_ohlcv.py
 
       - name: Show collection summary
         if: always()
