@@ -51,14 +51,18 @@ START_DATE = "2020-01-01"
 END_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 MAX_TICKERS = int(os.environ.get("MAX_TICKERS", "10000"))
-MAX_RETRIES = 3
+MAX_RETRIES = 2                    # 재시도 1회만 (총 2회 시도)
+
+# HTTP 타임아웃 (어떤 경우에도 티커당 최대 ~18초 보장)
+HTTP_TIMEOUT = 8                   # 초
+UNIVERSE_TIMEOUT = 15              # 티커 유니버스 다운로드 타임아웃
 
 # Stooq는 rate limit이 거의 없어서 텀 짧게 유지
 SLEEP_BETWEEN_TICKERS = 0.15
 SLEEP_JITTER = 0.10
 LONG_REST_EVERY_N = 1000           # 1000 티커마다 잠깐 휴식
 LONG_REST_DURATION = 10
-RETRY_BACKOFF = [2, 5, 10]
+RETRY_BACKOFF = [2, 5]             # 재시도 대기 2초 → 5초
 
 # 재개 모드
 RESUME = os.environ.get("RESUME", "1") == "1"
@@ -83,12 +87,27 @@ LOG_OUT = META_DIR / "collection_log.json"
 # ============================================================
 # 1. 티커 유니버스 수집
 # ============================================================
+def _http_get_text(url: str, timeout: int = UNIVERSE_TIMEOUT) -> str | None:
+    """
+    HTTP GET으로 텍스트 가져오기. 반드시 타임아웃 적용.
+    """
+    try:
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
+        if r.status_code == 200:
+            return r.text
+        print(f"[WARN] GET {url} -> status {r.status_code}", flush=True)
+    except Exception as e:
+        print(f"[WARN] GET {url} -> {type(e).__name__}: {e}", flush=True)
+    return None
+
+
 def fetch_ticker_universe() -> pd.DataFrame:
     """
     무료 소스에서 현재 상장된 미국 주식 티커 목록을 수집.
+    (타임아웃 보장 — requests 사용)
 
     소스:
-      - NASDAQ Trader FTP: nasdaqlisted.txt, otherlisted.txt (NASDAQ + NYSE + AMEX)
+      - NASDAQ Trader FTP: nasdaqlisted.txt, otherlisted.txt
       - Wikipedia: S&P500 (보강)
 
     Returns:
@@ -97,46 +116,49 @@ def fetch_ticker_universe() -> pd.DataFrame:
     rows = []
 
     # 1) NASDAQ listed
-    try:
-        df = pd.read_csv(
-            "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
-            sep="|",
-        )
-        df = df[df.get("Test Issue", "N") == "N"]
-        for t in df["Symbol"].dropna().astype(str):
-            rows.append({"ticker": t.strip(), "exchange": "NASDAQ", "source": "nasdaqtrader"})
-        print(f"[INFO] NASDAQ listed: {len(df)} symbols")
-    except Exception as e:
-        print(f"[WARN] NASDAQ listed fetch failed: {e}")
+    print("[INFO] fetching NASDAQ listed...", flush=True)
+    text = _http_get_text("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt")
+    if text:
+        try:
+            df = pd.read_csv(io.StringIO(text), sep="|")
+            df = df[df.get("Test Issue", "N") == "N"]
+            for t in df["Symbol"].dropna().astype(str):
+                rows.append({"ticker": t.strip(), "exchange": "NASDAQ", "source": "nasdaqtrader"})
+            print(f"[INFO] NASDAQ listed: {len(df)} symbols", flush=True)
+        except Exception as e:
+            print(f"[WARN] NASDAQ listed parse failed: {e}", flush=True)
 
     # 2) Other listed (NYSE, AMEX, etc.)
-    try:
-        df = pd.read_csv(
-            "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
-            sep="|",
-        )
-        df = df[df.get("Test Issue", "N") == "N"]
-        exchange_map = {"N": "NYSE", "A": "AMEX", "P": "NYSE_ARCA", "Z": "BATS"}
-        for _, r in df.iterrows():
-            sym = str(r.get("ACT Symbol", "")).strip()
-            ex = str(r.get("Exchange", "")).strip()
-            if sym:
-                rows.append({"ticker": sym, "exchange": exchange_map.get(ex, ex), "source": "nasdaqtrader"})
-        print(f"[INFO] Other listed: {len(df)} symbols")
-    except Exception as e:
-        print(f"[WARN] Other listed fetch failed: {e}")
+    print("[INFO] fetching other listed (NYSE/AMEX)...", flush=True)
+    text = _http_get_text("https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt")
+    if text:
+        try:
+            df = pd.read_csv(io.StringIO(text), sep="|")
+            df = df[df.get("Test Issue", "N") == "N"]
+            exchange_map = {"N": "NYSE", "A": "AMEX", "P": "NYSE_ARCA", "Z": "BATS"}
+            for _, r in df.iterrows():
+                sym = str(r.get("ACT Symbol", "")).strip()
+                ex = str(r.get("Exchange", "")).strip()
+                if sym:
+                    rows.append({"ticker": sym, "exchange": exchange_map.get(ex, ex), "source": "nasdaqtrader"})
+            print(f"[INFO] Other listed: {len(df)} symbols", flush=True)
+        except Exception as e:
+            print(f"[WARN] Other listed parse failed: {e}", flush=True)
 
     # 3) Wikipedia S&P500 (보강)
-    try:
-        sp = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
-        for t in sp["Symbol"].astype(str):
-            rows.append({"ticker": t.strip(), "exchange": "SP500", "source": "wikipedia"})
-        print(f"[INFO] S&P500: {len(sp)} symbols")
-    except Exception as e:
-        print(f"[WARN] S&P500 fetch failed: {e}")
+    print("[INFO] fetching Wikipedia S&P500...", flush=True)
+    text = _http_get_text("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+    if text:
+        try:
+            sp = pd.read_html(io.StringIO(text))[0]
+            for t in sp["Symbol"].astype(str):
+                rows.append({"ticker": t.strip(), "exchange": "SP500", "source": "wikipedia"})
+            print(f"[INFO] S&P500: {len(sp)} symbols", flush=True)
+        except Exception as e:
+            print(f"[WARN] S&P500 parse failed: {e}", flush=True)
 
     if not rows:
-        print("[FATAL] No tickers fetched from any source")
+        print("[FATAL] No tickers fetched from any source", flush=True)
         sys.exit(1)
 
     df = pd.DataFrame(rows)
@@ -160,7 +182,7 @@ def fetch_ticker_universe() -> pd.DataFrame:
     df = df.dropna(subset=["ticker"])
     df = df.drop_duplicates(subset=["ticker"], keep="first").reset_index(drop=True)
     df = df.sort_values("ticker").reset_index(drop=True)
-    print(f"[INFO] Total unique tickers: {len(df)}")
+    print(f"[INFO] Total unique tickers: {len(df)}", flush=True)
     return df
 
 
@@ -187,7 +209,7 @@ def download_single(ticker: str, start: str, end: str, session: requests.Session
     """
     url = stooq_url(ticker, start, end)
     try:
-        resp = session.get(url, timeout=20, headers={"User-Agent": USER_AGENT})
+        resp = session.get(url, timeout=HTTP_TIMEOUT, headers={"User-Agent": USER_AGENT})
     except Exception:
         return None
 
@@ -241,11 +263,12 @@ def save_ticker(ticker: str, df: pd.DataFrame) -> int:
 # 3. 메인 루프
 # ============================================================
 def main():
-    print("=" * 60)
-    print("원시 OHLCV 수집기 (Stooq)")
-    print(f"기간: {START_DATE} ~ {END_DATE}")
-    print(f"최대 티커: {MAX_TICKERS}")
-    print("=" * 60)
+    print("=" * 60, flush=True)
+    print("원시 OHLCV 수집기 (Stooq)", flush=True)
+    print(f"기간: {START_DATE} ~ {END_DATE}", flush=True)
+    print(f"최대 티커: {MAX_TICKERS}", flush=True)
+    print(f"HTTP 타임아웃: {HTTP_TIMEOUT}s, 재시도: {MAX_RETRIES}", flush=True)
+    print("=" * 60, flush=True)
 
     start_time = time.time()
 
@@ -254,7 +277,7 @@ def main():
     if len(universe) > MAX_TICKERS:
         universe = universe.head(MAX_TICKERS)
     tickers = universe["ticker"].tolist()
-    print(f"[INFO] 수집 대상: {len(tickers)} 종목")
+    print(f"[INFO] 수집 대상: {len(tickers)} 종목", flush=True)
 
     # HTTP 세션 재사용
     session = requests.Session()
@@ -288,7 +311,7 @@ def main():
             consecutive_fail += 1
             # 연속 30개 실패 시 30초 쿨다운 (Stooq가 막을 가능성 낮지만 안전장치)
             if consecutive_fail >= 30:
-                print(f"  [경고] 연속 {consecutive_fail}개 실패. 30초 대기...")
+                print(f"  [경고] 연속 {consecutive_fail}개 실패. 30초 대기...", flush=True)
                 time.sleep(30)
                 consecutive_fail = 0
         else:
@@ -307,13 +330,14 @@ def main():
             except Exception as e:
                 failed_rows.append({"ticker": t, "reason": f"save_error: {type(e).__name__}: {e}"})
 
-        # 진행 로그 (100 티커마다)
-        if idx % 100 == 0:
+        # 진행 로그 (50 티커마다 — 초반 살아있는지 빨리 확인 가능)
+        if idx % 50 == 0:
             elapsed = time.time() - start_time
             rate = idx / elapsed if elapsed > 0 else 0
             eta_sec = (total - idx) / rate if rate > 0 else 0
             print(f"[{idx}/{total}] success={len(success_rows)} failed={len(failed_rows)} "
-                  f"skipped={skipped_resume} elapsed={elapsed:.0f}s eta={eta_sec/60:.1f}min")
+                  f"skipped={skipped_resume} elapsed={elapsed:.0f}s eta={eta_sec/60:.1f}min",
+                  flush=True)
 
         # 중간 저장 (500 티커마다)
         if idx % 500 == 0:
@@ -322,7 +346,7 @@ def main():
 
         # 긴 휴식 (1000 티커마다)
         if idx % LONG_REST_EVERY_N == 0:
-            print(f"  [잠깐 휴식] {LONG_REST_DURATION}초 대기...")
+            print(f"  [잠깐 휴식] {LONG_REST_DURATION}초 대기...", flush=True)
             time.sleep(LONG_REST_DURATION)
         else:
             # 티커 간 짧은 텀
@@ -356,11 +380,11 @@ def main():
     with open(LOG_OUT, "w") as f:
         json.dump(log, f, indent=2, ensure_ascii=False)
 
-    print("=" * 60)
-    print(f"완료. 성공: {len(success_rows)}  실패: {len(failed_rows)}  스킵: {skipped_resume}")
-    print(f"경과: {elapsed/60:.1f}분")
-    print(f"출력: {OHLCV_DIR}")
-    print("=" * 60)
+    print("=" * 60, flush=True)
+    print(f"완료. 성공: {len(success_rows)}  실패: {len(failed_rows)}  스킵: {skipped_resume}", flush=True)
+    print(f"경과: {elapsed/60:.1f}분", flush=True)
+    print(f"출력: {OHLCV_DIR}", flush=True)
+    print("=" * 60, flush=True)
 
 
 if __name__ == "__main__":
