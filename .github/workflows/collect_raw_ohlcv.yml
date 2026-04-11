@@ -1,0 +1,71 @@
+name: Collect Raw OHLCV
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_tickers:
+        description: "최대 수집 티커 수 (10000 = 전체)"
+        required: false
+        default: "10000"
+      batch_size:
+        description: "yfinance 배치 사이즈"
+        required: false
+        default: "50"
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas numpy lxml html5lib pyarrow
+
+      - name: Run OHLCV collector
+        env:
+          MAX_TICKERS: ${{ github.event.inputs.max_tickers }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size }}
+        run: python research/data_collection/collect_raw_ohlcv.py
+
+      - name: Show collection summary
+        if: always()
+        run: |
+          if [ -f data/raw/metadata/collection_log.json ]; then
+            echo "## Collection Log" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/raw/metadata/collection_log.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d data/raw/ohlcv ]; then
+            COUNT=$(ls data/raw/ohlcv/*.parquet 2>/dev/null | wc -l)
+            SIZE=$(du -sh data/raw/ohlcv 2>/dev/null | cut -f1)
+            echo "parquet files: $COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "total size: $SIZE" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-ohlcv-data
+          path: data/raw/
+          retention-days: 30
+
+      - name: Commit metadata only
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/raw/metadata/
+          git diff --staged --quiet || git commit -m "raw ohlcv collection log ($(date +%Y-%m-%d))"
+          git push || true
