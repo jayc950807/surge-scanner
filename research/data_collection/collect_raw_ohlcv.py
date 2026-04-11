@@ -43,15 +43,16 @@ START_DATE = "2020-01-01"
 END_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 MAX_TICKERS = int(os.environ.get("MAX_TICKERS", "10000"))
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "50"))    # yfinance download() 배치
 MAX_RETRIES = 3
 
-# Rate limit 대응
-SLEEP_BETWEEN_BATCHES = 2.5        # 초 (기본 배치 간 텀)
-SLEEP_JITTER = 0.5                 # ± 랜덤 (0~0.5초)
-LONG_REST_EVERY_N_BATCHES = 50     # 50 배치마다 긴 휴식
-LONG_REST_DURATION = 30            # 긴 휴식 30초
-RETRY_BACKOFF = [5, 15, 30]        # 재시도 대기(초) — 1차 5초, 2차 15초, 3차 30초
+# Rate limit 대응 (티커 1개씩 순차 다운로드)
+# Yahoo Finance가 yf.download() 배치 API를 차단하므로
+# 기존 precision_check_fg.py와 동일하게 개별 다운로드 방식 사용
+SLEEP_BETWEEN_TICKERS = 0.4        # 초 (티커 간 텀)
+SLEEP_JITTER = 0.3                 # ± 랜덤 (0~0.3초)
+LONG_REST_EVERY_N = 500            # 500 티커마다 긴 휴식
+LONG_REST_DURATION = 20            # 긴 휴식 20초
+RETRY_BACKOFF = [3, 10, 20]        # 재시도 대기(초)
 
 # 재개 가능 (이미 저장된 티커 스킵)
 RESUME = os.environ.get("RESUME", "1") == "1"
@@ -156,55 +157,39 @@ def fetch_ticker_universe() -> pd.DataFrame:
 
 
 # ============================================================
-# 2. OHLCV 다운로드
+# 2. OHLCV 다운로드 (개별 티커 단위)
 # ============================================================
-def download_batch(tickers: list, start: str, end: str) -> dict:
+def download_single(ticker: str, start: str, end: str) -> pd.DataFrame | None:
     """
-    yfinance 배치 다운로드.
+    단일 티커 다운로드. 기존 precision_check_fg.py 와 동일한 방식.
 
     Returns:
-      dict {ticker: DataFrame} — 성공한 티커만.
-      실패한 티커는 딕셔너리에 없음.
+      DataFrame 또는 None (실패 시)
     """
-    result = {}
     try:
         df = yf.download(
-            tickers,
+            ticker,
             start=start,
             end=end,
             interval="1d",
-            group_by="ticker",
             auto_adjust=False,
-            threads=True,
             progress=False,
+            threads=False,
         )
     except Exception as e:
-        print(f"[ERROR] batch download failed: {e}")
-        return result
+        return None
 
     if df is None or df.empty:
-        return result
+        return None
 
-    # 단일 티커인 경우 컬럼 구조가 다름
-    if len(tickers) == 1:
-        t = tickers[0]
-        if not df.empty:
-            result[t] = df
-        return result
+    # MultiIndex columns 해제 (가끔 단일 티커도 MultiIndex로 나옴)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
-    # 멀티티커: MultiIndex columns
-    for t in tickers:
-        try:
-            sub = df[t].copy() if t in df.columns.get_level_values(0) else None
-            if sub is None:
-                continue
-            sub = sub.dropna(how="all")
-            if sub.empty:
-                continue
-            result[t] = sub
-        except Exception:
-            continue
-    return result
+    df = df.dropna(how="all")
+    if df.empty:
+        return None
+    return df
 
 
 def normalize_ohlcv(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -243,9 +228,9 @@ def save_ticker(ticker: str, df: pd.DataFrame) -> int:
 # ============================================================
 def main():
     print("=" * 60)
-    print("원시 OHLCV 수집기")
+    print("원시 OHLCV 수집기 (티커 단위 순차 다운로드)")
     print(f"기간: {START_DATE} ~ {END_DATE}")
-    print(f"최대 티커: {MAX_TICKERS}, 배치: {BATCH_SIZE}")
+    print(f"최대 티커: {MAX_TICKERS}")
     print("=" * 60)
 
     start_time = time.time()
@@ -257,75 +242,78 @@ def main():
     tickers = universe["ticker"].tolist()
     print(f"[INFO] 수집 대상: {len(tickers)} 종목")
 
-    # 2) 배치 다운로드
+    # 2) 개별 다운로드
     success_rows = []    # [{ticker, exchange, source, n_rows, first_date, last_date}]
     failed_rows = []     # [{ticker, reason}]
 
-    total_batches = (len(tickers) + BATCH_SIZE - 1) // BATCH_SIZE
-    for i in range(0, len(tickers), BATCH_SIZE):
-        batch = tickers[i : i + BATCH_SIZE]
-        batch_idx = i // BATCH_SIZE + 1
-        print(f"[{batch_idx}/{total_batches}] batch {batch[0]}..{batch[-1]} ({len(batch)} tickers)")
+    total = len(tickers)
+    skipped_resume = 0
+    consecutive_empty = 0  # 연속 실패 카운터 (rate limit 감지)
 
-        # 재개 모드: 이미 저장된 티커는 제외
-        if RESUME:
-            batch_to_fetch = [t for t in batch if not (OHLCV_DIR / f"{t}.parquet").exists()]
-            if len(batch_to_fetch) < len(batch):
-                skipped = len(batch) - len(batch_to_fetch)
-                print(f"  [resume] {skipped} 티커 이미 저장됨, 스킵")
-            if not batch_to_fetch:
-                continue
-        else:
-            batch_to_fetch = batch
+    for idx, t in enumerate(tickers, start=1):
+        # 재개 모드: 이미 저장된 티커는 스킵
+        if RESUME and (OHLCV_DIR / f"{t}.parquet").exists():
+            skipped_resume += 1
+            continue
 
         # 재시도 루프
-        data = {}
+        df = None
         for attempt in range(1, MAX_RETRIES + 1):
-            data = download_batch(batch_to_fetch, START_DATE, END_DATE)
-            if data:
+            df = download_single(t, START_DATE, END_DATE)
+            if df is not None and not df.empty:
                 break
-            wait = RETRY_BACKOFF[min(attempt - 1, len(RETRY_BACKOFF) - 1)]
-            print(f"  retry {attempt}/{MAX_RETRIES} (wait {wait}s)")
-            time.sleep(wait)
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF[min(attempt - 1, len(RETRY_BACKOFF) - 1)]
+                time.sleep(wait)
 
-        # 개별 티커 처리
-        for t in batch_to_fetch:
-            if t not in data:
-                failed_rows.append({"ticker": t, "reason": "no_data_from_yfinance"})
-                continue
+        if df is None or df.empty:
+            failed_rows.append({"ticker": t, "reason": "no_data_from_yfinance"})
+            consecutive_empty += 1
+            # 연속 20개 실패 = rate limit 의심 → 60초 쿨다운
+            if consecutive_empty >= 20:
+                print(f"  [rate limit 의심] 연속 {consecutive_empty}개 실패. 60초 대기...")
+                time.sleep(60)
+                consecutive_empty = 0
+        else:
+            consecutive_empty = 0
             try:
-                df = normalize_ohlcv(data[t], t)
-                if df.empty:
+                norm = normalize_ohlcv(df, t)
+                if norm.empty:
                     failed_rows.append({"ticker": t, "reason": "empty_after_normalize"})
-                    continue
-                n = save_ticker(t, df)
-                meta = universe[universe["ticker"] == t].iloc[0]
-                success_rows.append({
-                    "ticker": t,
-                    "exchange": meta["exchange"],
-                    "source": meta["source"],
-                    "n_rows": n,
-                    "first_date": df["date"].iloc[0],
-                    "last_date": df["date"].iloc[-1],
-                })
+                else:
+                    n = save_ticker(t, norm)
+                    meta = universe[universe["ticker"] == t].iloc[0]
+                    success_rows.append({
+                        "ticker": t,
+                        "exchange": meta["exchange"],
+                        "source": meta["source"],
+                        "n_rows": n,
+                        "first_date": norm["date"].iloc[0],
+                        "last_date": norm["date"].iloc[-1],
+                    })
             except Exception as e:
                 failed_rows.append({"ticker": t, "reason": f"save_error: {type(e).__name__}: {e}"})
 
-        # 중간 저장 (매 20 배치마다)
-        if batch_idx % 20 == 0:
+        # 진행 로그 (100 티커마다)
+        if idx % 100 == 0:
+            elapsed = time.time() - start_time
+            rate = idx / elapsed if elapsed > 0 else 0
+            eta_sec = (total - idx) / rate if rate > 0 else 0
+            print(f"[{idx}/{total}] success={len(success_rows)} failed={len(failed_rows)} "
+                  f"skipped={skipped_resume} elapsed={elapsed:.0f}s eta={eta_sec/60:.1f}min")
+
+        # 중간 저장 (500 티커마다)
+        if idx % 500 == 0:
             pd.DataFrame(success_rows).to_csv(TICKERS_OUT, index=False)
             pd.DataFrame(failed_rows).to_csv(FAILED_OUT, index=False)
-            elapsed = time.time() - start_time
-            print(f"  [checkpoint] success={len(success_rows)} failed={len(failed_rows)} elapsed={elapsed:.0f}s")
 
-        # 긴 휴식 (50 배치마다)
-        if batch_idx % LONG_REST_EVERY_N_BATCHES == 0:
+        # 긴 휴식 (500 티커마다)
+        if idx % LONG_REST_EVERY_N == 0:
             print(f"  [long rest] {LONG_REST_DURATION}초 대기...")
             time.sleep(LONG_REST_DURATION)
         else:
-            # 평소 배치 간 텀 + 지터
-            sleep_sec = SLEEP_BETWEEN_BATCHES + random.uniform(0, SLEEP_JITTER)
-            time.sleep(sleep_sec)
+            # 티커 간 텀 + 지터
+            time.sleep(SLEEP_BETWEEN_TICKERS + random.uniform(0, SLEEP_JITTER))
 
     # 3) 최종 저장
     pd.DataFrame(success_rows).to_csv(TICKERS_OUT, index=False)
@@ -339,8 +327,9 @@ def main():
         "requested_tickers": len(tickers),
         "succeeded": len(success_rows),
         "failed": len(failed_rows),
+        "skipped_resume": skipped_resume,
         "elapsed_seconds": round(elapsed, 1),
-        "data_source": "yfinance",
+        "data_source": "yfinance (single-ticker sequential)",
         "ticker_sources": ["nasdaqtrader.com", "wikipedia S&P500"],
         "output_dir": str(OHLCV_DIR.relative_to(ROOT)),
     }
