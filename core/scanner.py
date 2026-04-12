@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E)
+  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F)
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
@@ -28,11 +28,16 @@
     매도: +10% 익절 | 30일 타임아웃
     백테스트: 91.0% (273/300), 건당 평균 max +104.9%, 중간 도달일 2일
 
+  Strategy F (+50% 바닥 급등):
+    매수: Vol20d>10% + Dist52wHigh<-85% + BB%B<0 + Ret1d<-5% + GapUp>5%
+    매도: +50% 익절 | -20% 손절 | 20일 타임아웃
+    백테스트: 87.5% (8건/5년)
+
   Usage:
-    python scanner.py                      # Scan all strategies (A+B+C+D+E)
+    python scanner.py                      # Scan all strategies (A+B+C+D+E+F)
     python scanner.py --strategy A         # Strategy A only
-    python scanner.py --strategy DE        # Strategy D + E only
-    python scanner.py --strategy ABCDE     # All strategies
+    python scanner.py --strategy DEF       # Strategy D + E + F only
+    python scanner.py --strategy ABCDEF    # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -185,6 +190,16 @@ E_VOL_MIN        = 200000     # 20일 평균 거래량 >= 20만주
 E_TAKE_PROFIT    = 0.10       # +10%
 E_MAX_HOLD_DAYS  = 30
 
+# === Strategy F thresholds (+50% 바닥 급등) ===
+F_VOLATILITY_20D  = 0.10      # 20일 변동성 > 10%
+F_DIST_52W_HIGH   = -0.85     # 52주 고점 대비 -85% 이하
+F_BB_PCTB_THRESH  = 0.0       # 볼린저 %B < 0
+F_RET1D_THRESH    = -0.05     # 전일 수익률 < -5%
+F_GAP_UP_THRESH   = 0.05      # 갭업 > 5%
+F_TAKE_PROFIT     = 0.50      # +50%
+F_STOP_LOSS       = -0.20     # -20%
+F_MAX_HOLD_DAYS   = 20
+
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def calc_consec_down(close_series):
@@ -204,15 +219,16 @@ def calc_consec_down(close_series):
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
 def phase1_rsi_filter(all_tickers, strat_str):
-    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10)
+    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F: Vol>6%)
     한 번의 30d 스캔으로 모든 전략 후보를 수집.
     """
     run_d = 'D' in strat_str
     run_e = 'E' in strat_str
+    run_f = 'F' in strat_str
     run_abc = any(s in strat_str for s in ['A', 'B', 'C'])
 
     print(f"\n{'='*80}")
-    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''})")
+    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''}{' + Vol>6%' if run_f else ''})")
     print(f"{'='*80}")
     print(f"  대상: {len(all_tickers)}개 종목")
 
@@ -257,6 +273,13 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 # E 후보: Price $3~$10 + AvgVol >= 20만
                 if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
                     candidates.add(tk)
+
+                # F 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
+                if run_f:
+                    daily_ret = close.pct_change()
+                    vol_20d = float(daily_ret.tail(20).std()) if len(daily_ret) >= 20 else 0
+                    if vol_20d > 0.06:
+                        candidates.add(tk)
             except Exception as e:
                 print(f"  Warning: {tk} processing failed: {e}")
                 continue
@@ -270,7 +293,7 @@ def phase1_rsi_filter(all_tickers, strat_str):
 # ─── Unified Phase 2: 한 번의 다운로드로 A/B/C/D/E 동시 체크 ────────────────────
 
 def phase2_check_all(candidates, strat_str):
-    """Phase 2: 120d 데이터를 한 번만 받아서 A/B/C/D/E 조건을 모두 체크"""
+    """Phase 2: 120d(또는 2y if F) 데이터를 한 번만 받아서 A/B/C/D/E/F 조건을 모두 체크"""
     print(f"\n{'='*80}")
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
@@ -282,12 +305,14 @@ def phase2_check_all(candidates, strat_str):
     signals_c = []
     signals_d = []
     signals_e = []
+    signals_f = []
 
     run_a = 'A' in strat_str
     run_b = 'B' in strat_str
     run_c = 'C' in strat_str
     run_d = 'D' in strat_str
     run_e = 'E' in strat_str
+    run_f = 'F' in strat_str
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
@@ -296,10 +321,10 @@ def phase2_check_all(candidates, strat_str):
 
         if batch_num % 10 == 1 or batch_num == total_p2:
             print(f"    Phase2 Batch {batch_num}/{total_p2} | "
-                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)}")
+                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)}")
 
-        # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요)
-        data = download_batch(batch, period='120d')
+        # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요, F는 252d=2y 필요)
+        data = download_batch(batch, period='2y' if run_f else '120d')
         if data is None or data.empty:
             time.sleep(BATCH_DELAY)
             continue
@@ -535,6 +560,63 @@ def phase2_check_all(candidates, strat_str):
                                           f"Down={consec}d Vol={avg_vol/1000:.0f}K "
                                           f"TP=${tp_price:.2f}")
 
+                # ══════════════════════════════════════════════
+                # Strategy F: Vol20d>10% + 52wHigh<-85% + BB<0 + Ret1d<-5% + GapUp>5%
+                # ══════════════════════════════════════════════
+                if run_f and n >= 252:
+                    # 20일 변동성
+                    daily_returns = close.pct_change()
+                    vol_20d = float(daily_returns.iloc[-20:].std())
+
+                    if vol_20d > F_VOLATILITY_20D:
+                        # 52주 고점 대비 위치
+                        high_52w = float(high.rolling(252).max().iloc[-1])
+                        if high_52w > 0:
+                            dist_52w = (c_last - high_52w) / high_52w
+
+                            if dist_52w < F_DIST_52W_HIGH:
+                                # 볼린저 밴드 %B
+                                bb_mid = close.rolling(20).mean()
+                                bb_std_val = close.rolling(20).std()
+                                bb_lower = bb_mid - 2 * bb_std_val
+                                bb_upper = bb_mid + 2 * bb_std_val
+                                bb_range = float(bb_upper.iloc[-1]) - float(bb_lower.iloc[-1])
+                                bb_pctb = (c_last - float(bb_lower.iloc[-1])) / bb_range if bb_range > 0 else 0.5
+
+                                if bb_pctb < F_BB_PCTB_THRESH:
+                                    # 전일 수익률
+                                    if n >= 2:
+                                        prev_close = float(close.iloc[-2])
+                                        ret_1d = (c_last - prev_close) / prev_close if prev_close > 0 else 0
+
+                                        if ret_1d < F_RET1D_THRESH:
+                                            # 갭업 (당일 시가 vs 전일 종가)
+                                            gap_pct = (o_last - prev_close) / prev_close if prev_close > 0 else 0
+
+                                            if gap_pct > F_GAP_UP_THRESH:
+                                                tp_price = round(c_last * (1 + F_TAKE_PROFIT), 2)
+                                                sl_price = round(c_last * (1 + F_STOP_LOSS), 2)
+                                                signals_f.append({
+                                                    'strategy': 'F',
+                                                    'ticker': tk,
+                                                    'date': trade_date,
+                                                    'scan_time': scan_time_kst,
+                                                    'price': round(c_last, 2),
+                                                    'vol_20d': round(vol_20d * 100, 1),
+                                                    'dist_52w': round(dist_52w * 100, 1),
+                                                    'bb_pctb': round(bb_pctb, 3),
+                                                    'ret_1d': round(ret_1d * 100, 1),
+                                                    'gap_pct': round(gap_pct * 100, 1),
+                                                    'tp_price': tp_price,
+                                                    'sl_price': sl_price,
+                                                    'hold_days': F_MAX_HOLD_DAYS,
+                                                })
+                                                print(f"    ★ [F] {tk} @ ${c_last:.2f} | "
+                                                      f"Vol20d={vol_20d*100:.1f}% 52wH={dist_52w*100:.1f}% "
+                                                      f"BB={bb_pctb:.3f} Ret1d={ret_1d*100:.1f}% "
+                                                      f"Gap={gap_pct*100:.1f}% "
+                                                      f"TP=${tp_price:.2f} SL=${sl_price:.2f}")
+
             except Exception as e:
                 print(f"  Warning: {tk} phase2 processing failed: {e}")
                 continue
@@ -545,15 +627,16 @@ def phase2_check_all(candidates, strat_str):
     signals_c.sort(key=lambda x: x['rsi7'])
     signals_d.sort(key=lambda x: x['price'])
     signals_e.sort(key=lambda x: x['ret5d'])
+    signals_f.sort(key=lambda x: x['dist_52w'])
 
-    return signals_a, signals_b, signals_c, signals_d, signals_e
+    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f):
     """결과 출력"""
-    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e
+    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f
     date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy A
@@ -660,11 +743,33 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e):
                   f"${s['tp_price']:>9.2f} {s['hold_days']:>5}d")
         print(f"  Total: {len(signals_e)} signals")
 
+    # Strategy F
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY F — 바닥 급등 (+50%) — {date_str}")
+    print(f"  조건: Vol20d>10% + 52wHigh<-85% + BB<0 + Ret1d<-5% + GapUp>5%")
+    print(f"  청산: +50% 익절 | -20% 손절 | 20일 타임아웃")
+    print(f"  백테스트: 승률 87.5% (8건/5년), 20일내 50%+ 급등")
+    print(f"{'='*90}")
 
-def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
+    if not signals_f:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'Vol20d':>7} {'52wH%':>7} {'BB%B':>7} "
+              f"{'1일%':>7} {'Gap%':>7} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_f:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} "
+                  f"{s['vol_20d']:>6.1f}% {s['dist_52w']:>6.1f}% "
+                  f"{s['bb_pctb']:>7.3f} {s['ret_1d']:>6.1f}% "
+                  f"{s['gap_pct']:>6.1f}% "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_f)} signals")
+
+
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
-    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e
+    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f
 
     # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
     if all_signals:
@@ -737,6 +842,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
         'strategy_c_count': len(signals_c),
         'strategy_d_count': len(signals_d),
         'strategy_e_count': len(signals_e),
+        'strategy_f_count': len(signals_f),
         'total_count': len(all_signals),
         'dq_warnings': len(dq_warnings),
     }
@@ -749,9 +855,9 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E)')
-    parser.add_argument('--strategy', default='ABCDE',
-                       help='Which strategies to run, e.g. A, AB, ABCDE (default: ABCDE)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F)')
+    parser.add_argument('--strategy', default='ABCDEF',
+                       help='Which strategies to run, e.g. A, AB, ABCDEF (default: ABCDEF)')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -779,15 +885,15 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d, signals_e = phase2_check_all(candidates, strat_str)
+    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f = phase2_check_all(candidates, strat_str)
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d, signals_e)
-    save_results(signals_a, signals_b, signals_c, signals_d, signals_e)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건")
+    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건")
 
 
 if __name__ == '__main__':
