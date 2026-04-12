@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F)
+  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F + G + H)
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
@@ -33,11 +33,21 @@
     매도: +50% 익절 | -20% 손절 | 20일 타임아웃
     백테스트: 87.5% (8건/5년)
 
+  Strategy G (+40% MACD 전환 급등):
+    매수: Vol20d>10% + RSI7<30 + MACD 골든크로스 + GapUp>5% + Price<SMA5
+    매도: +40% 익절 | -20% 손절 | 20일 타임아웃
+    백테스트: 90.0% (10건/5년)
+
+  Strategy H (+40% ATR 확대 급등):
+    매수: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR확대>25%
+    매도: +40% 익절 | -20% 손절 | 20일 타임아웃
+    백테스트: 90.0% (10건/5년)
+
   Usage:
-    python scanner.py                      # Scan all strategies (A+B+C+D+E+F)
+    python scanner.py                      # Scan all strategies (A+B+C+D+E+F+G+H)
     python scanner.py --strategy A         # Strategy A only
     python scanner.py --strategy DEF       # Strategy D + E + F only
-    python scanner.py --strategy ABCDEF    # All strategies
+    python scanner.py --strategy ABCDEFGH  # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -200,6 +210,24 @@ F_TAKE_PROFIT     = 0.50      # +50%
 F_STOP_LOSS       = -0.20     # -20%
 F_MAX_HOLD_DAYS   = 20
 
+# === Strategy G thresholds (+40% MACD 전환 급등) ===
+G_VOLATILITY_20D  = 0.10
+G_RSI7_THRESH     = 30
+G_GAP_UP_THRESH   = 0.05
+G_TAKE_PROFIT     = 0.40
+G_STOP_LOSS       = -0.20
+G_MAX_HOLD_DAYS   = 20
+
+# === Strategy H thresholds (+40% ATR 확대 급등) ===
+H_RSI7_THRESH       = 30
+H_DIST_52W_HIGH     = -0.85
+H_RET1D_THRESH      = -0.05
+H_GAP_UP_THRESH     = 0.05
+H_ATR_CHANGE_THRESH = 0.25
+H_TAKE_PROFIT       = 0.40
+H_STOP_LOSS         = -0.20
+H_MAX_HOLD_DAYS     = 20
+
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def calc_consec_down(close_series):
@@ -219,12 +247,14 @@ def calc_consec_down(close_series):
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
 def phase1_rsi_filter(all_tickers, strat_str):
-    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F: Vol>6%)
+    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F/G/H: Vol>6%)
     한 번의 30d 스캔으로 모든 전략 후보를 수집.
     """
     run_d = 'D' in strat_str
     run_e = 'E' in strat_str
     run_f = 'F' in strat_str
+    run_g = 'G' in strat_str
+    run_h = 'H' in strat_str
     run_abc = any(s in strat_str for s in ['A', 'B', 'C'])
 
     print(f"\n{'='*80}")
@@ -274,8 +304,8 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
                     candidates.add(tk)
 
-                # F 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
-                if run_f:
+                # F/G/H 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
+                if run_f or run_g or run_h:
                     daily_ret = close.pct_change()
                     vol_20d = float(daily_ret.tail(20).std()) if len(daily_ret) >= 20 else 0
                     if vol_20d > 0.06:
@@ -293,7 +323,7 @@ def phase1_rsi_filter(all_tickers, strat_str):
 # ─── Unified Phase 2: 한 번의 다운로드로 A/B/C/D/E 동시 체크 ────────────────────
 
 def phase2_check_all(candidates, strat_str):
-    """Phase 2: 120d(또는 2y if F) 데이터를 한 번만 받아서 A/B/C/D/E/F 조건을 모두 체크"""
+    """Phase 2: 120d(또는 2y if F/G/H) 데이터를 한 번만 받아서 A/B/C/D/E/F/G/H 조건을 모두 체크"""
     print(f"\n{'='*80}")
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
@@ -306,6 +336,8 @@ def phase2_check_all(candidates, strat_str):
     signals_d = []
     signals_e = []
     signals_f = []
+    signals_g = []
+    signals_h = []
 
     run_a = 'A' in strat_str
     run_b = 'B' in strat_str
@@ -313,6 +345,8 @@ def phase2_check_all(candidates, strat_str):
     run_d = 'D' in strat_str
     run_e = 'E' in strat_str
     run_f = 'F' in strat_str
+    run_g = 'G' in strat_str
+    run_h = 'H' in strat_str
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
@@ -321,10 +355,10 @@ def phase2_check_all(candidates, strat_str):
 
         if batch_num % 10 == 1 or batch_num == total_p2:
             print(f"    Phase2 Batch {batch_num}/{total_p2} | "
-                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)}")
+                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)} G:{len(signals_g)} H:{len(signals_h)}")
 
-        # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요, F는 252d=2y 필요)
-        data = download_batch(batch, period='2y' if run_f else '120d')
+        # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요, F/G/H는 252d=2y 필요)
+        data = download_batch(batch, period='2y' if (run_f or run_g or run_h) else '120d')
         if data is None or data.empty:
             time.sleep(BATCH_DELAY)
             continue
@@ -362,18 +396,18 @@ def phase2_check_all(candidates, strat_str):
                 low5_min = float(low.iloc[-5:].min()) if n >= 5 else None
                 dist_low5 = (c_last - low5_min) / max(low5_min, 0.01) if low5_min else None
 
-                # ── RSI7 계산: A/B/C만 필요, D/E는 필요 없음 ──
+                # ── RSI7 계산: A/B/C/G/H 필요, D/E는 필요 없음 ──
                 rsi7_val = None
-                if run_a or run_b or run_c:
+                if run_a or run_b or run_c or run_g or run_h:
                     rsi7 = calc_rsi_wilder(close, 7)
                     if not pd.isna(rsi7.iloc[-1]):
                         rsi7_val = float(rsi7.iloc[-1])
                     else:
-                        # RSI7이 NaN인 경우: A/B/C는 스킵, D/E는 계속
-                        if run_a or run_b or run_c:
+                        # RSI7이 NaN인 경우: A/B/C/G/H는 스킵, D/E는 계속
+                        if run_a or run_b or run_c or run_g or run_h:
                             if not (run_d or run_e):
                                 continue
-                            # A/B/C를 못하지만 D/E는 계속하기 위해 pass
+                            # A/B/C/G/H를 못하지만 D/E는 계속하기 위해 pass
 
                 # ══════════════════════════════════════════════
                 # Strategy A: Intra>20% + Ret3d<-15% + Down>5 + DistLow5<5% + RSI7<20
@@ -617,6 +651,110 @@ def phase2_check_all(candidates, strat_str):
                                                       f"Gap={gap_pct*100:.1f}% "
                                                       f"TP=${tp_price:.2f} SL=${sl_price:.2f}")
 
+                # ══════════════════════════════════════════════
+                # Strategy G: Vol20d>10% + RSI7<30 + MACD cross up + GapUp>5% + Price<SMA5
+                # ══════════════════════════════════════════════
+                if run_g and n >= 30:
+                    daily_returns = close.pct_change()
+                    vol_20d = float(daily_returns.iloc[-20:].std()) if len(daily_returns) >= 20 else 0
+
+                    if vol_20d > G_VOLATILITY_20D and rsi7_val is not None and rsi7_val < G_RSI7_THRESH:
+                        # MACD histogram (12,26,9)
+                        ema12 = close.ewm(span=12, adjust=False).mean()
+                        ema26 = close.ewm(span=26, adjust=False).mean()
+                        macd_line = ema12 - ema26
+                        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                        macd_hist = macd_line - signal_line
+
+                        if len(macd_hist) >= 2:
+                            hist_today = float(macd_hist.iloc[-1])
+                            hist_yesterday = float(macd_hist.iloc[-2])
+
+                            if hist_today > 0 and hist_yesterday < 0:  # cross up
+                                # Gap up
+                                prev_close = float(close.iloc[-2])
+                                gap_pct = (o_last - prev_close) / prev_close if prev_close > 0 else 0
+
+                                if gap_pct > G_GAP_UP_THRESH:
+                                    # Price < SMA5
+                                    sma5 = float(close.rolling(5).mean().iloc[-1])
+                                    if not pd.isna(sma5) and c_last < sma5:
+                                        tp_price = round(c_last * (1 + G_TAKE_PROFIT), 2)
+                                        sl_price = round(c_last * (1 + G_STOP_LOSS), 2)
+                                        signals_g.append({
+                                            'strategy': 'G',
+                                            'ticker': tk,
+                                            'date': trade_date,
+                                            'scan_time': scan_time_kst,
+                                            'price': round(c_last, 2),
+                                            'rsi7': round(rsi7_val, 1),
+                                            'vol_20d': round(vol_20d * 100, 1),
+                                            'macd_hist': round(hist_today, 4),
+                                            'gap_pct': round(gap_pct * 100, 1),
+                                            'sma5': round(sma5, 2),
+                                            'tp_price': tp_price,
+                                            'sl_price': sl_price,
+                                            'hold_days': G_MAX_HOLD_DAYS,
+                                        })
+                                        print(f"    ★ [G] {tk} @ ${c_last:.2f} | "
+                                              f"RSI7={rsi7_val:.1f} Vol={vol_20d*100:.1f}% "
+                                              f"MACD={hist_today:.4f} Gap={gap_pct*100:.1f}% "
+                                              f"SMA5=${sma5:.2f}")
+
+                # ══════════════════════════════════════════════
+                # Strategy H: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR strongly expanding
+                # ══════════════════════════════════════════════
+                if run_h and n >= 252 and rsi7_val is not None and rsi7_val < H_RSI7_THRESH:
+                    # 52w high distance
+                    high_52w = float(high.rolling(252).max().iloc[-1])
+                    if high_52w > 0:
+                        dist_52w = (c_last - high_52w) / high_52w
+
+                        if dist_52w < H_DIST_52W_HIGH:
+                            # Ret 1d
+                            prev_close = float(close.iloc[-2]) if n >= 2 else 0
+                            ret_1d = (c_last - prev_close) / prev_close if prev_close > 0 else 0
+
+                            if ret_1d < H_RET1D_THRESH:
+                                # Gap up
+                                gap_pct = (o_last - prev_close) / prev_close if prev_close > 0 else 0
+
+                                if gap_pct > H_GAP_UP_THRESH:
+                                    # ATR strongly expanding (5-day ATR change > 25%)
+                                    tr = pd.concat([
+                                        high - low,
+                                        (high - close.shift(1)).abs(),
+                                        (low - close.shift(1)).abs()
+                                    ], axis=1).max(axis=1)
+                                    atr14 = tr.rolling(14).mean()
+                                    if len(atr14) >= 6 and not pd.isna(atr14.iloc[-1]) and not pd.isna(atr14.iloc[-6]):
+                                        atr_prev = float(atr14.iloc[-6])
+                                        atr_now = float(atr14.iloc[-1])
+                                        atr_change = (atr_now - atr_prev) / atr_prev if atr_prev > 0 else 0
+
+                                        if atr_change > H_ATR_CHANGE_THRESH:
+                                            tp_price = round(c_last * (1 + H_TAKE_PROFIT), 2)
+                                            sl_price = round(c_last * (1 + H_STOP_LOSS), 2)
+                                            signals_h.append({
+                                                'strategy': 'H',
+                                                'ticker': tk,
+                                                'date': trade_date,
+                                                'scan_time': scan_time_kst,
+                                                'price': round(c_last, 2),
+                                                'rsi7': round(rsi7_val, 1),
+                                                'dist_52w': round(dist_52w * 100, 1),
+                                                'ret_1d': round(ret_1d * 100, 1),
+                                                'gap_pct': round(gap_pct * 100, 1),
+                                                'atr_change': round(atr_change * 100, 1),
+                                                'tp_price': tp_price,
+                                                'sl_price': sl_price,
+                                                'hold_days': H_MAX_HOLD_DAYS,
+                                            })
+                                            print(f"    ★ [H] {tk} @ ${c_last:.2f} | "
+                                                  f"RSI7={rsi7_val:.1f} 52wH={dist_52w*100:.1f}% "
+                                                  f"Ret1d={ret_1d*100:.1f}% Gap={gap_pct*100:.1f}% "
+                                                  f"ATR={atr_change*100:.1f}%")
+
             except Exception as e:
                 print(f"  Warning: {tk} phase2 processing failed: {e}")
                 continue
@@ -628,15 +766,17 @@ def phase2_check_all(candidates, strat_str):
     signals_d.sort(key=lambda x: x['price'])
     signals_e.sort(key=lambda x: x['ret5d'])
     signals_f.sort(key=lambda x: x['dist_52w'])
+    signals_g.sort(key=lambda x: x['rsi7'])
+    signals_h.sort(key=lambda x: x['rsi7'])
 
-    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f
+    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h):
     """결과 출력"""
-    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f
+    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h
     date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy A
@@ -765,11 +905,51 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_f)} signals")
 
+    # Strategy G
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY G — MACD 전환 급등 (+40%) — {date_str}")
+    print(f"  조건: Vol20d>10% + RSI7<30 + MACD 골든크로스 + GapUp>5% + Price<SMA5")
+    print(f"  청산: +40% 익절 | -20% 손절 | 20일 타임아웃")
+    print(f"  백테스트: 승률 90.0% (10건/5년), 20일내 40%+ 급등")
+    print(f"{'='*90}")
+    if not signals_g:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'RSI7':>6} {'Vol20d':>7} {'MACD':>8} "
+              f"{'Gap%':>7} {'SMA5':>8} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_g:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} {s['rsi7']:>6.1f} "
+                  f"{s['vol_20d']:>6.1f}% {s['macd_hist']:>8.4f} "
+                  f"{s['gap_pct']:>6.1f}% ${s['sma5']:>7.2f} "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_g)} signals")
 
-def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f):
+    # Strategy H
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY H — ATR 확대 급등 (+40%) — {date_str}")
+    print(f"  조건: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR확대>25%")
+    print(f"  청산: +40% 익절 | -20% 손절 | 20일 타임아웃")
+    print(f"  백테스트: 승률 90.0% (10건/5년), 20일내 40%+ 급등")
+    print(f"{'='*90}")
+    if not signals_h:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'RSI7':>6} {'52wH%':>7} {'1일%':>7} "
+              f"{'Gap%':>7} {'ATR%':>7} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_h:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} {s['rsi7']:>6.1f} "
+                  f"{s['dist_52w']:>6.1f}% {s['ret_1d']:>6.1f}% "
+                  f"{s['gap_pct']:>6.1f}% {s['atr_change']:>6.1f}% "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_h)} signals")
+
+
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
-    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f
+    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h
 
     # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
     if all_signals:
@@ -843,6 +1023,8 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
         'strategy_d_count': len(signals_d),
         'strategy_e_count': len(signals_e),
         'strategy_f_count': len(signals_f),
+        'strategy_g_count': len(signals_g),
+        'strategy_h_count': len(signals_h),
         'total_count': len(all_signals),
         'dq_warnings': len(dq_warnings),
     }
@@ -855,9 +1037,9 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F)')
-    parser.add_argument('--strategy', default='ABCDEF',
-                       help='Which strategies to run, e.g. A, AB, ABCDEF (default: ABCDEF)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F+G+H)')
+    parser.add_argument('--strategy', default='ABCDEFGH',
+                       help='Which strategies to run, e.g. A, AB, ABCDEFGH (default: ABCDEFGH)')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -885,15 +1067,15 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f = phase2_check_all(candidates, strat_str)
+    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h = phase2_check_all(candidates, strat_str)
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f)
-    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건")
+    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건 | G: {len(signals_g)}건 | H: {len(signals_h)}건")
 
 
 if __name__ == '__main__':
