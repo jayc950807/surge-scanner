@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F + G + H)
+  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F + G + H + I + J)
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
@@ -43,11 +43,21 @@
     매도: +40% 익절 | -20% 손절 | 20일 타임아웃
     백테스트: 90.0% (10건/5년)
 
+  Strategy I (+10% 과매도 반등 단타):
+    매수: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0
+    매도: +10% 익절 | -20% 손절 | 5일 타임아웃
+    백테스트: 100% (8건/5년)
+
+  Strategy J (+10% MACD 전환 단타):
+    매수: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20
+    매도: +10% 익절 | -20% 손절 | 5일 타임아웃
+    백테스트: 90% (9/10, 5년)
+
   Usage:
-    python scanner.py                      # Scan all strategies (A+B+C+D+E+F+G+H)
-    python scanner.py --strategy A         # Strategy A only
-    python scanner.py --strategy DEF       # Strategy D + E + F only
-    python scanner.py --strategy ABCDEFGH  # All strategies
+    python scanner.py                        # Scan all strategies (A+B+C+D+E+F+G+H+I+J)
+    python scanner.py --strategy A           # Strategy A only
+    python scanner.py --strategy DEF         # Strategy D + E + F only
+    python scanner.py --strategy ABCDEFGHIJ  # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -228,6 +238,26 @@ H_TAKE_PROFIT       = 0.40
 H_STOP_LOSS         = -0.20
 H_MAX_HOLD_DAYS     = 20
 
+# === Strategy I thresholds (+10% 과매도 반등 단타) ===
+I_RSI14_THRESH     = 30
+I_VOL_RATIO_THRESH = 2.0
+I_MACD_POS         = True        # macd_hist > 0
+I_RET1D_THRESH     = -0.05       # prev_big_drop: return_1d < -5%
+I_RET5D_THRESH     = 0.0         # ret5d_pos: return_5d > 0
+I_TAKE_PROFIT      = 0.10        # +10%
+I_STOP_LOSS        = -0.20       # -20%
+I_MAX_HOLD_DAYS    = 5
+
+# === Strategy J thresholds (+10% MACD 전환 단타) ===
+J_VOLATILITY_20D   = 0.10        # very_high_vol: volatility_20d > 10%
+J_RSI14_THRESH     = 30
+J_VOL_RATIO_THRESH = 2.0
+J_MACD_CROSSUP     = True        # macd_cross_up: hist < 0 yesterday, > 0 today
+J_STOCH_OVERSOLD   = 20          # stoch_k < 20
+J_TAKE_PROFIT      = 0.10        # +10%
+J_STOP_LOSS        = -0.20       # -20%
+J_MAX_HOLD_DAYS    = 5
+
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def calc_consec_down(close_series):
@@ -247,7 +277,7 @@ def calc_consec_down(close_series):
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
 def phase1_rsi_filter(all_tickers, strat_str):
-    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F/G/H: Vol>6%)
+    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F/G/H/I/J: Vol>6%)
     한 번의 30d 스캔으로 모든 전략 후보를 수집.
     """
     run_d = 'D' in strat_str
@@ -255,10 +285,12 @@ def phase1_rsi_filter(all_tickers, strat_str):
     run_f = 'F' in strat_str
     run_g = 'G' in strat_str
     run_h = 'H' in strat_str
+    run_i = 'I' in strat_str
+    run_j = 'J' in strat_str
     run_abc = any(s in strat_str for s in ['A', 'B', 'C'])
 
     print(f"\n{'='*80}")
-    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''}{' + Vol>6%' if run_f else ''})")
+    print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''}{' + Vol>6%' if (run_f or run_g or run_h or run_i or run_j) else ''})")
     print(f"{'='*80}")
     print(f"  대상: {len(all_tickers)}개 종목")
 
@@ -304,8 +336,8 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
                     candidates.add(tk)
 
-                # F/G/H 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
-                if run_f or run_g or run_h:
+                # F/G/H/I/J 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
+                if run_f or run_g or run_h or run_i or run_j:
                     daily_ret = close.pct_change()
                     vol_20d = float(daily_ret.tail(20).std()) if len(daily_ret) >= 20 else 0
                     if vol_20d > 0.06:
@@ -323,7 +355,7 @@ def phase1_rsi_filter(all_tickers, strat_str):
 # ─── Unified Phase 2: 한 번의 다운로드로 A/B/C/D/E 동시 체크 ────────────────────
 
 def phase2_check_all(candidates, strat_str):
-    """Phase 2: 120d(또는 2y if F/G/H) 데이터를 한 번만 받아서 A/B/C/D/E/F/G/H 조건을 모두 체크"""
+    """Phase 2: 120d(또는 2y if F/G/H) 데이터를 한 번만 받아서 A/B/C/D/E/F/G/H/I/J 조건을 모두 체크"""
     print(f"\n{'='*80}")
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
@@ -338,6 +370,8 @@ def phase2_check_all(candidates, strat_str):
     signals_f = []
     signals_g = []
     signals_h = []
+    signals_i = []
+    signals_j = []
 
     run_a = 'A' in strat_str
     run_b = 'B' in strat_str
@@ -347,6 +381,8 @@ def phase2_check_all(candidates, strat_str):
     run_f = 'F' in strat_str
     run_g = 'G' in strat_str
     run_h = 'H' in strat_str
+    run_i = 'I' in strat_str
+    run_j = 'J' in strat_str
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
@@ -355,7 +391,7 @@ def phase2_check_all(candidates, strat_str):
 
         if batch_num % 10 == 1 or batch_num == total_p2:
             print(f"    Phase2 Batch {batch_num}/{total_p2} | "
-                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)} G:{len(signals_g)} H:{len(signals_h)}")
+                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)} G:{len(signals_g)} H:{len(signals_h)} I:{len(signals_i)} J:{len(signals_j)}")
 
         # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요, F/G/H는 252d=2y 필요)
         data = download_batch(batch, period='2y' if (run_f or run_g or run_h) else '120d')
@@ -755,6 +791,120 @@ def phase2_check_all(candidates, strat_str):
                                                   f"Ret1d={ret_1d*100:.1f}% Gap={gap_pct*100:.1f}% "
                                                   f"ATR={atr_change*100:.1f}%")
 
+                # ══════════════════════════════════════════════
+                # Strategy I: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0
+                # ══════════════════════════════════════════════
+                if run_i and n >= 26 and len(vol) >= 26:
+                    # RSI14
+                    rsi14 = calc_rsi_wilder(close, 14)
+                    rsi14_val = float(rsi14.iloc[-1]) if not pd.isna(rsi14.iloc[-1]) else None
+
+                    if rsi14_val is not None and rsi14_val < I_RSI14_THRESH:
+                        # Volume ratio: vol / vol_sma_20
+                        vol_sma_20 = float(vol.tail(20).mean()) if len(vol) >= 20 else 0
+                        vol_ratio = float(vol.iloc[-1]) / max(vol_sma_20, 1.0)
+
+                        if vol_ratio > I_VOL_RATIO_THRESH:
+                            # MACD histogram (12,26,9)
+                            ema12 = close.ewm(span=12, adjust=False).mean()
+                            ema26 = close.ewm(span=26, adjust=False).mean()
+                            macd_line = ema12 - ema26
+                            signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                            macd_hist = macd_line - signal_line
+
+                            hist_today = float(macd_hist.iloc[-1]) if not pd.isna(macd_hist.iloc[-1]) else None
+
+                            if hist_today is not None and hist_today > 0:
+                                # return_1d (previous day < -5%)
+                                ret_1d = (c_last - float(close.iloc[-2])) / float(close.iloc[-2]) if n >= 2 else 0
+
+                                if ret_1d < I_RET1D_THRESH:
+                                    # return_5d (5-day > 0)
+                                    ret_5d = c_last / float(close.iloc[-6]) - 1 if n >= 6 else 0
+
+                                    if ret_5d > I_RET5D_THRESH:
+                                        tp_price = round(c_last * (1 + I_TAKE_PROFIT), 2)
+                                        sl_price = round(c_last * (1 + I_STOP_LOSS), 2)
+                                        signals_i.append({
+                                            'strategy': 'I',
+                                            'ticker': tk,
+                                            'date': trade_date,
+                                            'scan_time': scan_time_kst,
+                                            'price': round(c_last, 2),
+                                            'rsi14': round(rsi14_val, 1),
+                                            'vol_ratio': round(vol_ratio, 2),
+                                            'macd_hist': round(hist_today, 4),
+                                            'ret_1d': round(ret_1d * 100, 1),
+                                            'ret_5d': round(ret_5d * 100, 1),
+                                            'tp_price': tp_price,
+                                            'sl_price': sl_price,
+                                            'hold_days': I_MAX_HOLD_DAYS,
+                                        })
+                                        print(f"    ★ [I] {tk} @ ${c_last:.2f} | "
+                                              f"RSI14={rsi14_val:.1f} VolRatio={vol_ratio:.2f}x "
+                                              f"MACD={hist_today:.4f} Ret1d={ret_1d*100:.1f}% "
+                                              f"Ret5d={ret_5d*100:.1f}%")
+
+                # ══════════════════════════════════════════════
+                # Strategy J: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20
+                # ══════════════════════════════════════════════
+                if run_j and n >= 26 and len(vol) >= 26:
+                    # 20-day volatility
+                    daily_returns = close.pct_change()
+                    vol_20d = float(daily_returns.iloc[-20:].std()) if len(daily_returns) >= 20 else 0
+
+                    if vol_20d > J_VOLATILITY_20D:
+                        # RSI14
+                        rsi14 = calc_rsi_wilder(close, 14)
+                        rsi14_val = float(rsi14.iloc[-1]) if not pd.isna(rsi14.iloc[-1]) else None
+
+                        if rsi14_val is not None and rsi14_val < J_RSI14_THRESH:
+                            # Volume ratio: vol / vol_sma_20
+                            vol_sma_20 = float(vol.tail(20).mean()) if len(vol) >= 20 else 0
+                            vol_ratio = float(vol.iloc[-1]) / max(vol_sma_20, 1.0)
+
+                            if vol_ratio > J_VOL_RATIO_THRESH:
+                                # MACD histogram (12,26,9) — check cross up
+                                ema12 = close.ewm(span=12, adjust=False).mean()
+                                ema26 = close.ewm(span=26, adjust=False).mean()
+                                macd_line = ema12 - ema26
+                                signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                                macd_hist = macd_line - signal_line
+
+                                if len(macd_hist) >= 2:
+                                    hist_today = float(macd_hist.iloc[-1])
+                                    hist_yesterday = float(macd_hist.iloc[-2])
+
+                                    if hist_yesterday < 0 and hist_today > 0:  # cross up
+                                        # Stochastic K (14)
+                                        lowest_14 = low.rolling(14).min()
+                                        highest_14 = high.rolling(14).max()
+                                        stoch_k = 100 * (close - lowest_14) / (highest_14 - lowest_14)
+                                        stoch_k_val = float(stoch_k.iloc[-1]) if not pd.isna(stoch_k.iloc[-1]) else None
+
+                                        if stoch_k_val is not None and stoch_k_val < J_STOCH_OVERSOLD:
+                                            tp_price = round(c_last * (1 + J_TAKE_PROFIT), 2)
+                                            sl_price = round(c_last * (1 + J_STOP_LOSS), 2)
+                                            signals_j.append({
+                                                'strategy': 'J',
+                                                'ticker': tk,
+                                                'date': trade_date,
+                                                'scan_time': scan_time_kst,
+                                                'price': round(c_last, 2),
+                                                'vol_20d': round(vol_20d * 100, 1),
+                                                'rsi14': round(rsi14_val, 1),
+                                                'vol_ratio': round(vol_ratio, 2),
+                                                'macd_hist': round(hist_today, 4),
+                                                'stoch_k': round(stoch_k_val, 1),
+                                                'tp_price': tp_price,
+                                                'sl_price': sl_price,
+                                                'hold_days': J_MAX_HOLD_DAYS,
+                                            })
+                                            print(f"    ★ [J] {tk} @ ${c_last:.2f} | "
+                                                  f"Vol20d={vol_20d*100:.1f}% RSI14={rsi14_val:.1f} "
+                                                  f"VolRatio={vol_ratio:.2f}x MACD={hist_today:.4f} "
+                                                  f"Stoch={stoch_k_val:.1f}")
+
             except Exception as e:
                 print(f"  Warning: {tk} phase2 processing failed: {e}")
                 continue
@@ -768,15 +918,17 @@ def phase2_check_all(candidates, strat_str):
     signals_f.sort(key=lambda x: x['dist_52w'])
     signals_g.sort(key=lambda x: x['rsi7'])
     signals_h.sort(key=lambda x: x['rsi7'])
+    signals_i.sort(key=lambda x: x['rsi14'])
+    signals_j.sort(key=lambda x: x['rsi14'])
 
-    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h
+    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
     """결과 출력"""
-    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h
+    all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
     date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy A
@@ -945,11 +1097,51 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_h)} signals")
 
+    # Strategy I
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY I — 과매도 반등 단타 (+10%) — {date_str}")
+    print(f"  조건: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0")
+    print(f"  청산: +10% 익절 | -20% 손절 | 5일 타임아웃")
+    print(f"  백테스트: 승률 100% (8건/5년)")
+    print(f"{'='*90}")
+    if not signals_i:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'RSI14':>6} {'Vol배율':>7} {'MACD':>8} "
+              f"{'1일%':>7} {'5일%':>7} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_i:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} {s['rsi14']:>6.1f} "
+                  f"{s['vol_ratio']:>7.2f}x {s['macd_hist']:>8.4f} "
+                  f"{s['ret_1d']:>6.1f}% {s['ret_5d']:>6.1f}% "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_i)} signals")
 
-def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h):
+    # Strategy J
+    print(f"\n{'='*90}")
+    print(f"  ★ STRATEGY J — MACD 전환 단타 (+10%) — {date_str}")
+    print(f"  조건: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20")
+    print(f"  청산: +10% 익절 | -20% 손절 | 5일 타임아웃")
+    print(f"  백테스트: 승률 90% (9/10, 5년)")
+    print(f"{'='*90}")
+    if not signals_j:
+        print("  신호 없음")
+    else:
+        print(f"{'Ticker':<8} {'종가':>8} {'Vol20d':>7} {'RSI14':>6} {'Vol배율':>7} "
+              f"{'MACD':>8} {'Stoch':>7} {'익절가':>10} {'손절가':>10}")
+        print("-" * 90)
+        for s in signals_j:
+            print(f"{s['ticker']:<8} {s['price']:>8.2f} {s['vol_20d']:>6.1f}% "
+                  f"{s['rsi14']:>6.1f} {s['vol_ratio']:>7.2f}x "
+                  f"{s['macd_hist']:>8.4f} {s['stoch_k']:>6.1f} "
+                  f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
+        print(f"  Total: {len(signals_j)} signals")
+
+
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
-    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h
+    all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
 
     # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
     if all_signals:
@@ -1025,6 +1217,8 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
         'strategy_f_count': len(signals_f),
         'strategy_g_count': len(signals_g),
         'strategy_h_count': len(signals_h),
+        'strategy_i_count': len(signals_i),
+        'strategy_j_count': len(signals_j),
         'total_count': len(all_signals),
         'dq_warnings': len(dq_warnings),
     }
@@ -1037,9 +1231,9 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F+G+H)')
-    parser.add_argument('--strategy', default='ABCDEFGH',
-                       help='Which strategies to run, e.g. A, AB, ABCDEFGH (default: ABCDEFGH)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F+G+H+I+J)')
+    parser.add_argument('--strategy', default='ABCDEFGHIJ',
+                       help='Which strategies to run, e.g. A, AB, ABCDEFGHIJ (default: ABCDEFGHIJ)')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -1067,15 +1261,15 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h = phase2_check_all(candidates, strat_str)
+    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j = phase2_check_all(candidates, strat_str)
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h)
-    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건 | G: {len(signals_g)}건 | H: {len(signals_h)}건")
+    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건 | G: {len(signals_g)}건 | H: {len(signals_h)}건 | I: {len(signals_i)}건 | J: {len(signals_j)}건")
 
 
 if __name__ == '__main__':
