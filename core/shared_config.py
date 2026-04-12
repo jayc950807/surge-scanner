@@ -30,6 +30,7 @@ STRATEGY_CONFIG = {
     'C': {'tp_pct': 0.05, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 5},
     'D': {'tp_pct': 0.20, 'sl_pct': None,   'trailing_pct': None,  'max_hold': 30},
     'E': {'tp_pct': 0.10, 'sl_pct': None,   'trailing_pct': None,  'max_hold': 30},
+    'F': {'tp_pct': 0.50, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 20},
 }
 
 STRATEGY_NAMES = {
@@ -38,6 +39,7 @@ STRATEGY_NAMES = {
     'C': '과매도 반등 +5%',
     'D': '초저가 폭락 +20%',
     'E': '급락 속반등 +10%',
+    'F': '바닥 급등 +50%',
 }
 
 # ─── Common Filters ──────────────────────────────────────────────────────────
