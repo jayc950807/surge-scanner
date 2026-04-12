@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pandas numpy lxml html5lib pyarrow requests
+          pip install pandas numpy lxml html5lib pyarrow requests pandas_datareader
 
       - name: Run OHLCV collector
         env:
