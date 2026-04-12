@@ -285,6 +285,11 @@ hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
 .stag-C { color: var(--amber); border-color: #b8954a66; background: #b8954a0a; }
 .stag-D { color: var(--red-bright); border-color: var(--red); background: #9e4a5a0a; }
 .stag-E { color: #9a7abf; border-color: #7a5aaf66; background: #7a5aaf0a; }
+.stag-F { color: #e0a040; border-color: #c0882066; background: #c088200a; }
+.stag-G { color: #40b0a0; border-color: #309a8a66; background: #309a8a0a; }
+.stag-H { color: #d06070; border-color: #b0485866; background: #b048580a; }
+.stag-I { color: #70a0e0; border-color: #5088c066; background: #5088c00a; }
+.stag-J { color: #a080d0; border-color: #8868b866; background: #8868b80a; }
 
 /* ── Cell States ── */
 .c-win { color: var(--green-bright); font-weight: 600; }
@@ -363,6 +368,11 @@ hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
 .rr-strat-info.si-C::before { background: var(--amber); }
 .rr-strat-info.si-D::before { background: var(--red); }
 .rr-strat-info.si-E::before { background: #7a5aaf; }
+.rr-strat-info.si-F::before { background: #c08820; }
+.rr-strat-info.si-G::before { background: #309a8a; }
+.rr-strat-info.si-H::before { background: #b04858; }
+.rr-strat-info.si-I::before { background: #5088c0; }
+.rr-strat-info.si-J::before { background: #8868b8; }
 .rr-strat-info h3 {
     font-family: var(--font-display);
     font-size: 1.15em;
@@ -582,15 +592,15 @@ def load_closed_positions():
     return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-STRAT_TAB = {'A': 'A_5%5일', 'B': 'D_15%10일', 'C': 'B_5%5일', 'D': 'E_20%30일', 'E': 'C_10%30일'}
-STRAT_NAMES = {'A': 'A_5%5일 · 급락반등', 'B': 'D_15%10일 · 고수익', 'C': 'B_5%5일 · 과매도', 'D': 'E_20%30일 · 초저가', 'E': 'C_10%30일 · 속반등'}
-STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등'}
-STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%'}
-STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10}
-STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%'}
-STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30}
+STRAT_TAB = {'A': 'A_5%5일', 'B': 'D_15%10일', 'C': 'B_5%5일', 'D': 'E_20%30일', 'E': 'C_10%30일', 'F': 'F_50%20일', 'G': 'G_40%20일', 'H': 'H_40%20일', 'I': 'I_10%5일', 'J': 'J_10%5일'}
+STRAT_NAMES = {'A': 'A_5%5일 · 급락반등', 'B': 'D_15%10일 · 고수익', 'C': 'B_5%5일 · 과매도', 'D': 'E_20%30일 · 초저가', 'E': 'C_10%30일 · 속반등', 'F': 'F_50%20일 · 바닥급등', 'G': 'G_40%20일 · MACD전환', 'H': 'H_40%20일 · ATR확대', 'I': 'I_10%5일 · 과매도단타', 'J': 'J_10%5일 · MACD단타'}
+STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등', 'F': '바닥급등', 'G': 'MACD전환', 'H': 'ATR확대', 'I': '과매도단타', 'J': 'MACD단타'}
+STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%', 'F': '+50%', 'G': '+40%', 'H': '+40%', 'I': '+10%', 'J': '+10%'}
+STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10, 'F': 50, 'G': 40, 'H': 40, 'I': 10, 'J': 10}
+STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%', 'F': '87.5%', 'G': '90.0%', 'H': '90.0%', 'I': '100.0%', 'J': '90.0%'}
+STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30, 'F': 20, 'G': 20, 'H': 20, 'I': 5, 'J': 5}
 # 탭 표시 순서: TP% 오름차순, 동일 TP%일 때 보유일 오름차순
-STRAT_ORDER = ['A', 'C', 'E', 'B', 'D']
+STRAT_ORDER = ['A', 'C', 'I', 'J', 'E', 'B', 'G', 'H', 'F', 'D']
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def safe_str(val, fb='—'):
@@ -721,7 +731,7 @@ st.markdown('''<div class="rr-header">
 meta_parts = []
 if scan_info:
     meta_parts.append(f'<span class="hl">Last Scan</span> {scan_info.get("scan_time", "N/A")}')
-    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k.lower()}_count", 0)}' for k in 'ABCDE')
+    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k.lower()}_count", 0)}' for k in 'ABCDEFGHIJ')
     meta_parts.append(f'<span class="hl">Signals</span> {counts}')
 if tracker_info:
     meta_parts.append(f'<span class="hl">Active</span> {tracker_info.get("open_count", 0)} <span class="hl">Win</span> {tracker_info.get("win_count", 0)} <span class="hl">Loss</span> {tracker_info.get("loss_count", 0)}')
@@ -738,8 +748,8 @@ history = load_history()
 _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-tab_today, tab_a, tab_c, tab_e, tab_b, tab_d, tab_history = st.tabs([
-    _today_label, "A_5%5일", "B_5%5일", "C_10%30일", "D_15%10일", "E_20%30일", "Performance"
+tab_today, tab_a, tab_c, tab_i, tab_j, tab_e, tab_b, tab_g, tab_h, tab_f, tab_d, tab_history = st.tabs([
+    _today_label, "A_5%5일", "B_5%5일", "I_10%5일", "J_10%5일", "C_10%30일", "D_15%10일", "G_40%20일", "H_40%20일", "F_50%20일", "E_20%30일", "Performance"
 ])
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
@@ -840,6 +850,106 @@ STRAT_INFO = {
             "vol_avg": st.column_config.NumberColumn("Avg Vol", format="%d"),
             "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
             "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
+        },
+    },
+    'F': {
+        'title': 'F_50%20일 — 바닥급등',
+        'desc': ['20일 변동성 > 10%', '52주 고점 대비 -85% 이하', '볼린저 %B < 0', '전일 수익률 < -5%', '갭업 > 5%'],
+        'rules': ['매수: 신호 당일 종가', '익절: +50%', '손절: -20%', '최대 보유: 20일'],
+        'bt': '87.5% (7/8)',
+        'cols': ['ticker','date','scan_time','price','vol_20d','dist_52w','bb_pctb','ret_1d','gap_pct','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
+            "dist_52w": st.column_config.NumberColumn("52W Dist", format="%.1f%%"),
+            "bb_pctb": st.column_config.NumberColumn("BB %B", format="%.3f"),
+            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
+            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'G': {
+        'title': 'G_40%20일 — MACD전환',
+        'desc': ['20일 변동성 > 10%', 'RSI(7) < 30', 'MACD 히스토그램 골든크로스', '갭업 > 5%', '종가 < SMA(5)'],
+        'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
+        'bt': '90.0% (9/10)',
+        'cols': ['ticker','date','scan_time','price','rsi7','vol_20d','macd_hist','gap_pct','sma5','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
+            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
+            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
+            "sma5": st.column_config.NumberColumn("SMA5", format="$%.2f"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'H': {
+        'title': 'H_40%20일 — ATR확대',
+        'desc': ['RSI(7) < 30', '52주 고점 대비 -85% 이하', '전일 수익률 < -5%', '갭업 > 5%', 'ATR 5일 변화 > 25%'],
+        'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
+        'bt': '90.0% (9/10)',
+        'cols': ['ticker','date','scan_time','price','rsi7','dist_52w','ret_1d','gap_pct','atr_change','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
+            "dist_52w": st.column_config.NumberColumn("52W Dist", format="%.1f%%"),
+            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
+            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
+            "atr_change": st.column_config.NumberColumn("ATR Chg", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'I': {
+        'title': 'I_10%5일 — 과매도단타',
+        'desc': ['RSI(14) < 30', '거래량 2배 이상', 'MACD 히스토그램 > 0', '전일 수익률 < -5%', '5일 수익률 > 0'],
+        'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
+        'bt': '100.0% (8/8)',
+        'cols': ['ticker','date','scan_time','price','rsi14','vol_ratio','macd_hist','ret_1d','ret_5d','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "vol_ratio": st.column_config.NumberColumn("Vol Ratio", format="%.2f"),
+            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
+            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
+            "ret_5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
+        },
+    },
+    'J': {
+        'title': 'J_10%5일 — MACD단타',
+        'desc': ['20일 변동성 > 10%', 'RSI(14) < 30', '거래량 2배 이상', 'MACD 골든크로스', '스토캐스틱 K < 20'],
+        'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
+        'bt': '90.0% (9/10)',
+        'cols': ['ticker','date','scan_time','price','vol_20d','rsi14','vol_ratio','macd_hist','stoch_k','tp_price','sl_price'],
+        'col_config': {
+            "ticker": st.column_config.TextColumn("Ticker", width="small"),
+            "date": st.column_config.TextColumn("Date"),
+            "scan_time": st.column_config.TextColumn("Scan"),
+            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
+            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
+            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+            "vol_ratio": st.column_config.NumberColumn("Vol Ratio", format="%.2f"),
+            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
+            "stoch_k": st.column_config.NumberColumn("Stoch K", format="%.1f"),
+            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
+            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
 }
@@ -997,7 +1107,7 @@ with tab_today:
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
 
-for k, t in [('A', tab_a), ('C', tab_c), ('E', tab_e), ('B', tab_b), ('D', tab_d)]:
+for k, t in [('A', tab_a), ('C', tab_c), ('I', tab_i), ('J', tab_j), ('E', tab_e), ('B', tab_b), ('G', tab_g), ('H', tab_h), ('F', tab_f), ('D', tab_d)]:
     render_strategy_tab(k, t)
 
 # ─── Tab: Performance ─────────────────────────────────────────────────────────
@@ -2462,6 +2572,11 @@ with st.sidebar:
 | C_10%30일 | 91.0% | 30d |
 | D_15%10일 | 90.3% | 10d |
 | E_20%30일 | 97.7% | 30d |
+| F_50%20일 | 87.5% | 20d |
+| G_40%20일 | 90.0% | 20d |
+| H_40%20일 | 90.0% | 20d |
+| I_10%5일 | 100.0% | 5d |
+| J_10%5일 | 90.0% | 5d |
 
 ---
 Auto-scan via GitHub Actions
