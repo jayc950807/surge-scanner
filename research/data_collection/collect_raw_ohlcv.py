@@ -1,20 +1,20 @@
 """
-원시 OHLCV 수집기 (Raw OHLCV Collector) — Stooq 버전
-=====================================================
+원시 OHLCV 수집기 (Raw OHLCV Collector) — Stooq via pandas_datareader
+=====================================================================
 2020-01-01 ~ 오늘까지, 미국 주식 ~10,000 종목의 일봉 OHLCV를 수집해서
 parquet 파일로 저장.
 
-데이터 소스: Stooq (https://stooq.com)
+데이터 소스: Stooq (https://stooq.com) via pandas_datareader
   - 무료, API key 불필요
-  - 직접 CSV 다운로드: https://stooq.com/q/d/l/?s={ticker}.us&i=d&d1=YYYYMMDD&d2=YYYYMMDD
+  - pandas_datareader가 Stooq의 세션/쿠키/URL 전부 처리
   - 분할(split) 자동 조정 (배당 조정은 없음)
-  - anti-bot/rate-limit 거의 없음 → GitHub Actions에서 정상 작동
+  - 직접 HTTP 호출보다 안정적 (HTML 반환 이슈 회피)
 
 원칙:
   1. 무료 데이터 소스만 사용
   2. 거짓 데이터 없음. 구할 수 없는 건 failed_tickers.csv 에 기록
   3. 단일 출처 (Stooq) → 데이터 일관성 보장
-  4. 재시도 3회 후 실패 시 스킵
+  4. 재시도 2회 후 실패 시 스킵
   5. 지표 계산 없음. 순수 OHLCV만 저장
   6. 한계: 현재 상장 종목만. 상장폐지 종목은 포함되지 않음 (생존자 편향 존재)
 
@@ -41,6 +41,7 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from pandas_datareader import data as pdr
 
 warnings.filterwarnings("ignore")
 
@@ -67,8 +68,7 @@ RETRY_BACKOFF = [2, 5]             # 재시도 대기 2초 → 5초
 # 재개 모드
 RESUME = os.environ.get("RESUME", "1") == "1"
 
-# Stooq 엔드포인트
-STOOQ_URL = "https://stooq.com/q/d/l/"
+# HTTP User-Agent (티커 유니버스 수집용)
 USER_AGENT = "Mozilla/5.0 (compatible; surge-scanner/1.0)"
 
 # 파일 경로
@@ -187,60 +187,43 @@ def fetch_ticker_universe() -> pd.DataFrame:
 
 
 # ============================================================
-# 2. Stooq에서 OHLCV 다운로드
+# 2. Stooq에서 OHLCV 다운로드 (pandas_datareader)
 # ============================================================
-def stooq_url(ticker: str, start: str, end: str) -> str:
+def download_single(ticker: str, start: str, end: str) -> pd.DataFrame | None:
     """
-    Stooq CSV 다운로드 URL 생성.
-    예: https://stooq.com/q/d/l/?s=aapl.us&i=d&d1=20200101&d2=20260411
-    """
-    s = ticker.lower() + ".us"
-    d1 = start.replace("-", "")
-    d2 = end.replace("-", "")
-    return f"{STOOQ_URL}?s={s}&i=d&d1={d1}&d2={d2}"
+    Stooq에서 단일 티커 OHLCV를 pandas_datareader로 다운로드.
 
-
-def download_single(ticker: str, start: str, end: str, session: requests.Session) -> pd.DataFrame | None:
-    """
-    Stooq에서 단일 티커 OHLCV CSV 다운로드.
+    pandas_datareader.data.DataReader(ticker, 'stooq', ...) 는
+    Stooq의 CSV 엔드포인트를 올바른 세션/쿠키/URL로 호출해서
+    DataFrame을 반환함. 직접 HTTP 호출 시 발생하는 HTML 반환 문제 회피.
 
     Returns:
       DataFrame [date, open, high, low, close, volume] 또는 None
     """
-    url = stooq_url(ticker, start, end)
     try:
-        resp = session.get(url, timeout=HTTP_TIMEOUT, headers={"User-Agent": USER_AGENT})
-    except Exception:
-        return None
-
-    if resp.status_code != 200:
-        return None
-
-    text = resp.text.strip()
-    # Stooq는 데이터 없는 티커에 대해 "No data" 반환
-    if not text or text.lower().startswith("no data") or "Date" not in text[:20]:
-        return None
-
-    try:
-        df = pd.read_csv(io.StringIO(text))
+        # pandas_datareader는 Stooq에서 미국 주식을 그냥 티커로 받음 (예: 'AAPL')
+        df = pdr.DataReader(ticker, "stooq", start=start, end=end)
     except Exception:
         return None
 
     if df is None or df.empty:
         return None
 
-    # 컬럼 표준화
-    expected_cols = {"Date", "Open", "High", "Low", "Close", "Volume"}
+    # Stooq는 내림차순 반환 → 오름차순으로 정렬
+    df = df.sort_index(ascending=True)
+
+    # 컬럼 확인 (pandas_datareader Stooq는 Open, High, Low, Close, Volume 반환)
+    expected_cols = {"Open", "High", "Low", "Close", "Volume"}
     if not expected_cols.issubset(set(df.columns)):
         return None
 
     out = pd.DataFrame()
-    out["date"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
-    out["open"] = pd.to_numeric(df["Open"], errors="coerce")
-    out["high"] = pd.to_numeric(df["High"], errors="coerce")
-    out["low"] = pd.to_numeric(df["Low"], errors="coerce")
-    out["close"] = pd.to_numeric(df["Close"], errors="coerce")
-    out["volume"] = pd.to_numeric(df["Volume"], errors="coerce")
+    out["date"] = pd.to_datetime(df.index).strftime("%Y-%m-%d")
+    out["open"] = pd.to_numeric(df["Open"].values, errors="coerce")
+    out["high"] = pd.to_numeric(df["High"].values, errors="coerce")
+    out["low"] = pd.to_numeric(df["Low"].values, errors="coerce")
+    out["close"] = pd.to_numeric(df["Close"].values, errors="coerce")
+    out["volume"] = pd.to_numeric(df["Volume"].values, errors="coerce")
 
     # 핵심 가격이 NaN인 행 제외
     out = out.dropna(subset=["open", "high", "low", "close"], how="all")
@@ -279,10 +262,7 @@ def main():
     tickers = universe["ticker"].tolist()
     print(f"[INFO] 수집 대상: {len(tickers)} 종목", flush=True)
 
-    # HTTP 세션 재사용
-    session = requests.Session()
-
-    # 2) 개별 다운로드
+    # 2) 개별 다운로드 (pandas_datareader가 내부적으로 세션 처리)
     success_rows = []
     failed_rows = []
 
@@ -299,7 +279,7 @@ def main():
         # 재시도
         df = None
         for attempt in range(1, MAX_RETRIES + 1):
-            df = download_single(t, START_DATE, END_DATE, session)
+            df = download_single(t, START_DATE, END_DATE)
             if df is not None and not df.empty:
                 break
             if attempt < MAX_RETRIES:
