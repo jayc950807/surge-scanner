@@ -1,1 +1,5 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg
+C,IREZ,2026-04-13,06:57 KST,18.08,23.8,33.3,-19.3,7.0,2.44,18.98,14.46,,,,
+D,REPL,2026-04-13,06:57 KST,1.7,,39.3,,,,2.04,,19.0,-80.1,30.0,
+E,NBIZ,2026-04-13,06:57 KST,4.38,,29.0,,7.0,,4.82,,,-50.5,30.0,2338418.0
+E,CORD,2026-04-13,06:57 KST,6.84,,25.4,,5.0,,7.53,,,-50.0,30.0,2549709.0
