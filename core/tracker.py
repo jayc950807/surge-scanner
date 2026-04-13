@@ -101,9 +101,9 @@ def fetch_price_data(ticker, start_date, end_date=None):
         tk = yf.Ticker(ticker)
         if end_date:
             end_dt = pd.to_datetime(end_date) + timedelta(days=1)
-            df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'))
+            df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'), auto_adjust=False)
         else:
-            df = tk.history(start=start_date)
+            df = tk.history(start=start_date, auto_adjust=False)
         if df is not None and len(df) > 0:
             # timezone 제거 (yfinance가 America/New_York 등 반환 → naive로 통일)
             if df.index.tz is not None:
