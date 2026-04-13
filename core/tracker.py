@@ -184,23 +184,11 @@ def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_ho
         sl_hit = sl_price > 0 and l <= sl_price
 
         if tp_hit and sl_hit:
-            # 같은 날 둘 다 가능한 경우:
-            # 시가에서 TP/SL 중 어느 쪽이 가까운지로 판단
-            o = float(row['Open'])
-            dist_to_tp = abs(tp_price - o)
-            dist_to_sl = abs(sl_price - o)
-            if dist_to_tp <= dist_to_sl:
-                # TP가 시가에 더 가까움 → TP 먼저 도달 가능성 높음
-                result_pct = (tp_price - entry_price) / entry_price * 100
-                max_ach = 100.0
-                return ('WIN', tp_price, date_str, date_str, max_price, max_price_date,
-                        min_price, min_price_date, days_held, result_pct, max_ach)
-            else:
-                # SL이 시가에 더 가까움 → SL 먼저 도달
-                result_pct = (sl_price - entry_price) / entry_price * 100
-                max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
-                return ('LOSS', sl_price, date_str, '', max_price, max_price_date,
-                        min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
+            # 같은 날 둘 다 터진 경우: 순서를 확정할 수 없으므로 보수적으로 LOSS 처리
+            result_pct = (sl_price - entry_price) / entry_price * 100
+            max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
+            return ('LOSS', sl_price, date_str, '', max_price, max_price_date,
+                    min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
 
         if tp_hit:
             result_pct = (tp_price - entry_price) / entry_price * 100
