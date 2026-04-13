@@ -1,16 +1,16 @@
 {
-  "scan_date": "2026-04-10",
-  "scan_time": "2026-04-13 22:13:46 KST",
+  "scan_date": "2026-04-13",
+  "scan_time": "2026-04-13 22:46:23 KST",
   "strategy_a_count": 0,
   "strategy_b_count": 0,
-  "strategy_c_count": 1,
+  "strategy_c_count": 0,
   "strategy_d_count": 0,
-  "strategy_e_count": 1,
+  "strategy_e_count": 0,
   "strategy_f_count": 0,
   "strategy_g_count": 0,
   "strategy_h_count": 0,
   "strategy_i_count": 0,
-  "strategy_j_count": 1,
-  "total_count": 3,
+  "strategy_j_count": 0,
+  "total_count": 0,
   "dq_warnings": 0
 }
