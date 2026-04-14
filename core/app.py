@@ -650,8 +650,9 @@ def chg_html(val_raw):
     return f'<span class="{cls}">{v:+.1f}%</span>'
 
 def result_badge(r):
+    # v4: TRAILING 상태는 더 이상 생성되지 않으므로 매핑에서 제거.
     m = {'WIN': ('st-win', 'WIN'), 'LOSS': ('st-loss', 'LOSS'), 'EXPIRED': ('st-expired', 'EXP'),
-         'TRAILING': ('st-loss', 'TRAIL'), 'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
+         'OPEN': ('st-open', 'OPEN'), 'PENDING': ('st-pending', 'WAIT')}
     cls, txt = m.get(r, ('c-muted', r))
     return f'<span class="{cls}">{txt}</span>'
 
@@ -1142,6 +1143,7 @@ with tab_history:
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
     # Aggregate — 대소문자 무관 매칭
+    # v4: result_status 가능값은 WIN / LOSS / EXPIRED 3종. TRAILING 집계 제거.
     total_det = len(all_records)
     if not closed_pos.empty and rs_col in closed_pos.columns:
         _rs_upper = closed_pos[rs_col].astype(str).str.upper()
@@ -1149,12 +1151,11 @@ with tab_history:
         total_win = int((_rs_upper == 'WIN').sum())
         total_loss = int((_rs_upper == 'LOSS').sum())
         total_exp = int((_rs_upper == 'EXPIRED').sum())
-        total_trailing = int((_rs_upper == 'TRAILING').sum())
     else:
-        total_closed = total_win = total_loss = total_exp = total_trailing = 0
-    total_fail = total_loss + total_exp + total_trailing  # EXPIRED, TRAILING도 실패로 간주
+        total_closed = total_win = total_loss = total_exp = 0
+    total_fail = total_loss + total_exp  # LOSS + EXPIRED 모두 실패로 집계
     total_open = len(open_pos[open_pos['status'].str.upper().isin(['OPEN', 'PENDING'])]) if not open_pos.empty and 'status' in open_pos.columns else 0
-    # 승률: Win / (Win + Loss + Expired) — EXPIRED는 실패로 간주
+    # 승률: Win / (Win + Loss + Expired) — LOSS·EXPIRED는 실패로 간주
     total_decided = total_win + total_fail
     wr = (total_win / total_decided * 100) if total_decided > 0 else 0
 
@@ -1273,10 +1274,9 @@ with tab_history:
             nw = int((_s_rs=='WIN').sum()) if nc>0 else 0
             nl = int((_s_rs=='LOSS').sum()) if nc>0 else 0
             ne = int((_s_rs=='EXPIRED').sum()) if nc>0 else 0
-            nt = int((_s_rs=='TRAILING').sum()) if nc>0 else 0
             na = len(s_op)
-            # 승률: Win / (Win + Loss + Expired + Trailing) — EXPIRED, TRAILING 실패로 간주
-            s_decided = nw + nl + ne + nt
+            # v4: 승률 = Win / (Win + Loss + Expired). LOSS·EXPIRED는 실패로 간주.
+            s_decided = nw + nl + ne
             sw = (nw/s_decided*100) if s_decided>0 else 0
             avg = 0
             if nc>0 and 'result_pct' in s_cl.columns:
