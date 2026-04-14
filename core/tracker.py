@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Scanner — Position Tracker (FIXED v3)
+  US Stock Surge Scanner — Position Tracker (v4, SIMPLIFIED)
 
-  수정 사항:
-    1. TP/SL 체크를 날짜순으로 하루씩 동시 확인 (기존: TP 전체→SL 전체 순서 버그)
-    2. 동일 티커/날짜 복수 전략 시 entry_price 일관성 보장
-    3. 진입일(entry_date) 포함 TP/SL 체크 통일
-    4. --reverify 옵션: 전체 청산 내역 재검증
-    5. trailing stop을 날짜순 루프 안에서 처리
-    6. Fix #1: 모든 bare except을 적절한 로깅과 함께 처리
-    7. Fix #7: datetime.now() 일관성 - signal 파일 자동 감지 + UTC timezone 사용
-    8. Fix #8: 미사용 fetch_current_prices 함수 제거
-    9. Fix #9: O(n²) pd.concat 최적화 - 리스트에 모으고 한 번에 concat
+  [v4 판정 규칙 — 단순화]
+    전제: 탐지된 날짜(signal_date) = 진입 날짜(entry_date). signal_date 당일
+          종가에 매수한 것으로 간주하고, 다음 거래일부터 max_hold일 동안 추적.
+
+    성공/실패 판정은 오직 세 가지 결과만 가진다.
+      1. WIN     : max_hold 이내에 TP(High >= tp_price)에 먼저 도달
+      2. LOSS    : max_hold 이내에 SL(Low  <= sl_price)에 먼저 도달
+                   또는 같은 날 TP/SL이 동시에 도달(일봉만으로는 선후 판별 불가
+                   → 보수적으로 LOSS)
+      3. EXPIRED : max_hold 경과 시까지 TP / SL 모두 미도달 (실패 카테고리)
+
+    ※ Trailing stop 관련 로직(trailing_pct, trailing_level, peak_price 기반
+       청산, 'TRAILING' 상태값)은 v4에서 전면 제거되었다.
+
+  [이전 버전(v3) 대비 변경]
+    - track_position_daywise(): trailing 인자/분기 삭제. WIN/LOSS/EXPIRED만 반환.
+    - update_open_positions() / reverify_all(): trailing_pct 조회·전달 삭제.
+    - generate_tracker_summary(): trailing_count 집계 삭제.
+    - result_status 가능값: WIN / LOSS / EXPIRED (3종)
 
   Usage:
     python tracker.py                # 전체 업데이트
@@ -55,7 +64,7 @@ OPEN_COLS = [
 
 CLOSED_COLS = OPEN_COLS + [
     'close_date', 'close_price', 'result_pct',
-    'result_status',  # WIN, LOSS, EXPIRED, TRAILING
+    'result_status',  # WIN, LOSS, EXPIRED  (v4: TRAILING 제거)
     'tp_hit_date',
     'max_achievement_pct',
 ]
@@ -139,16 +148,33 @@ def get_entry_for_signal(ticker, signal_date):
     return None, None
 
 
-def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_hold, hist_after_entry):
+def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after_entry):
     """
-    [핵심 수정] 날짜순으로 하루씩 TP/SL/Trailing을 동시 체크.
-    기존 버그: TP를 전체 기간에서 먼저 찾고, 없으면 SL을 전체 기간에서 찾음
-    → SL이 먼저 맞았는데 나중에 TP 맞은 경우 WIN으로 잘못 처리됨
+    [v4 단순화] 진입일 다음 거래일부터 하루씩 TP/SL 도달 여부만 순차 검사.
 
-    Returns: (result, close_price, close_date, tp_hit_date, max_price, max_price_date,
-              min_price, min_price_date, days_held, result_pct, max_achievement_pct)
+    판정 규칙 (반드시 코드와 1:1 일치):
+      - max_hold 이내에 TP(High >= tp_price)에 먼저 도달       → WIN
+      - max_hold 이내에 SL(Low  <= sl_price)에 먼저 도달       → LOSS
+      - 같은 날 TP와 SL이 모두 도달 (High>=tp_price AND
+        Low<=sl_price): 일봉 데이터만으로는 장중 선후 관계를
+        확정할 수 없다. 백테스트 결과의 과신을 막기 위해
+        **보수적으로 LOSS로 판정한다.**
+      - max_hold 경과 시까지 TP·SL 모두 미도달                 → EXPIRED
+      - 위 어느 조건도 발동하지 않고 데이터가 부족해 아직
+        결정되지 않은 경우                                     → None (진행중)
+
+    ※ Trailing stop 관련 로직은 v4에서 전면 제거됨 (trailing_pct, trailing_level,
+       peak_price 기반 청산, 'TRAILING' 상태값 모두 삭제).
+
+    Returns:
+        (result, close_price, close_date, tp_hit_date,
+         max_price, max_price_date, min_price, min_price_date,
+         days_held, result_pct, max_achievement_pct)
+
+        - result ∈ {'WIN', 'LOSS', 'EXPIRED', None}
+        - tp_hit_date 는 WIN 일 때만 채워지고, 그 외에는 ''
+        - max_achievement_pct: 최고가가 TP 대비 몇 % 도달했는지 (참고용)
     """
-    peak_price = entry_price
     max_price = entry_price
     max_price_date = ''
     min_price = entry_price
@@ -167,7 +193,7 @@ def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_ho
         date_str = dt.strftime('%Y-%m-%d')
         days_held = day_i + 1
 
-        # max/min 업데이트
+        # max/min 업데이트 (achievement 계산용 참고값)
         if h > max_price:
             max_price = h
             max_price_date = date_str
@@ -175,49 +201,38 @@ def track_position_daywise(entry_price, tp_price, sl_price, trailing_pct, max_ho
             min_price = l
             min_price_date = date_str
 
-        # peak 업데이트 (trailing용)
-        if h > peak_price:
-            peak_price = h
-
-        # ── 같은 날 TP와 SL 동시 체크 ──
         tp_hit = tp_price > 0 and h >= tp_price
         sl_hit = sl_price > 0 and l <= sl_price
 
+        # ── 같은 날 TP·SL 동시 도달: 선후 불명 → 보수적으로 LOSS ──
+        # (일봉 OHLC만으로는 장중 경로를 알 수 없으므로 유리하게 가정하지 않는다)
         if tp_hit and sl_hit:
-            # 같은 날 둘 다 터진 경우: 순서를 확정할 수 없으므로 보수적으로 LOSS 처리
             result_pct = (sl_price - entry_price) / entry_price * 100
             max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
             return ('LOSS', sl_price, date_str, '', max_price, max_price_date,
                     min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
 
+        # ── TP 선도달 → WIN ──
         if tp_hit:
             result_pct = (tp_price - entry_price) / entry_price * 100
             return ('WIN', tp_price, date_str, date_str, max_price, max_price_date,
                     min_price, min_price_date, days_held, result_pct, 100.0)
 
+        # ── SL 선도달 → LOSS ──
         if sl_hit:
             result_pct = (sl_price - entry_price) / entry_price * 100
             max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
             return ('LOSS', sl_price, date_str, '', max_price, max_price_date,
                     min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
 
-        # ── Trailing stop 체크 ──
-        if trailing_pct and peak_price > entry_price:
-            trailing_level = peak_price * (1 + trailing_pct)
-            if c <= trailing_level:
-                result_pct = (c - entry_price) / entry_price * 100
-                max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
-                return ('TRAILING', c, date_str, '', max_price, max_price_date,
-                        min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
-
-        # ── 만기 체크 ──
+        # ── max_hold 경과: TP / SL 모두 미도달 → EXPIRED (실패) ──
         if days_held >= max_hold:
             result_pct = (c - entry_price) / entry_price * 100
             max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
             return ('EXPIRED', c, date_str, '', max_price, max_price_date,
                     min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
 
-    # 아직 결과 미확정 (진행중)
+    # ── 아직 결과 미확정 (price data 부족 등, 진행중) ──
     if len(hist_after_entry) > 0:
         last_c = float(hist_after_entry['Close'].iloc[-1])
         days_held = len(hist_after_entry)
@@ -460,7 +475,6 @@ def update_open_positions():
         entry_date = row['entry_date']
         tp_price = float(row['tp_price']) if row['tp_price'] else 0
         sl_price_val = float(row['sl_price']) if row['sl_price'] else 0
-        trailing_pct = config.get('trailing_pct')
         max_hold = int(row['max_hold']) if row['max_hold'] else config.get('max_hold', 5)
 
         # 히스토리 가져오기 (캐시)
@@ -481,10 +495,10 @@ def update_open_positions():
         if hist_tracking.empty:
             continue
 
-        # [핵심 수정] 날짜순 TP/SL 동시 체크
+        # [v4] 날짜순 TP/SL 선도달 체크 (trailing 제거)
         result = track_position_daywise(
             entry_price, tp_price, sl_price_val,
-            trailing_pct, max_hold, hist_tracking
+            max_hold, hist_tracking
         )
 
         (res_status, close_price, close_date, tp_hit_date,
@@ -513,7 +527,7 @@ def update_open_positions():
         if res_status is not None:
             to_close.append((idx, res_status, close_price, close_date,
                            tp_hit_date or '', result_pct, max_ach))
-            emoji = {'WIN': '  WIN', 'LOSS': '  LOSS', 'TRAILING': '  TRAIL', 'EXPIRED': '  EXP'}
+            emoji = {'WIN': '  WIN', 'LOSS': '  LOSS', 'EXPIRED': '  EXP'}
             print(f"    {emoji.get(res_status, res_status)}: [{strategy}] {ticker} "
                   f"@ ${close_price:.2f} ({result_pct:+.1f}%) on {close_date}")
 
@@ -568,7 +582,8 @@ def generate_tracker_summary():
         summary['win_count'] = len(closed_pos[closed_pos['result_status'] == 'WIN'])
         summary['loss_count'] = len(closed_pos[closed_pos['result_status'] == 'LOSS'])
         summary['expired_count'] = len(closed_pos[closed_pos['result_status'] == 'EXPIRED'])
-        summary['trailing_count'] = len(closed_pos[closed_pos['result_status'] == 'TRAILING'])
+        # v4: 성공/실패 이분법 집계 (WIN = 성공, LOSS+EXPIRED = 실패)
+        summary['fail_count'] = summary['loss_count'] + summary['expired_count']
 
     try:
         with open(os.path.join(DATA_DIR, 'tracker_summary.json'), 'w') as f:
@@ -579,8 +594,7 @@ def generate_tracker_summary():
     print(f"  요약: OPEN={summary.get('open_count', 0)} | "
           f"WIN={summary.get('win_count', 0)} | "
           f"LOSS={summary.get('loss_count', 0)} | "
-          f"EXPIRED={summary.get('expired_count', 0)} | "
-          f"TRAILING={summary.get('trailing_count', 0)}")
+          f"EXPIRED={summary.get('expired_count', 0)}")
 
 
 # ─── Step 5: Re-verify all closed positions ────────────────────────────────────
@@ -663,7 +677,6 @@ def reverify_all():
         sl_pct = config.get('sl_pct', None)
         tp_price = round(entry_price * (1 + tp_pct), 2)
         sl_price = round(entry_price * (1 + sl_pct), 2) if sl_pct else 0
-        trailing_pct = config.get('trailing_pct')
         max_hold = config.get('max_hold', 5)
 
         # 3. 히스토리 재조회
@@ -691,10 +704,10 @@ def reverify_all():
             new_closed.append(pos)
             continue
 
-        # 4. 날짜순 TP/SL 동시 체크로 재판정
+        # 4. [v4] 날짜순 TP/SL 선도달 체크로 재판정 (trailing 제거)
         result = track_position_daywise(
             entry_price, tp_price, sl_price,
-            trailing_pct, max_hold, hist_tracking
+            max_hold, hist_tracking
         )
 
         (res_status, close_price, close_date, tp_hit_date,
@@ -779,20 +792,21 @@ def reverify_all():
                 new_open_df[c] = ''
     save_csv(new_open_df, OPEN_PATH)
 
-    # 통계
+    # 통계 (v4: WIN / LOSS / EXPIRED 3종만. TRAILING 제거)
     total = len(new_closed) + len(new_open)
     n_win = sum(1 for p in new_closed if p.get('result_status') == 'WIN')
     n_loss = sum(1 for p in new_closed if p.get('result_status') == 'LOSS')
-    n_trail = sum(1 for p in new_closed if p.get('result_status') == 'TRAILING')
     n_exp = sum(1 for p in new_closed if p.get('result_status') == 'EXPIRED')
     n_open = len(new_open)
 
     print(f"\n  재검증 완료:")
     print(f"    총: {total}건 | WIN: {n_win} | LOSS: {n_loss} | "
-          f"TRAILING: {n_trail} | EXPIRED: {n_exp} | 진행중: {n_open}")
+          f"EXPIRED: {n_exp} | 진행중: {n_open}")
     print(f"    변경된 결과: {changed_count}건")
-    win_rate = n_win / (n_win + n_loss + n_trail + n_exp) * 100 if (n_win + n_loss + n_trail + n_exp) > 0 else 0
-    print(f"    승률: {win_rate:.1f}%")
+    # 승률 = WIN / (WIN + LOSS + EXPIRED). LOSS와 EXPIRED는 모두 실패로 집계.
+    closed_n = n_win + n_loss + n_exp
+    win_rate = n_win / closed_n * 100 if closed_n > 0 else 0
+    print(f"    승률: {win_rate:.1f}%  (실패 = LOSS + EXPIRED = {n_loss + n_exp}건)")
 
 
 # ─── Init: Backfill from history.csv ─────────────────────────────────────────
