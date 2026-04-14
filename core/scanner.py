@@ -5,7 +5,7 @@
 
   Strategy A (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
-    매도: +5% 익절 | -20% 손절 | -3% 트레일링 | 5일 타임아웃
+    매도: +5% 익절 | -20% 손절 | 5일 타임아웃
     백테스트: 90.1% (236/262), 최적청산 누적 +515%
 
   Strategy B (+15% High-Gain):
@@ -169,7 +169,6 @@ A_DIST_LOW5      = 0.05      # 5일 최저가 대비 < 5%
 A_RSI7_THRESH    = 20        # RSI(7) < 20
 A_TAKE_PROFIT    = 0.05      # +5%
 A_STOP_LOSS      = -0.20     # -20%
-A_TRAILING_STOP  = -0.03     # -3% 트레일링
 A_MAX_HOLD_DAYS  = 5
 
 # === Strategy B thresholds (+15%) ===
@@ -935,7 +934,7 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
     print(f"\n{'='*90}")
     print(f"  ★ STRATEGY A — Weekly Signal (+5%) — {date_str}")
     print(f"  조건: Intra>20% + Ret3d<-15% + Down>5d + DistLow5<5% + RSI7<20")
-    print(f"  청산: +5% 익절 | -20% 손절 | -3% 트레일링 | 5일 타임아웃")
+    print(f"  청산: +5% 익절 | -20% 손절 | 5일 타임아웃")
     print(f"  백테스트: 승률 90.1% (262건/5년), 최적청산 누적 +515%")
     print(f"{'='*90}")
 
