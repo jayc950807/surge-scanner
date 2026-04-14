@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d,ret5d,vol_avg,hold_days
+A,BEZ,2026-04-14,00:13 KST,5.8,16.7,34.1,-52.4,6,2.6,6.1,4.64,,,,
+C,BEZ,2026-04-14,00:13 KST,5.8,16.7,34.1,,6,2.56,6.1,4.64,-41.7,,,
+E,BEZ,2026-04-14,00:13 KST,5.8,,34.1,,6,,6.39,,,-67.4,360149.0,30.0
