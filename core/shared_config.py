@@ -24,17 +24,18 @@ LEVERAGED_ETF = {
 }
 
 # ─── Strategy Configuration ──────────────────────────────────────────────────
+# v4: trailing_pct 필드 제거. 모든 전략이 TP / SL / max_hold 세 기준만 사용.
 STRATEGY_CONFIG = {
-    'A': {'tp_pct': 0.05, 'sl_pct': -0.20, 'trailing_pct': -0.03, 'max_hold': 5},
-    'B': {'tp_pct': 0.15, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 10},
-    'C': {'tp_pct': 0.05, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 5},
-    'D': {'tp_pct': 0.20, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 30},
-    'E': {'tp_pct': 0.10, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 30},
-    'F': {'tp_pct': 0.50, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 20},
-    'G': {'tp_pct': 0.40, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 20},
-    'H': {'tp_pct': 0.40, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 20},
-    'I': {'tp_pct': 0.10, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 5},
-    'J': {'tp_pct': 0.10, 'sl_pct': -0.20, 'trailing_pct': None,  'max_hold': 5},
+    'A': {'tp_pct': 0.05, 'sl_pct': -0.20, 'max_hold': 5},
+    'B': {'tp_pct': 0.15, 'sl_pct': -0.20, 'max_hold': 10},
+    'C': {'tp_pct': 0.05, 'sl_pct': -0.20, 'max_hold': 5},
+    'D': {'tp_pct': 0.20, 'sl_pct': -0.20, 'max_hold': 30},
+    'E': {'tp_pct': 0.10, 'sl_pct': -0.20, 'max_hold': 30},
+    'F': {'tp_pct': 0.50, 'sl_pct': -0.20, 'max_hold': 20},
+    'G': {'tp_pct': 0.40, 'sl_pct': -0.20, 'max_hold': 20},
+    'H': {'tp_pct': 0.40, 'sl_pct': -0.20, 'max_hold': 20},
+    'I': {'tp_pct': 0.10, 'sl_pct': -0.20, 'max_hold': 5},
+    'J': {'tp_pct': 0.10, 'sl_pct': -0.20, 'max_hold': 5},
 }
 
 STRATEGY_NAMES = {
