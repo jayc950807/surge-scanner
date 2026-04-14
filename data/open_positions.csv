@@ -1,1 +1,4 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated
+A,BEZ,2026-04-14,5.15,,,5.41,4.12,0.05,5,PENDING,,,,,,,,0,2026-04-14
+C,BEZ,2026-04-14,5.15,,,5.41,4.12,0.05,5,PENDING,,,,,,,,0,2026-04-14
+E,BEZ,2026-04-14,5.15,,,5.67,4.12,0.1,30,PENDING,,,,,,,,0,2026-04-14
