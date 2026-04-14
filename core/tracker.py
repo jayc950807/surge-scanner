@@ -697,7 +697,10 @@ def reverify_all():
             continue
 
         entry_dt = pd.to_datetime(entry_date)
-        hist_tracking = hist[hist.index >= entry_dt]
+        # [v4 버그수정] 진입일 자체는 추적에서 제외 (update_open_positions 와 일치).
+        # 진입가는 당일 종가이므로 당일 장중 고/저가를 TP/SL 판정이나 peak 기록에
+        # 사용하면 lookahead bias 가 발생한다 (매수 이전 시점 가격을 후행 판정에 씀).
+        hist_tracking = hist[hist.index > entry_dt]
 
         if hist_tracking.empty:
             pos['result_status'] = 'NO_DATA'
