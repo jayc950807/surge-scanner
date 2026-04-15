@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price
+C,IONZ,2026-04-15,07:03 KST,7.75,15.6,55.8,-41.9,4,0.65,8.14,6.2
+C,TSLZ,2026-04-15,07:03 KST,13.75,26.2,21.0,-15.4,5,1.33,14.44,11.0
+C,TSLQ,2026-04-15,07:03 KST,21.38,26.5,21.1,-15.3,5,1.66,22.45,17.1
