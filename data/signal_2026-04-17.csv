@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+D,TRUG,2026-04-17,06:55 KST,2.24,24.5,38.5,-41.1,2.69,30
