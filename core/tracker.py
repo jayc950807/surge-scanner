@@ -46,7 +46,7 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
 # ─── Import from shared_config ────────────────────────────────────────────────
 from shared_config import (
-    STRATEGY_CONFIG, STRATEGY_NAMES, DATA_DIR, KST,
+    STRATEGY_CONFIG, STRATEGY_NAMES, STRATEGY_WINRATE, DATA_DIR, KST,
     download_batch, extract_ticker_df
 )
 
