@@ -1,63 +1,62 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Detection — Combined Scanner (Strategy A + B + C + D + E + F + G + H + I + J)
+  US Stock Surge Detection — Combined Scanner (Strategy 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10)
 
-  Strategy A (+5% in 5 Days):
+  Strategy 1 (+5% in 5 Days):
     매수: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
     매도: +5% 익절 | -20% 손절 | 5일 타임아웃
     백테스트: 90.1% (236/262), 최적청산 누적 +515%
 
-  Strategy B (+15% High-Gain):
+  Strategy 2 (+15% High-Gain):
     매수: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
     매도: +15% 지정가 | -20% 손절 | 10일 종가청산
     백테스트: 90.3% (28/31)
 
-  Strategy C (+5% 2일 연속 급락 과매도 반등):
+  Strategy 3 (+5% 2일 연속 급락 과매도 반등):
     매수: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + ConsecDown>3 + DistLow5<3%
     매도: +5% 익절 | -20% 손절 | 5일 타임아웃
     백테스트: 86.9% (542/624), +7% 기준 81.4%
 
-  Strategy D (+20% 초저가 폭락 반등):
+  Strategy 4 (+20% 초저가 폭락 반등):
     매수: Price<=$3 + Ret5d<=-40% + Intra>=30% + RSI14<=25
     매도: +20% 익절 | 30일 타임아웃
     백테스트: 97.7% (127/130), 건당 평균 +18.9%, 중간 도달일 2일
 
-  Strategy E (+10% 저가주 급락 반등):
+  Strategy 5 (+10% 저가주 급락 반등):
     매수: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + AvgVol>=20만
     매도: +10% 익절 | 30일 타임아웃
     백테스트: 91.0% (273/300), 건당 평균 max +104.9%, 중간 도달일 2일
 
-  Strategy F (+50% 바닥 급등):
+  Strategy 6 (+50% 바닥 급등):
     매수: Vol20d>10% + Dist52wHigh<-85% + BB%B<0 + Ret1d<-5% + GapUp>5%
     매도: +50% 익절 | -20% 손절 | 20일 타임아웃
     백테스트: 87.5% (8건/5년)
 
-  Strategy G (+40% MACD 전환 급등):
+  Strategy 7 (+40% MACD 전환 급등):
     매수: Vol20d>10% + RSI7<30 + MACD 골든크로스 + GapUp>5% + Price<SMA5
     매도: +40% 익절 | -20% 손절 | 20일 타임아웃
     백테스트: 90.0% (10건/5년)
 
-  Strategy H (+40% ATR 확대 급등):
+  Strategy 8 (+40% ATR 확대 급등):
     매수: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR확대>25%
     매도: +40% 익절 | -20% 손절 | 20일 타임아웃
     백테스트: 90.0% (10건/5년)
 
-  Strategy I (+10% 과매도 반등 단타):
+  Strategy 9 (+10% 과매도 반등 단타):
     매수: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0
     매도: +10% 익절 | -20% 손절 | 5일 타임아웃
     백테스트: 100% (8건/5년)
 
-  Strategy J (+10% MACD 전환 단타):
+  Strategy 10 (+10% MACD 전환 단타):
     매수: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20
     매도: +10% 익절 | -20% 손절 | 5일 타임아웃
     백테스트: 90% (9/10, 5년)
 
   Usage:
-    python scanner.py                        # Scan all strategies (A+B+C+D+E+F+G+H+I+J)
-    python scanner.py --strategy A           # Strategy A only
-    python scanner.py --strategy DEF         # Strategy D + E + F only
-    python scanner.py --strategy ABCDEFGHIJ  # All strategies
+    python scanner.py                        # Scan all strategies (1+2+3+4+5+6+7+8+9+10)
+    python scanner.py --strategy 1           # Strategy 1 only
+    python scanner.py --strategy 12345678910 # All strategies
 
   Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append)
 ================================================================================
@@ -83,6 +82,8 @@ from shared_config import (
     BATCH_SIZE,
     BATCH_DELAY,
     STRATEGY_CONFIG,
+    STRATEGY_CONDITIONS,
+    STRATEGY_WINRATE,
     calc_rsi_wilder,
     get_all_tickers,
     download_batch,
@@ -276,17 +277,17 @@ def calc_consec_down(close_series):
 # ─── Unified Phase 1: 공통 RSI 필터 ─────────────────────────────────────────
 
 def phase1_rsi_filter(all_tickers, strat_str):
-    """Phase 1: 공통 필터링 (A/B/C: RSI7<35, D: Price<=$3, E: Price $3~$10, F/G/H/I/J: Vol>6%)
+    """Phase 1: 공통 필터링 (1/2/3: RSI7<35, 4: Price<=$3, 5: Price $3~$10, 6/7/8/9/10: Vol>6%)
     한 번의 30d 스캔으로 모든 전략 후보를 수집.
     """
-    run_d = 'D' in strat_str
-    run_e = 'E' in strat_str
-    run_f = 'F' in strat_str
-    run_g = 'G' in strat_str
-    run_h = 'H' in strat_str
-    run_i = 'I' in strat_str
-    run_j = 'J' in strat_str
-    run_abc = any(s in strat_str for s in ['A', 'B', 'C'])
+    run_d = '4' in strat_str
+    run_e = '5' in strat_str
+    run_f = '6' in strat_str
+    run_g = '7' in strat_str
+    run_h = '8' in strat_str
+    run_i = '9' in strat_str
+    run_j = '10' in strat_str
+    run_abc = any(s in strat_str for s in ['1', '2', '3'])
 
     print(f"\n{'='*80}")
     print(f"  [Phase 1] 공통 필터링 (RSI7<35{' + Price<=$3' if run_d else ''}{' + Price $3~$10' if run_e else ''}{' + Vol>6%' if (run_f or run_g or run_h or run_i or run_j) else ''})")
@@ -321,21 +322,21 @@ def phase1_rsi_filter(all_tickers, strat_str):
                 if last_close < MIN_PRICE or avg_vol < MIN_VOLUME:
                     continue
 
-                # A/B/C 후보: RSI7 < 35
+                # 1/2/3 후보: RSI7 < 35
                 if run_abc:
                     rsi7 = calc_rsi_wilder(close, 7)
                     if not pd.isna(rsi7.iloc[-1]) and float(rsi7.iloc[-1]) < 35:
                         candidates.add(tk)
 
-                # D 후보: Price <= $3 (추가 다운로드 없이 동일 데이터 사용)
+                # 4 후보: Price <= $3 (추가 다운로드 없이 동일 데이터 사용)
                 if run_d and last_close <= D_PRICE_THRESH:
                     candidates.add(tk)
 
-                # E 후보: Price $3~$10 + AvgVol >= 20만
+                # 5 후보: Price $3~$10 + AvgVol >= 20만
                 if run_e and E_PRICE_MIN <= last_close <= E_PRICE_MAX and avg_vol >= E_VOL_MIN:
                     candidates.add(tk)
 
-                # F/G/H/I/J 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
+                # 6/7/8/9/10 후보: 변동성 높거나 52주 최저 근처 (느슨한 필터, 실제 기준은 0.10)
                 if run_f or run_g or run_h or run_i or run_j:
                     daily_ret = close.pct_change()
                     vol_20d = float(daily_ret.tail(20).std()) if len(daily_ret) >= 20 else 0
@@ -351,10 +352,10 @@ def phase1_rsi_filter(all_tickers, strat_str):
     return candidates
 
 
-# ─── Unified Phase 2: 한 번의 다운로드로 A/B/C/D/E 동시 체크 ────────────────────
+# ─── Unified Phase 2: 한 번의 다운로드로 1/2/3/4/5 동시 체크 ────────────────────
 
 def phase2_check_all(candidates, strat_str):
-    """Phase 2: 120d(또는 2y if F/G/H) 데이터를 한 번만 받아서 A/B/C/D/E/F/G/H/I/J 조건을 모두 체크"""
+    """Phase 2: 120d(또는 2y if 6/7/8) 데이터를 한 번만 받아서 1/2/3/4/5/6/7/8/9/10 조건을 모두 체크"""
     print(f"\n{'='*80}")
     print(f"  [Phase 2] 정밀 분석 ({len(candidates)}개 후보)")
     print(f"{'='*80}")
@@ -372,16 +373,19 @@ def phase2_check_all(candidates, strat_str):
     signals_i = []
     signals_j = []
 
-    run_a = 'A' in strat_str
-    run_b = 'B' in strat_str
-    run_c = 'C' in strat_str
-    run_d = 'D' in strat_str
-    run_e = 'E' in strat_str
-    run_f = 'F' in strat_str
-    run_g = 'G' in strat_str
-    run_h = 'H' in strat_str
-    run_i = 'I' in strat_str
-    run_j = 'J' in strat_str
+    run_a = '1' in strat_str
+    run_b = '2' in strat_str
+    run_c = '3' in strat_str
+    run_d = '4' in strat_str
+    run_e = '5' in strat_str
+    run_f = '6' in strat_str
+    run_g = '7' in strat_str
+    run_h = '8' in strat_str
+    run_i = '9' in strat_str
+    run_j = '10' in strat_str
+
+    # Collect (ticker, df) pairs for phase3
+    candidates_phase1_data = []
 
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
@@ -390,7 +394,7 @@ def phase2_check_all(candidates, strat_str):
 
         if batch_num % 10 == 1 or batch_num == total_p2:
             print(f"    Phase2 Batch {batch_num}/{total_p2} | "
-                  f"A:{len(signals_a)} B:{len(signals_b)} C:{len(signals_c)} D:{len(signals_d)} E:{len(signals_e)} F:{len(signals_f)} G:{len(signals_g)} H:{len(signals_h)} I:{len(signals_i)} J:{len(signals_j)}")
+                  f"1:{len(signals_a)} 2:{len(signals_b)} 3:{len(signals_c)} 4:{len(signals_d)} 5:{len(signals_e)} 6:{len(signals_f)} 7:{len(signals_g)} 8:{len(signals_h)} 9:{len(signals_i)} 10:{len(signals_j)}")
 
         # 120d로 한 번만 다운로드 (B가 MA20에 120d 필요, F/G/H는 252d=2y 필요)
         data = download_batch(batch, period='2y' if (run_f or run_g or run_h) else '120d')
@@ -424,6 +428,9 @@ def phase2_check_all(candidates, strat_str):
                 if avg_vol < MIN_VOLUME:
                     continue
 
+                # Save for phase3
+                candidates_phase1_data.append((tk, df))
+
                 # ── 공통 계산 (한 번만) ──
                 intra = (h_last - l_last) / l_last  # FIX #4: low-based for consistency with backtest
                 consec = calc_consec_down(close)
@@ -431,21 +438,21 @@ def phase2_check_all(candidates, strat_str):
                 low5_min = float(low.iloc[-5:].min()) if n >= 5 else None
                 dist_low5 = (c_last - low5_min) / max(low5_min, 0.01) if low5_min else None
 
-                # ── RSI7 계산: A/B/C/G/H 필요, D/E는 필요 없음 ──
+                # ── RSI7 계산: 1/2/3/7/8 필요, 4/5는 필요 없음 ──
                 rsi7_val = None
                 if run_a or run_b or run_c or run_g or run_h:
                     rsi7 = calc_rsi_wilder(close, 7)
                     if not pd.isna(rsi7.iloc[-1]):
                         rsi7_val = float(rsi7.iloc[-1])
                     else:
-                        # RSI7이 NaN인 경우: A/B/C/G/H는 스킵, D/E는 계속
+                        # RSI7이 NaN인 경우: 1/2/3/7/8는 스킵, 4/5는 계속
                         if run_a or run_b or run_c or run_g or run_h:
                             if not (run_d or run_e):
                                 continue
-                            # A/B/C/G/H를 못하지만 D/E는 계속하기 위해 pass
+                            # 1/2/3/7/8를 못하지만 4/5는 계속하기 위해 pass
 
                 # ══════════════════════════════════════════════
-                # Strategy A: Intra>20% + Ret3d<-15% + Down>5 + DistLow5<5% + RSI7<20
+                # Strategy 1: Intra>20% + Ret3d<-15% + Down>5 + DistLow5<5% + RSI7<20
                 # ══════════════════════════════════════════════
                 if run_a and rsi7_val is not None and rsi7_val < A_RSI7_THRESH:
                     if (intra > A_INTRA_THRESH and
@@ -458,7 +465,7 @@ def phase2_check_all(candidates, strat_str):
                             tp_price = round(c_last * (1 + A_TAKE_PROFIT), 2)
                             sl_price = round(c_last * (1 + A_STOP_LOSS), 2)
                             signals_a.append({
-                                'strategy': 'A',
+                                'strategy': '1',
                                 'ticker': tk,
                                 'date': trade_date,
                                 'scan_time': scan_time_kst,
@@ -471,12 +478,12 @@ def phase2_check_all(candidates, strat_str):
                                 'tp_price': tp_price,
                                 'sl_price': sl_price,
                             })
-                            print(f"    ★ [A] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                            print(f"    ★ [1] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
                                   f"Intra={intra*100:.0f}% Ret3d={ret3d*100:.1f}% "
                                   f"Down={consec}d Dist={dist_low5*100:.1f}%")
 
                 # ══════════════════════════════════════════════
-                # Strategy B: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
+                # Strategy 2: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0
                 # ══════════════════════════════════════════════
                 if run_b and rsi7_val is not None and rsi7_val < B_RSI7_THRESH and intra > B_INTRA_THRESH:
                     # ATR ratio
@@ -513,7 +520,7 @@ def phase2_check_all(candidates, strat_str):
                                             tp_price = round(c_last * (1 + B_TAKE_PROFIT), 2)
                                             sl_price = round(c_last * (1 + B_STOP_LOSS), 2)
                                             signals_b.append({
-                                                'strategy': 'B',
+                                                'strategy': '2',
                                                 'ticker': tk,
                                                 'date': trade_date,
                                                 'scan_time': scan_time_kst,
@@ -527,14 +534,14 @@ def phase2_check_all(candidates, strat_str):
                                                 'tp_price': tp_price,
                                                 'sl_price': sl_price,
                                             })
-                                            print(f"    ★ [B] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                                            print(f"    ★ [2] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
                                                   f"RSI14={rsi14_val:.1f} ATR={atr_ratio:.1f} "
                                                   f"Intra={intra*100:.0f}% MA20={ma20_pos*100:.1f}%")
                                     except Exception as e:
                                         print(f"    Warning: {tk} info fetch failed: {e}")
 
                 # ══════════════════════════════════════════════
-                # Strategy C: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3 + DistLow5<3%
+                # Strategy 3: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3 + DistLow5<3%
                 # ══════════════════════════════════════════════
                 if run_c and rsi7_val is not None and rsi7_val < C_RSI7_THRESH and intra > C_INTRA_THRESH:
                     if (n >= 3 and
@@ -549,7 +556,7 @@ def phase2_check_all(candidates, strat_str):
                             tp_price = round(c_last * (1 + C_TAKE_PROFIT), 2)
                             sl_price = round(c_last * (1 + C_STOP_LOSS), 2)
                             signals_c.append({
-                                'strategy': 'C',
+                                'strategy': '3',
                                 'ticker': tk,
                                 'date': trade_date,
                                 'scan_time': scan_time_kst,
@@ -562,12 +569,12 @@ def phase2_check_all(candidates, strat_str):
                                 'tp_price': tp_price,
                                 'sl_price': sl_price,
                             })
-                            print(f"    ★ [C] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
+                            print(f"    ★ [3] {tk} @ ${c_last:.2f} | RSI7={rsi7_val:.1f} "
                                   f"Intra={intra*100:.0f}% Ret1d={ret1d*100:.1f}% "
                                   f"Down={consec}d Dist5={dist_low5*100:.1f}%")
 
                 # ══════════════════════════════════════════════
-                # Strategy D: Price<=$3 + Ret5d<=-40% + Intra>=30% + RSI14<=25
+                # Strategy 4: Price<=$3 + Ret5d<=-40% + Intra>=30% + RSI14<=25
                 # ══════════════════════════════════════════════
                 if run_d and c_last <= D_PRICE_THRESH and intra >= D_INTRA_THRESH:
                     if n >= 6:
@@ -578,7 +585,7 @@ def phase2_check_all(candidates, strat_str):
                             if not pd.isna(rsi14_val) and rsi14_val <= D_RSI14_THRESH:
                                 tp_price = round(c_last * (1 + D_TAKE_PROFIT), 2)
                                 signals_d.append({
-                                    'strategy': 'D',
+                                    'strategy': '4',
                                     'ticker': tk,
                                     'date': trade_date,
                                     'scan_time': scan_time_kst,
@@ -589,19 +596,19 @@ def phase2_check_all(candidates, strat_str):
                                     'tp_price': tp_price,
                                     'hold_days': D_MAX_HOLD_DAYS,
                                 })
-                                print(f"    ★ [D] {tk} @ ${c_last:.2f} | RSI14={rsi14_val:.1f} "
+                                print(f"    ★ [4] {tk} @ ${c_last:.2f} | RSI14={rsi14_val:.1f} "
                                       f"Intra={intra*100:.0f}% Ret5d={ret5d*100:.1f}% "
                                       f"TP=${tp_price:.2f}")
 
                 # ══════════════════════════════════════════════
-                # Strategy E: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + Vol>=20만
+                # Strategy 5: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + Vol>=20만
                 # ══════════════════════════════════════════════
                 if run_e and E_PRICE_MIN <= c_last <= E_PRICE_MAX and intra >= E_INTRA_THRESH:
                     if avg_vol >= E_VOL_MIN and consec >= E_CONSEC_DOWN:
                         if n >= 6:
                             ret5d_e = c_last / float(close.iloc[-6]) - 1
                             if ret5d_e <= E_RET5D_THRESH:
-                                # D전략과 중복 제외 (pr<=3 & ret5d<=-40 & intra>=30 & rsi14<=25)
+                                # 4전략과 중복 제외 (pr<=3 & ret5d<=-40 & intra>=30 & rsi14<=25)
                                 is_d = False
                                 if c_last <= D_PRICE_THRESH and ret5d_e <= D_RET5D_THRESH and intra >= D_INTRA_THRESH:
                                     rsi14_e = calc_rsi_wilder(close, 14)
@@ -612,7 +619,7 @@ def phase2_check_all(candidates, strat_str):
                                 if not is_d:
                                     tp_price = round(c_last * (1 + E_TAKE_PROFIT), 2)
                                     signals_e.append({
-                                        'strategy': 'E',
+                                        'strategy': '5',
                                         'ticker': tk,
                                         'date': trade_date,
                                         'scan_time': scan_time_kst,
@@ -624,13 +631,13 @@ def phase2_check_all(candidates, strat_str):
                                         'tp_price': tp_price,
                                         'hold_days': E_MAX_HOLD_DAYS,
                                     })
-                                    print(f"    ★ [E] {tk} @ ${c_last:.2f} | "
+                                    print(f"    ★ [5] {tk} @ ${c_last:.2f} | "
                                           f"Ret5d={ret5d_e*100:.1f}% Intra={intra*100:.0f}% "
                                           f"Down={consec}d Vol={avg_vol/1000:.0f}K "
                                           f"TP=${tp_price:.2f}")
 
                 # ══════════════════════════════════════════════
-                # Strategy F: Vol20d>10% + 52wHigh<-85% + BB<0 + Ret1d<-5% + GapUp>5%
+                # Strategy 6: Vol20d>10% + 52wHigh<-85% + BB<0 + Ret1d<-5% + GapUp>5%
                 # ══════════════════════════════════════════════
                 if run_f and n >= 252:
                     # 20일 변동성
@@ -666,7 +673,7 @@ def phase2_check_all(candidates, strat_str):
                                                 tp_price = round(c_last * (1 + F_TAKE_PROFIT), 2)
                                                 sl_price = round(c_last * (1 + F_STOP_LOSS), 2)
                                                 signals_f.append({
-                                                    'strategy': 'F',
+                                                    'strategy': '6',
                                                     'ticker': tk,
                                                     'date': trade_date,
                                                     'scan_time': scan_time_kst,
@@ -680,14 +687,14 @@ def phase2_check_all(candidates, strat_str):
                                                     'sl_price': sl_price,
                                                     'hold_days': F_MAX_HOLD_DAYS,
                                                 })
-                                                print(f"    ★ [F] {tk} @ ${c_last:.2f} | "
+                                                print(f"    ★ [6] {tk} @ ${c_last:.2f} | "
                                                       f"Vol20d={vol_20d*100:.1f}% 52wH={dist_52w*100:.1f}% "
                                                       f"BB={bb_pctb:.3f} Ret1d={ret_1d*100:.1f}% "
                                                       f"Gap={gap_pct*100:.1f}% "
                                                       f"TP=${tp_price:.2f} SL=${sl_price:.2f}")
 
                 # ══════════════════════════════════════════════
-                # Strategy G: Vol20d>10% + RSI7<30 + MACD cross up + GapUp>5% + Price<SMA5
+                # Strategy 7: Vol20d>10% + RSI7<30 + MACD cross up + GapUp>5% + Price<SMA5
                 # ══════════════════════════════════════════════
                 if run_g and n >= 30:
                     daily_returns = close.pct_change()
@@ -717,7 +724,7 @@ def phase2_check_all(candidates, strat_str):
                                         tp_price = round(c_last * (1 + G_TAKE_PROFIT), 2)
                                         sl_price = round(c_last * (1 + G_STOP_LOSS), 2)
                                         signals_g.append({
-                                            'strategy': 'G',
+                                            'strategy': '7',
                                             'ticker': tk,
                                             'date': trade_date,
                                             'scan_time': scan_time_kst,
@@ -731,13 +738,13 @@ def phase2_check_all(candidates, strat_str):
                                             'sl_price': sl_price,
                                             'hold_days': G_MAX_HOLD_DAYS,
                                         })
-                                        print(f"    ★ [G] {tk} @ ${c_last:.2f} | "
+                                        print(f"    ★ [7] {tk} @ ${c_last:.2f} | "
                                               f"RSI7={rsi7_val:.1f} Vol={vol_20d*100:.1f}% "
                                               f"MACD={hist_today:.4f} Gap={gap_pct*100:.1f}% "
                                               f"SMA5=${sma5:.2f}")
 
                 # ══════════════════════════════════════════════
-                # Strategy H: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR strongly expanding
+                # Strategy 8: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR strongly expanding
                 # ══════════════════════════════════════════════
                 if run_h and n >= 252 and rsi7_val is not None and rsi7_val < H_RSI7_THRESH:
                     # 52w high distance
@@ -771,7 +778,7 @@ def phase2_check_all(candidates, strat_str):
                                             tp_price = round(c_last * (1 + H_TAKE_PROFIT), 2)
                                             sl_price = round(c_last * (1 + H_STOP_LOSS), 2)
                                             signals_h.append({
-                                                'strategy': 'H',
+                                                'strategy': '8',
                                                 'ticker': tk,
                                                 'date': trade_date,
                                                 'scan_time': scan_time_kst,
@@ -785,13 +792,13 @@ def phase2_check_all(candidates, strat_str):
                                                 'sl_price': sl_price,
                                                 'hold_days': H_MAX_HOLD_DAYS,
                                             })
-                                            print(f"    ★ [H] {tk} @ ${c_last:.2f} | "
+                                            print(f"    ★ [8] {tk} @ ${c_last:.2f} | "
                                                   f"RSI7={rsi7_val:.1f} 52wH={dist_52w*100:.1f}% "
                                                   f"Ret1d={ret_1d*100:.1f}% Gap={gap_pct*100:.1f}% "
                                                   f"ATR={atr_change*100:.1f}%")
 
                 # ══════════════════════════════════════════════
-                # Strategy I: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0
+                # Strategy 9: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0
                 # ══════════════════════════════════════════════
                 if run_i and n >= 26 and len(vol) >= 26:
                     # RSI14
@@ -825,7 +832,7 @@ def phase2_check_all(candidates, strat_str):
                                         tp_price = round(c_last * (1 + I_TAKE_PROFIT), 2)
                                         sl_price = round(c_last * (1 + I_STOP_LOSS), 2)
                                         signals_i.append({
-                                            'strategy': 'I',
+                                            'strategy': '9',
                                             'ticker': tk,
                                             'date': trade_date,
                                             'scan_time': scan_time_kst,
@@ -839,13 +846,13 @@ def phase2_check_all(candidates, strat_str):
                                             'sl_price': sl_price,
                                             'hold_days': I_MAX_HOLD_DAYS,
                                         })
-                                        print(f"    ★ [I] {tk} @ ${c_last:.2f} | "
+                                        print(f"    ★ [9] {tk} @ ${c_last:.2f} | "
                                               f"RSI14={rsi14_val:.1f} VolRatio={vol_ratio:.2f}x "
                                               f"MACD={hist_today:.4f} Ret1d={ret_1d*100:.1f}% "
                                               f"Ret5d={ret_5d*100:.1f}%")
 
                 # ══════════════════════════════════════════════
-                # Strategy J: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20
+                # Strategy 10: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20
                 # ══════════════════════════════════════════════
                 if run_j and n >= 26 and len(vol) >= 26:
                     # 20-day volatility
@@ -885,7 +892,7 @@ def phase2_check_all(candidates, strat_str):
                                             tp_price = round(c_last * (1 + J_TAKE_PROFIT), 2)
                                             sl_price = round(c_last * (1 + J_STOP_LOSS), 2)
                                             signals_j.append({
-                                                'strategy': 'J',
+                                                'strategy': '10',
                                                 'ticker': tk,
                                                 'date': trade_date,
                                                 'scan_time': scan_time_kst,
@@ -899,7 +906,7 @@ def phase2_check_all(candidates, strat_str):
                                                 'sl_price': sl_price,
                                                 'hold_days': J_MAX_HOLD_DAYS,
                                             })
-                                            print(f"    ★ [J] {tk} @ ${c_last:.2f} | "
+                                            print(f"    ★ [10] {tk} @ ${c_last:.2f} | "
                                                   f"Vol20d={vol_20d*100:.1f}% RSI14={rsi14_val:.1f} "
                                                   f"VolRatio={vol_ratio:.2f}x MACD={hist_today:.4f} "
                                                   f"Stoch={stoch_k_val:.1f}")
@@ -920,19 +927,209 @@ def phase2_check_all(candidates, strat_str):
     signals_i.sort(key=lambda x: x['rsi14'])
     signals_j.sort(key=lambda x: x['rsi14'])
 
-    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j
+    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, candidates_phase1_data
+
+
+# ─── New Strategy Functions ──────────────────────────────────────────────────
+
+def evaluate_conditions_for_stock(close, high, low, opn, vol, n):
+    """
+    Evaluate all 36 indicator conditions for a single stock.
+    Parameters: close/high/low/opn/vol are pandas Series (price history), n = index of the day to evaluate.
+    Returns: dict of condition_name → bool
+    """
+    import numpy as np
+
+    conds = {}
+    c = close
+    v = vol
+
+    # Need enough history
+    if len(c) < max(n+1, 201):
+        return {}
+
+    # Precompute indicators at index n
+    # Volatility (20d)
+    ret_series = c.pct_change()
+    vol_20d = ret_series.iloc[max(0,n-19):n+1].std() * np.sqrt(252) if n >= 19 else 0
+    conds["high_vol"] = vol_20d > 0.06
+    conds["very_high_vol"] = vol_20d > 0.10
+
+    # RSI 14
+    rsi14_series = calc_rsi_wilder(c, 14)
+    rsi_14 = rsi14_series.iloc[n] if n < len(rsi14_series) else 50
+    conds["rsi_below_30"] = rsi_14 < 30
+    conds["rsi_below_40"] = rsi_14 < 40
+    conds["rsi_30_50"] = (rsi_14 >= 30) and (rsi_14 <= 50)
+
+    # 52-week high distance
+    if n >= 252:
+        high_52w = high.iloc[n-252:n+1].max()
+    else:
+        high_52w = high.iloc[:n+1].max()
+    dist_52w_high = (c.iloc[n] - high_52w) / high_52w if high_52w > 0 else 0
+    conds["near_52w_low"] = dist_52w_high < -0.70
+    conds["deep_52w_low"] = dist_52w_high < -0.85
+
+    # Volume ratio
+    vol_avg_20 = v.iloc[max(0,n-19):n].mean() if n >= 1 else 1
+    vol_ratio = v.iloc[n] / vol_avg_20 if vol_avg_20 > 0 else 1
+    conds["vol_1_5x"] = vol_ratio > 1.5
+    conds["vol_2x"] = vol_ratio > 2.0
+    conds["vol_3x"] = vol_ratio > 3.0
+
+    # MACD (12,26,9)
+    ema12 = c.ewm(span=12, adjust=False).mean()
+    ema26 = c.ewm(span=26, adjust=False).mean()
+    macd_line = ema12 - ema26
+    macd_signal = macd_line.ewm(span=9, adjust=False).mean()
+    macd_hist = macd_line - macd_signal
+    conds["macd_pos"] = macd_hist.iloc[n] > 0
+    conds["macd_neg"] = macd_hist.iloc[n] < 0
+    conds["macd_cross_up"] = (macd_hist.iloc[n] > 0) and (n > 0 and macd_hist.iloc[n-1] < 0)
+
+    # Bollinger Bands (20, 2)
+    sma20 = c.rolling(20).mean()
+    std20 = c.rolling(20).std()
+    bb_upper = sma20 + 2 * std20
+    bb_lower = sma20 - 2 * std20
+    bb_range = bb_upper - bb_lower
+    bb_pctb = (c.iloc[n] - bb_lower.iloc[n]) / bb_range.iloc[n] if bb_range.iloc[n] > 0 else 0.5
+    conds["bb_below_lower"] = bb_pctb < 0
+    conds["bb_below_mid"] = bb_pctb < 0.5
+
+    # Returns
+    ret_1d = (c.iloc[n] - c.iloc[n-1]) / c.iloc[n-1] if n >= 1 and c.iloc[n-1] > 0 else 0
+    conds["prev_up"] = ret_1d > 0
+    conds["prev_down"] = ret_1d < 0
+    conds["prev_big_drop"] = ret_1d < -0.05
+
+    ret_5d = (c.iloc[n] - c.iloc[n-5]) / c.iloc[n-5] if n >= 5 and c.iloc[n-5] > 0 else 0
+    conds["ret5d_neg"] = ret_5d < 0
+    conds["ret5d_pos"] = ret_5d > 0
+
+    ret_20d = (c.iloc[n] - c.iloc[n-20]) / c.iloc[n-20] if n >= 20 and c.iloc[n-20] > 0 else 0
+    conds["ret20d_neg"] = ret_20d < 0
+    conds["ret20d_strong_neg"] = ret_20d < -0.15
+    conds["ret20d_very_neg"] = ret_20d < -0.30
+
+    # Gap
+    gap_pct = (opn.iloc[n] - c.iloc[n-1]) / c.iloc[n-1] if n >= 1 and c.iloc[n-1] > 0 else 0
+    conds["gap_up"] = gap_pct > 0.02
+    conds["gap_up_big"] = gap_pct > 0.05
+
+    # ATR (14)
+    tr_series = pd.concat([
+        high - low,
+        (high - c.shift(1)).abs(),
+        (low - c.shift(1)).abs()
+    ], axis=1).max(axis=1)
+    atr_14 = tr_series.rolling(14).mean()
+    if n >= 19:
+        atr_now = atr_14.iloc[n]
+        atr_5ago = atr_14.iloc[n-5] if n >= 5 else atr_now
+        atr_change_5d = (atr_now - atr_5ago) / atr_5ago if atr_5ago > 0 else 0
+    else:
+        atr_change_5d = 0
+    conds["atr_expanding"] = atr_change_5d > 0.10
+    conds["atr_strongly_expanding"] = atr_change_5d > 0.25
+
+    # SMA
+    sma5 = c.rolling(5).mean()
+    sma50 = c.rolling(50).mean()
+    sma200 = c.rolling(200).mean()
+    conds["price_below_sma5"] = c.iloc[n] < sma5.iloc[n] if n >= 4 else False
+    conds["price_below_sma20"] = c.iloc[n] < sma20.iloc[n] if n >= 19 else False
+    conds["sma5_below_sma20"] = sma5.iloc[n] < sma20.iloc[n] if n >= 19 else False
+    ratio_sma = (sma5.iloc[n] - sma20.iloc[n]) / sma20.iloc[n] if n >= 19 and sma20.iloc[n] > 0 else 0
+    conds["golden_cross_near"] = (ratio_sma > -0.02) and (ratio_sma < 0.02)
+    conds["price_below_sma50"] = c.iloc[n] < sma50.iloc[n] if n >= 49 else False
+    conds["price_below_sma200"] = c.iloc[n] < sma200.iloc[n] if n >= 199 else False
+
+    # Volume 3-day increase
+    if n >= 2:
+        conds["vol_3day_increase"] = (v.iloc[n] > v.iloc[n-1]) and (v.iloc[n-1] > v.iloc[n-2])
+    else:
+        conds["vol_3day_increase"] = False
+
+    # Stochastic K (14,3)
+    if n >= 13:
+        low14 = low.iloc[n-13:n+1].min()
+        high14 = high.iloc[n-13:n+1].max()
+        stoch_k = ((c.iloc[n] - low14) / (high14 - low14) * 100) if (high14 - low14) > 0 else 50
+    else:
+        stoch_k = 50
+    conds["stoch_oversold"] = stoch_k < 20
+
+    # Williams %R (14)
+    if n >= 13:
+        williams_r = ((high14 - c.iloc[n]) / (high14 - low14) * -100) if (high14 - low14) > 0 else -50
+    else:
+        williams_r = -50
+    conds["williams_oversold"] = williams_r < -80
+
+    return conds
+
+
+def phase3_check_new_strategies(candidates, strat_str):
+    """
+    Check new strategies (11-306) using data-driven condition evaluation.
+    candidates: list of (ticker, df) from phase1
+    strat_str: strategy key string like '11', '12', etc.
+    Returns: list of signal dicts
+    """
+    import math
+    conditions_list = STRATEGY_CONDITIONS.get(strat_str)
+    if conditions_list is None:
+        return []
+
+    cfg = STRATEGY_CONFIG.get(strat_str, {})
+    tp_pct = cfg.get('tp_pct', 0.10)
+
+    signals = []
+    for tk, df in candidates:
+        if len(df) < 30:
+            continue
+
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+        opn = df['Open']
+        vol = df['Volume']
+        n = len(df) - 1  # last day
+
+        conds = evaluate_conditions_for_stock(close, high, low, opn, vol, n)
+        if not conds:
+            continue
+
+        # Check if ALL conditions are met
+        if all(conds.get(c, False) for c in conditions_list):
+            price = close.iloc[n]
+            tp_price = math.floor(price * (1 + tp_pct) * 100) / 100
+            signals.append({
+                'ticker': tk,
+                'strategy': strat_str,
+                'price': round(price, 2),
+                'tp_price': tp_price,
+                'date': df.index[n].strftime('%Y-%m-%d'),
+            })
+
+    return signals
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals=None):
     """결과 출력"""
     all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
+    if new_strat_signals:
+        for sigs in new_strat_signals.values():
+            all_sigs += sigs
     date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
-    # Strategy A
+    # Strategy 1
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY A — Weekly Signal (+5%) — {date_str}")
+    print(f"  ★ STRATEGY 1 — Weekly Signal (+5%) — {date_str}")
     print(f"  조건: Intra>20% + Ret3d<-15% + Down>5d + DistLow5<5% + RSI7<20")
     print(f"  청산: +5% 익절 | -20% 손절 | 5일 타임아웃")
     print(f"  백테스트: 승률 90.1% (262건/5년), 최적청산 누적 +515%")
@@ -951,9 +1148,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_a)} signals")
 
-    # Strategy B
+    # Strategy 2
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY B — High-Gain (+15%) — {date_str}")
+    print(f"  ★ STRATEGY 2 — High-Gain (+15%) — {date_str}")
     print(f"  조건: RSI7<20 + RSI14<35 + ATR>3 + Intra>15% + MA20<=-25% + RevGrowth>0")
     print(f"  청산: +15% 지정가 | -20% 손절 | 10일 종가청산")
     print(f"  백테스트: 승률 90.3% (31건/28적중)")
@@ -972,9 +1169,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_b)} signals")
 
-    # Strategy C
+    # Strategy 3
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY C — 과매도 반등 (+5%) — {date_str}")
+    print(f"  ★ STRATEGY 3 — 과매도 반등 (+5%) — {date_str}")
     print(f"  조건: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + Down>3d + DistLow5<3%")
     print(f"  청산: +5% 익절 | -20% 손절 | 5일 타임아웃")
     print(f"  백테스트: 승률 86.9% (624건/5년), +7% 기준 81.4%")
@@ -993,9 +1190,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_c)} signals")
 
-    # Strategy D
+    # Strategy 4
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY D — 초저가 폭락 반등 (+20%) — {date_str}")
+    print(f"  ★ STRATEGY 4 — 초저가 폭락 반등 (+20%) — {date_str}")
     print(f"  조건: Price<=$3 + Ret5d<=-40% + Intra>=30% + RSI14<=25")
     print(f"  청산: +20% 익절 | 30일 타임아웃")
     print(f"  백테스트: 승률 97.7% (130건/5년), 건당 평균 +18.9%")
@@ -1013,9 +1210,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} {s['hold_days']:>5}d")
         print(f"  Total: {len(signals_d)} signals")
 
-    # Strategy E
+    # Strategy 5
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY E — 저가주 급락 반등 (+10%) — {date_str}")
+    print(f"  ★ STRATEGY 5 — 저가주 급락 반등 (+10%) — {date_str}")
     print(f"  조건: $3~$10 + Ret5d<=-25% + Intra>=20% + ConsecDown>=5 + AvgVol>=20만")
     print(f"  청산: +10% 익절 | 30일 타임아웃")
     print(f"  백테스트: 승률 91.0% (300건/5년), 평균 max +104.9%, 중간 도달일 2일")
@@ -1034,9 +1231,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} {s['hold_days']:>5}d")
         print(f"  Total: {len(signals_e)} signals")
 
-    # Strategy F
+    # Strategy 6
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY F — 바닥 급등 (+50%) — {date_str}")
+    print(f"  ★ STRATEGY 6 — 바닥 급등 (+50%) — {date_str}")
     print(f"  조건: Vol20d>10% + 52wHigh<-85% + BB<0 + Ret1d<-5% + GapUp>5%")
     print(f"  청산: +50% 익절 | -20% 손절 | 20일 타임아웃")
     print(f"  백테스트: 승률 87.5% (8건/5년), 20일내 50%+ 급등")
@@ -1056,9 +1253,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_f)} signals")
 
-    # Strategy G
+    # Strategy 7
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY G — MACD 전환 급등 (+40%) — {date_str}")
+    print(f"  ★ STRATEGY 7 — MACD 전환 급등 (+40%) — {date_str}")
     print(f"  조건: Vol20d>10% + RSI7<30 + MACD 골든크로스 + GapUp>5% + Price<SMA5")
     print(f"  청산: +40% 익절 | -20% 손절 | 20일 타임아웃")
     print(f"  백테스트: 승률 90.0% (10건/5년), 20일내 40%+ 급등")
@@ -1076,9 +1273,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_g)} signals")
 
-    # Strategy H
+    # Strategy 8
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY H — ATR 확대 급등 (+40%) — {date_str}")
+    print(f"  ★ STRATEGY 8 — ATR 확대 급등 (+40%) — {date_str}")
     print(f"  조건: RSI7<30 + 52wHigh<-85% + Ret1d<-5% + GapUp>5% + ATR확대>25%")
     print(f"  청산: +40% 익절 | -20% 손절 | 20일 타임아웃")
     print(f"  백테스트: 승률 90.0% (10건/5년), 20일내 40%+ 급등")
@@ -1096,9 +1293,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_h)} signals")
 
-    # Strategy I
+    # Strategy 9
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY I — 과매도 반등 단타 (+10%) — {date_str}")
+    print(f"  ★ STRATEGY 9 — 과매도 반등 단타 (+10%) — {date_str}")
     print(f"  조건: RSI14<30 + Vol2x + MACD>0 + Ret1d<-5% + Ret5d>0")
     print(f"  청산: +10% 익절 | -20% 손절 | 5일 타임아웃")
     print(f"  백테스트: 승률 100% (8건/5년)")
@@ -1116,9 +1313,9 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_i)} signals")
 
-    # Strategy J
+    # Strategy 10
     print(f"\n{'='*90}")
-    print(f"  ★ STRATEGY J — MACD 전환 단타 (+10%) — {date_str}")
+    print(f"  ★ STRATEGY 10 — MACD 전환 단타 (+10%) — {date_str}")
     print(f"  조건: Vol20d>10% + RSI14<30 + Vol2x + MACD cross up + Stoch<20")
     print(f"  청산: +10% 익절 | -20% 손절 | 5일 타임아웃")
     print(f"  백테스트: 승률 90% (9/10, 5년)")
@@ -1136,11 +1333,30 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_j)} signals")
 
+    # New strategies (11-306)
+    if new_strat_signals:
+        print(f"\n{'='*90}")
+        print(f"  ★ NEW STRATEGIES (11-306) — {date_str}")
+        print(f"{'='*90}")
+        for sk in sorted(new_strat_signals.keys(), key=lambda x: int(x)):
+            sigs = new_strat_signals[sk]
+            winrate = STRATEGY_WINRATE.get(sk, 0)
+            print(f"\n  Strategy {sk} (winrate: {winrate:.1f}%): {len(sigs)} signals")
+            print(f"  {'Ticker':<8} {'Price':>8} {'TP':>8}")
+            print(f"  {'-'*26}")
+            for s in sigs:
+                print(f"  {s['ticker']:<8} {s['price']:>8.2f} {s['tp_price']:>8.2f}")
 
-def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
+
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals=None):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
     all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
+
+    # Include new strategy signals
+    if new_strat_signals:
+        for sigs in new_strat_signals.values():
+            all_signals += sigs
 
     # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
     if all_signals:
@@ -1181,7 +1397,7 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
         # Price sanity check
         if price <= 0:
             dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — price={price} (zero or negative)")
-        # Volume check (only E has vol_avg)
+        # Volume check (only 5 has vol_avg)
         vol = sig.get('vol_avg', None)
         if vol is not None and vol < 50000:
             dq_warnings.append(f"  ⚠ DQ: [{strat}] {tk} — low volume={vol:,} (<50K)")
@@ -1208,19 +1424,23 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
     summary = {
         'scan_date': date_str,
         'scan_time': datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S KST'),
-        'strategy_a_count': len(signals_a),
-        'strategy_b_count': len(signals_b),
-        'strategy_c_count': len(signals_c),
-        'strategy_d_count': len(signals_d),
-        'strategy_e_count': len(signals_e),
-        'strategy_f_count': len(signals_f),
-        'strategy_g_count': len(signals_g),
-        'strategy_h_count': len(signals_h),
-        'strategy_i_count': len(signals_i),
-        'strategy_j_count': len(signals_j),
+        'strategy_1_count': len(signals_a),
+        'strategy_2_count': len(signals_b),
+        'strategy_3_count': len(signals_c),
+        'strategy_4_count': len(signals_d),
+        'strategy_5_count': len(signals_e),
+        'strategy_6_count': len(signals_f),
+        'strategy_7_count': len(signals_g),
+        'strategy_8_count': len(signals_h),
+        'strategy_9_count': len(signals_i),
+        'strategy_10_count': len(signals_j),
         'total_count': len(all_signals),
         'dq_warnings': len(dq_warnings),
     }
+    # Add new strategy counts
+    if new_strat_signals:
+        for sk, sigs in new_strat_signals.items():
+            summary[f'strategy_{sk}_count'] = len(sigs)
     with open('data/latest_scan.json', 'w') as f:
         json.dump(summary, f, indent=2)
 
@@ -1230,9 +1450,9 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (A+B+C+D+E+F+G+H+I+J)')
-    parser.add_argument('--strategy', default='ABCDEFGHIJ',
-                       help='Which strategies to run, e.g. A, AB, ABCDEFGHIJ (default: ABCDEFGHIJ)')
+    parser = argparse.ArgumentParser(description='US Stock Surge Scanner (1+2+3+4+5+6+7+8+9+10)')
+    parser.add_argument('--strategy', default='12345678910',
+                       help='Which strategies to run, e.g. 1, 12, 12345678910 (default: 12345678910)')
     args = parser.parse_args()
 
     t0 = time.time()
@@ -1260,15 +1480,28 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j = phase2_check_all(candidates, strat_str)
+    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, candidates_phase1 = phase2_check_all(candidates, strat_str)
+
+    # Phase 3: New strategies (11-306)
+    new_strat_signals = {}
+    new_strategy_keys = [k for k in STRATEGY_CONFIG.keys() if k not in ('1','2','3','4','5','6','7','8','9','10')]
+    print(f"\n{'='*60}")
+    print(f"Phase 3: Checking {len(new_strategy_keys)} new strategies...")
+    print(f"{'='*60}")
+    for sk in sorted(new_strategy_keys, key=lambda x: int(x)):
+        sigs = phase3_check_new_strategies(candidates_phase1, sk)
+        if sigs:
+            new_strat_signals[sk] = sigs
+            print(f"  Strategy {sk}: {len(sigs)} signals")
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
-    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    print(f"  Strategy A: {len(signals_a)}건 | B: {len(signals_b)}건 | C: {len(signals_c)}건 | D: {len(signals_d)}건 | E: {len(signals_e)}건 | F: {len(signals_f)}건 | G: {len(signals_g)}건 | H: {len(signals_h)}건 | I: {len(signals_i)}건 | J: {len(signals_j)}건")
+    new_total = sum(len(s) for s in new_strat_signals.values()) if new_strat_signals else 0
+    print(f"  Strategy 1: {len(signals_a)}건 | 2: {len(signals_b)}건 | 3: {len(signals_c)}건 | 4: {len(signals_d)}건 | 5: {len(signals_e)}건 | 6: {len(signals_f)}건 | 7: {len(signals_g)}건 | 8: {len(signals_h)}건 | 9: {len(signals_i)}건 | 10: {len(signals_j)}건 | New(11-306): {new_total}건")
 
 
 if __name__ == '__main__':
