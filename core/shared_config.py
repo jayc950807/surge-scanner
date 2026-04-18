@@ -1264,8 +1264,8 @@ STRATEGY_WINRATE = {
 # ─── Common Filters ──────────────────────────────────────────────────────────
 MIN_PRICE = 1.0
 MIN_VOLUME = 10000       # 20일 평균거래량 기준
-BATCH_SIZE = 50
-BATCH_DELAY = 3
+BATCH_SIZE = 80
+BATCH_DELAY = 1.5
 
 DATA_DIR = 'data'
 
