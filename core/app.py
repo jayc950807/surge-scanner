@@ -15,7 +15,7 @@ from collections import defaultdict
 
 # shared_config에서 공통 상수/함수 import (없으면 로컬 fallback)
 try:
-    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES, is_us_dst
+    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES, STRATEGY_WINRATE, is_us_dst
 except ImportError:
     KST = timezone(timedelta(hours=9))
     def is_us_dst(dt_date):
@@ -280,16 +280,17 @@ hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
     border: 1px solid;
     white-space: nowrap;
 }
-.stag-A { color: var(--green-bright); border-color: var(--green); background: #4a9e7d12; }
-.stag-B { color: var(--blue); border-color: #4a7a9e66; background: #4a7a9e0a; }
-.stag-C { color: var(--amber); border-color: #b8954a66; background: #b8954a0a; }
-.stag-D { color: var(--red-bright); border-color: var(--red); background: #9e4a5a0a; }
-.stag-E { color: #9a7abf; border-color: #7a5aaf66; background: #7a5aaf0a; }
-.stag-F { color: #e0a040; border-color: #c0882066; background: #c088200a; }
-.stag-G { color: #40b0a0; border-color: #309a8a66; background: #309a8a0a; }
-.stag-H { color: #d06070; border-color: #b0485866; background: #b048580a; }
-.stag-I { color: #70a0e0; border-color: #5088c066; background: #5088c00a; }
-.stag-J { color: #a080d0; border-color: #8868b866; background: #8868b80a; }
+.stag-1 { color: var(--green-bright); border-color: var(--green); background: #4a9e7d12; }
+.stag-2 { color: var(--blue); border-color: #4a7a9e66; background: #4a7a9e0a; }
+.stag-3 { color: var(--amber); border-color: #b8954a66; background: #b8954a0a; }
+.stag-4 { color: var(--red-bright); border-color: var(--red); background: #9e4a5a0a; }
+.stag-5 { color: #9a7abf; border-color: #7a5aaf66; background: #7a5aaf0a; }
+.stag-6 { color: #e0a040; border-color: #c0882066; background: #c088200a; }
+.stag-7 { color: #40b0a0; border-color: #309a8a66; background: #309a8a0a; }
+.stag-8 { color: #d06070; border-color: #b0485866; background: #b048580a; }
+.stag-9 { color: #70a0e0; border-color: #5088c066; background: #5088c00a; }
+.stag-10 { color: #a080d0; border-color: #8868b866; background: #8868b80a; }
+.stag-new { color: var(--gold); border-color: var(--gold-dim); background: #c9a96e12; }
 
 /* ── Cell States ── */
 .c-win { color: var(--green-bright); font-weight: 600; }
@@ -363,16 +364,16 @@ hr { border-color: var(--border-subtle) !important; opacity: 0.4 !important; }
     top: 0; left: 0; bottom: 0;
     width: 3px;
 }
-.rr-strat-info.si-A::before { background: var(--green); }
-.rr-strat-info.si-B::before { background: var(--blue); }
-.rr-strat-info.si-C::before { background: var(--amber); }
-.rr-strat-info.si-D::before { background: var(--red); }
-.rr-strat-info.si-E::before { background: #7a5aaf; }
-.rr-strat-info.si-F::before { background: #c08820; }
-.rr-strat-info.si-G::before { background: #309a8a; }
-.rr-strat-info.si-H::before { background: #b04858; }
-.rr-strat-info.si-I::before { background: #5088c0; }
-.rr-strat-info.si-J::before { background: #8868b8; }
+.rr-strat-info.si-1::before { background: var(--green); }
+.rr-strat-info.si-2::before { background: var(--blue); }
+.rr-strat-info.si-3::before { background: var(--amber); }
+.rr-strat-info.si-4::before { background: var(--red); }
+.rr-strat-info.si-5::before { background: #7a5aaf; }
+.rr-strat-info.si-6::before { background: #c08820; }
+.rr-strat-info.si-7::before { background: #309a8a; }
+.rr-strat-info.si-8::before { background: #b04858; }
+.rr-strat-info.si-9::before { background: #5088c0; }
+.rr-strat-info.si-10::before { background: #8868b8; }
 .rr-strat-info h3 {
     font-family: var(--font-display);
     font-size: 1.15em;
@@ -592,15 +593,38 @@ def load_closed_positions():
     return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-STRAT_TAB = {'A': 'A_5%5일', 'B': 'D_15%10일', 'C': 'B_5%5일', 'D': 'E_20%30일', 'E': 'C_10%30일', 'F': 'F_50%20일', 'G': 'G_40%20일', 'H': 'H_40%20일', 'I': 'I_10%5일', 'J': 'J_10%5일'}
-STRAT_NAMES = {'A': 'A_5%5일 · 급락반등', 'B': 'D_15%10일 · 고수익', 'C': 'B_5%5일 · 과매도', 'D': 'E_20%30일 · 초저가', 'E': 'C_10%30일 · 속반등', 'F': 'F_50%20일 · 바닥급등', 'G': 'G_40%20일 · MACD전환', 'H': 'H_40%20일 · ATR확대', 'I': 'I_10%5일 · 과매도단타', 'J': 'J_10%5일 · MACD단타'}
-STRAT_KR = {'A': '급락반등', 'B': '고수익', 'C': '과매도', 'D': '초저가', 'E': '속반등', 'F': '바닥급등', 'G': 'MACD전환', 'H': 'ATR확대', 'I': '과매도단타', 'J': 'MACD단타'}
-STRAT_TP = {'A': '+5%', 'B': '+15%', 'C': '+5%', 'D': '+20%', 'E': '+10%', 'F': '+50%', 'G': '+40%', 'H': '+40%', 'I': '+10%', 'J': '+10%'}
-STRAT_TP_NUM = {'A': 5, 'B': 15, 'C': 5, 'D': 20, 'E': 10, 'F': 50, 'G': 40, 'H': 40, 'I': 10, 'J': 10}
-STRAT_BT_WR = {'A': '90.1%', 'B': '90.3%', 'C': '86.9%', 'D': '97.7%', 'E': '91.0%', 'F': '87.5%', 'G': '90.0%', 'H': '90.0%', 'I': '100.0%', 'J': '90.0%'}
-STRAT_MAX_HOLD = {'A': 5, 'B': 10, 'C': 5, 'D': 30, 'E': 30, 'F': 20, 'G': 20, 'H': 20, 'I': 5, 'J': 5}
+STRAT_TAB = {'1': 'A_5%5일', '2': 'D_15%10일', '3': 'B_5%5일', '4': 'E_20%30일', '5': 'C_10%30일', '6': 'F_50%20일', '7': 'G_40%20일', '8': 'H_40%20일', '9': 'I_10%5일', '10': 'J_10%5일'}
+STRAT_NAMES = {'1': 'A_5%5일 · 급락반등', '2': 'D_15%10일 · 고수익', '3': 'B_5%5일 · 과매도', '4': 'E_20%30일 · 초저가', '5': 'C_10%30일 · 속반등', '6': 'F_50%20일 · 바닥급등', '7': 'G_40%20일 · MACD전환', '8': 'H_40%20일 · ATR확대', '9': 'I_10%5일 · 과매도단타', '10': 'J_10%5일 · MACD단타'}
+STRAT_KR = {'1': '급락반등', '2': '고수익', '3': '과매도', '4': '초저가', '5': '속반등', '6': '바닥급등', '7': 'MACD전환', '8': 'ATR확대', '9': '과매도단타', '10': 'MACD단타'}
+STRAT_TP = {'1': '+5%', '2': '+15%', '3': '+5%', '4': '+20%', '5': '+10%', '6': '+50%', '7': '+40%', '8': '+40%', '9': '+10%', '10': '+10%'}
+STRAT_TP_NUM = {'1': 5, '2': 15, '3': 5, '4': 20, '5': 10, '6': 50, '7': 40, '8': 40, '9': 10, '10': 10}
+STRAT_BT_WR = {'1': '90.1%', '2': '90.3%', '3': '86.9%', '4': '97.7%', '5': '91.0%', '6': '87.5%', '7': '90.0%', '8': '90.0%', '9': '100.0%', '10': '90.0%'}
+STRAT_MAX_HOLD = {'1': 5, '2': 10, '3': 5, '4': 30, '5': 30, '6': 20, '7': 20, '8': 20, '9': 5, '10': 5}
 # 탭 표시 순서: TP% 오름차순, 동일 TP%일 때 보유일 오름차순
-STRAT_ORDER = ['A', 'C', 'I', 'J', 'E', 'B', 'G', 'H', 'F', 'D']
+STRAT_ORDER = ['1', '3', '9', '10', '5', '2', '7', '8', '6', '4']
+
+# Populate strategy dicts for new strategies (11-306) from STRATEGY_CONFIG
+try:
+    for _k, _cfg in STRATEGY_CONFIG.items():
+        if _k not in STRAT_KR:
+            _tp = _cfg.get('tp_pct', 0)
+            _mh = _cfg.get('max_hold', 5)
+            STRAT_KR[_k] = f'{int(_tp*100)}%{_mh}일'
+            STRAT_TP[_k] = f'+{int(_tp*100)}%'
+            STRAT_TP_NUM[_k] = int(_tp * 100)
+            STRAT_MAX_HOLD[_k] = _mh
+            STRAT_TAB[_k] = f'S{_k}_{int(_tp*100)}%{_mh}일'
+            STRAT_NAMES[_k] = f'S{_k}_{int(_tp*100)}%{_mh}일'
+except NameError:
+    pass
+
+# Populate STRAT_BT_WR for new strategies from shared_config
+try:
+    for _k, _v in STRATEGY_WINRATE.items():
+        if _k not in STRAT_BT_WR:
+            STRAT_BT_WR[_k] = _v
+except NameError:
+    pass
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def safe_str(val, fb='—'):
@@ -614,7 +638,8 @@ def safe_float(val, fb=0):
     except: return fb
 
 def stag(s):
-    return f'<span class="stag stag-{s}">{STRAT_TAB.get(s, s)}</span>'
+    cls = f'stag-{s}' if s in ('1','2','3','4','5','6','7','8','9','10') else 'stag-new'
+    return f'<span class="stag {cls}">{STRAT_TAB.get(s, s)}</span>'
 
 def cell_html(ach, det, loss=0, prog=0):
     """Render matrix cell: ach=wins, det=total, loss=loss+expired, prog=open+pending"""
@@ -732,7 +757,7 @@ st.markdown('''<div class="rr-header">
 meta_parts = []
 if scan_info:
     meta_parts.append(f'<span class="hl">Last Scan</span> {scan_info.get("scan_time", "N/A")}')
-    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k.lower()}_count", 0)}' for k in 'ABCDEFGHIJ')
+    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k}_count", 0)}' for k in ['1','2','3','4','5','6','7','8','9','10'])
     meta_parts.append(f'<span class="hl">Signals</span> {counts}')
 if tracker_info:
     meta_parts.append(f'<span class="hl">Active</span> {tracker_info.get("open_count", 0)} <span class="hl">Win</span> {tracker_info.get("win_count", 0)} <span class="hl">Loss</span> {tracker_info.get("loss_count", 0)}')
@@ -749,13 +774,13 @@ history = load_history()
 _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-tab_today, tab_a, tab_c, tab_i, tab_j, tab_e, tab_b, tab_g, tab_h, tab_f, tab_d, tab_history = st.tabs([
-    _today_label, "A_5%5일", "B_5%5일", "I_10%5일", "J_10%5일", "C_10%30일", "D_15%10일", "G_40%20일", "H_40%20일", "F_50%20일", "E_20%30일", "Performance"
+tab_today, tab_1, tab_3, tab_9, tab_10, tab_5, tab_2, tab_7, tab_8, tab_6, tab_4, tab_new, tab_history = st.tabs([
+    _today_label, "1_5%5일", "3_5%5일", "9_10%5일", "10_10%5일", "5_10%30일", "2_15%10일", "7_40%20일", "8_40%20일", "6_50%20일", "4_20%30일", "New (11+)", "Performance"
 ])
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
 STRAT_INFO = {
-    'A': {
+    '1': {
         'title': 'A_5%5일 — 급락반등',
         'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
@@ -775,7 +800,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'B': {
+    '2': {
         'title': 'D_15%10일 — 고수익',
         'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
@@ -796,7 +821,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'C': {
+    '3': {
         'title': 'B_5%5일 — 과매도',
         'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
@@ -816,7 +841,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'D': {
+    '4': {
         'title': 'E_20%30일 — 초저가',
         'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
@@ -834,7 +859,7 @@ STRAT_INFO = {
             "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
         },
     },
-    'E': {
+    '5': {
         'title': 'C_10%30일 — 속반등',
         'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
@@ -853,7 +878,7 @@ STRAT_INFO = {
             "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
         },
     },
-    'F': {
+    '6': {
         'title': 'F_50%20일 — 바닥급등',
         'desc': ['20일 변동성 > 10%', '52주 고점 대비 -85% 이하', '볼린저 %B < 0', '전일 수익률 < -5%', '갭업 > 5%'],
         'rules': ['매수: 신호 당일 종가', '익절: +50%', '손절: -20%', '최대 보유: 20일'],
@@ -873,7 +898,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'G': {
+    '7': {
         'title': 'G_40%20일 — MACD전환',
         'desc': ['20일 변동성 > 10%', 'RSI(7) < 30', 'MACD 히스토그램 골든크로스', '갭업 > 5%', '종가 < SMA(5)'],
         'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
@@ -893,7 +918,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'H': {
+    '8': {
         'title': 'H_40%20일 — ATR확대',
         'desc': ['RSI(7) < 30', '52주 고점 대비 -85% 이하', '전일 수익률 < -5%', '갭업 > 5%', 'ATR 5일 변화 > 25%'],
         'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
@@ -913,7 +938,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'I': {
+    '9': {
         'title': 'I_10%5일 — 과매도단타',
         'desc': ['RSI(14) < 30', '거래량 2배 이상', 'MACD 히스토그램 > 0', '전일 수익률 < -5%', '5일 수익률 > 0'],
         'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
@@ -933,7 +958,7 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    'J': {
+    '10': {
         'title': 'J_10%5일 — MACD단타',
         'desc': ['20일 변동성 > 10%', 'RSI(14) < 30', '거래량 2배 이상', 'MACD 골든크로스', '스토캐스틱 K < 20'],
         'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
@@ -1003,6 +1028,22 @@ def render_strategy_tab(key, tab_obj):
 # ─── Tab: Today's Picks ──────────────────────────────────────────────────────
 # Pre-load closed positions for today's sell section
 _closed_for_today = load_closed_positions()
+
+# ── 전략별 실제 승률 계산 (현재까지 누적) ──
+_actual_wr = {}
+if not _closed_for_today.empty and 'strategy' in _closed_for_today.columns:
+    _wr_rs = 'result_status' if 'result_status' in _closed_for_today.columns else 'status'
+    for _sk in _closed_for_today['strategy'].unique():
+        _sk_rows = _closed_for_today[_closed_for_today['strategy'] == _sk]
+        _sk_upper = _sk_rows[_wr_rs].astype(str).str.upper()
+        _sk_win = int((_sk_upper == 'WIN').sum())
+        _sk_fail = int((_sk_upper.isin(['LOSS', 'EXPIRED'])).sum())
+        _sk_total = _sk_win + _sk_fail
+        if _sk_total > 0:
+            _actual_wr[_sk] = f'{_sk_win}/{_sk_total} ({_sk_win/_sk_total*100:.0f}%)'
+        else:
+            _actual_wr[_sk] = '—'
+
 _today_sells = pd.DataFrame()
 if not _closed_for_today.empty and 'close_date' in _closed_for_today.columns:
     # close_date(미국 날짜)를 KST로 변환 후 오늘(KST)과 비교
@@ -1060,7 +1101,7 @@ with tab_today:
         # Build the today table grouped by strategy
         html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
         html += '<th>Strategy</th><th>Target</th><th>Ticker</th>'
-        html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>Backtest</th>'
+        html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>실제승률</th><th>BT승률</th>'
         html += '</tr></thead><tbody>'
 
         for s_key in STRAT_ORDER:
@@ -1079,6 +1120,7 @@ with tab_today:
                 tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
                 sell_by = calc_sell_date_kst(sig_date, mh)
 
+                _awr = _actual_wr.get(s_key, '—')
                 html += f'<tr>'
                 html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
                 html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
@@ -1086,8 +1128,35 @@ with tab_today:
                 html += f'<td>{pr_h}</td>'
                 html += f'<td>{tp_h}</td>'
                 html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
+                html += f'<td style="color:var(--green-bright);font-weight:600">{_awr}</td>'
                 html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
                 html += f'</tr>'
+
+        # New strategies (11+)
+        if 'strategy' in today_signals.columns:
+            new_keys = sorted([k for k in today_signals['strategy'].unique() if k not in STRAT_ORDER], key=lambda x: int(x) if x.isdigit() else 999)
+            for s_key in new_keys:
+                s_sig = today_signals[today_signals['strategy'] == s_key]
+                for idx, row in s_sig.iterrows():
+                    tk = safe_str(row.get('ticker'))
+                    pr = safe_float(row.get('price', 0))
+                    tp = safe_float(row.get('tp_price', 0))
+                    sig_date = safe_str(row.get('date'))
+                    mh = STRAT_MAX_HOLD.get(s_key, 5)
+                    pr_h = f'${pr:.2f}' if pr > 0 else '—'
+                    tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
+                    sell_by = calc_sell_date_kst(sig_date, mh)
+                    _awr = _actual_wr.get(s_key, '—')
+                    html += f'<tr>'
+                    html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
+                    html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
+                    html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
+                    html += f'<td>{pr_h}</td>'
+                    html += f'<td>{tp_h}</td>'
+                    html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
+                    html += f'<td style="color:var(--green-bright);font-weight:600">{_awr}</td>'
+                    html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
+                    html += f'</tr>'
 
         html += '</tbody></table></div>'
         st.markdown(html, unsafe_allow_html=True)
@@ -1108,8 +1177,45 @@ with tab_today:
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
 
-for k, t in [('A', tab_a), ('C', tab_c), ('I', tab_i), ('J', tab_j), ('E', tab_e), ('B', tab_b), ('G', tab_g), ('H', tab_h), ('F', tab_f), ('D', tab_d)]:
+for k, t in [('1', tab_1), ('3', tab_3), ('9', tab_9), ('10', tab_10), ('5', tab_5), ('2', tab_2), ('7', tab_7), ('8', tab_8), ('6', tab_6), ('4', tab_4)]:
     render_strategy_tab(k, t)
+
+with tab_new:
+    st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">New Strategies (11~306) — 백테스트 90%+ 적중률 전략</div>', unsafe_allow_html=True)
+    if not today_signals.empty and 'strategy' in today_signals.columns:
+        new_sig = today_signals[~today_signals['strategy'].isin(['1','2','3','4','5','6','7','8','9','10'])]
+        if not new_sig.empty:
+            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
+            html += '<th>Strategy</th><th>Target</th><th>Ticker</th>'
+            html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>실제승률</th><th>BT승률</th>'
+            html += '</tr></thead><tbody>'
+            for _, row in new_sig.iterrows():
+                s_key = safe_str(row.get('strategy'))
+                tk = safe_str(row.get('ticker'))
+                pr = safe_float(row.get('price', 0))
+                tp = safe_float(row.get('tp_price', 0))
+                sig_date = safe_str(row.get('date'))
+                mh = STRAT_MAX_HOLD.get(s_key, 5)
+                pr_h = f'${pr:.2f}' if pr > 0 else '—'
+                tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
+                sell_by = calc_sell_date_kst(sig_date, mh)
+                _awr = _actual_wr.get(s_key, '—')
+                html += f'<tr>'
+                html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
+                html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
+                html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
+                html += f'<td>{pr_h}</td>'
+                html += f'<td>{tp_h}</td>'
+                html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
+                html += f'<td style="color:var(--green-bright);font-weight:600">{_awr}</td>'
+                html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
+                html += f'</tr>'
+            html += '</tbody></table></div>'
+            st.markdown(html, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="rr-empty">오늘 New Strategy 신호 없음</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
 
 # ─── Tab: Performance ─────────────────────────────────────────────────────────
 with tab_history:
@@ -1139,7 +1245,10 @@ with tab_history:
             lambda x: us_to_kst_date(x)[:7] if us_to_kst_date(x) != '—' else '—'
         )
 
-    strategies = STRAT_ORDER  # ['A', 'C', 'E', 'B', 'D'] — TP% 오름차순
+    strategies = list(STRAT_ORDER)
+    if not all_records.empty and 'strategy' in all_records.columns:
+        extra = sorted([s for s in all_records['strategy'].unique() if s not in strategies], key=lambda x: int(x) if x.isdigit() else 999)
+        strategies.extend(extra)
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
     # Aggregate — 대소문자 무관 매칭
@@ -1643,7 +1752,7 @@ with tab_history:
                 st.markdown('<div class="rr-empty">No valid P&L data</div>', unsafe_allow_html=True)
             else:
                 strats_data=sorted(pnl_df['strategy'].unique())
-                sc={'A':'#4a9e7d','B':'#4a7a9e','C':'#b8954a','D':'#9e4a5a','E':'#7a5aaf'}
+                sc={'1':'#4a9e7d','2':'#4a7a9e','3':'#b8954a','4':'#9e4a5a','5':'#7a5aaf','6':'#c08820','7':'#309a8a','8':'#b04858','9':'#5088c0','10':'#8868b8'}
 
                 chart_data=pd.DataFrame()
                 for s in strats_data:
