@@ -73,6 +73,15 @@ OPEN_PATH = os.path.join(DATA_DIR, 'open_positions.csv')
 CLOSED_PATH = os.path.join(DATA_DIR, 'closed_positions.csv')
 
 
+# ─── Legacy Strategy Code Migration ──────────────────────────────────────────
+_LEGACY_STRAT_MAP = {'A': '1', 'B': '2', 'C': '3', 'D': '4', 'E': '5', 'F': '6', 'G': '7', 'H': '8', 'I': '9', 'J': '10'}
+
+def _fix_legacy_strategy(df):
+    """이전 버전 알파벳 전략 코드(A~J)를 숫자(1~10)로 변환"""
+    if not df.empty and 'strategy' in df.columns:
+        df['strategy'] = df['strategy'].replace(_LEGACY_STRAT_MAP)
+    return df
+
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
 def load_csv(path, cols=None):
@@ -83,6 +92,7 @@ def load_csv(path, cols=None):
             for c in cols:
                 if c not in df.columns:
                     df[c] = ''
+        _fix_legacy_strategy(df)
         return df
     if cols:
         return pd.DataFrame(columns=cols)
