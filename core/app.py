@@ -557,7 +557,7 @@ def load_today_signals():
     files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
     if files:
         df = pd.read_csv(files[0])
-        return df if len(df) > 0 else pd.DataFrame()
+        return _fix_legacy_strategy(df) if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -565,6 +565,7 @@ def load_history():
     p = "data/history.csv"
     if os.path.exists(p):
         df = pd.read_csv(p)
+        _fix_legacy_strategy(df)
         df['date'] = pd.to_datetime(df['date'])
         return df
     return pd.DataFrame()
@@ -576,12 +577,21 @@ def load_tracker_summary():
         with open(p, 'r') as f: return json.load(f)
     return None
 
+# 이전 버전 알파벳 코드 → 숫자 코드 변환
+_LEGACY_STRAT_MAP = {'A': '1', 'B': '2', 'C': '3', 'D': '4', 'E': '5', 'F': '6', 'G': '7', 'H': '8', 'I': '9', 'J': '10'}
+
+def _fix_legacy_strategy(df):
+    """이전 버전 알파벳 전략 코드(A~J)를 숫자(1~10)로 변환"""
+    if not df.empty and 'strategy' in df.columns:
+        df['strategy'] = df['strategy'].replace(_LEGACY_STRAT_MAP)
+    return df
+
 @st.cache_data(ttl=300)
 def load_open_positions():
     p = "data/open_positions.csv"
     if os.path.exists(p):
         df = pd.read_csv(p, dtype=str)
-        return df if len(df) > 0 else pd.DataFrame()
+        return _fix_legacy_strategy(df) if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -589,7 +599,7 @@ def load_closed_positions():
     p = "data/closed_positions.csv"
     if os.path.exists(p):
         df = pd.read_csv(p, dtype=str)
-        return df if len(df) > 0 else pd.DataFrame()
+        return _fix_legacy_strategy(df) if len(df) > 0 else pd.DataFrame()
     return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
