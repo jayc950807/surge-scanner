@@ -1482,14 +1482,46 @@ def main():
     print("\n[3] Phase 2: 전략별 정밀 분석...")
     signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, candidates_phase1 = phase2_check_all(candidates, strat_str)
 
-    # Phase 3: New strategies (11-306)
+    # Phase 3: New strategies (11-306) — 조건을 종목당 1회만 계산
     new_strat_signals = {}
     new_strategy_keys = [k for k in STRATEGY_CONFIG.keys() if k not in ('1','2','3','4','5','6','7','8','9','10')]
     print(f"\n{'='*60}")
     print(f"Phase 3: Checking {len(new_strategy_keys)} new strategies...")
     print(f"{'='*60}")
+
+    # Step 1: 종목별 조건을 한 번만 계산 (캐시)
+    import math
+    candidate_conds = {}  # {ticker: (conds_dict, price, date_str, df)}
+    phase3_t0 = time.time()
+    for tk, df in candidates_phase1:
+        if len(df) < 30:
+            continue
+        close = df['Close']
+        n = len(df) - 1
+        conds = evaluate_conditions_for_stock(close, df['High'], df['Low'], df['Open'], df['Volume'], n)
+        if conds:
+            candidate_conds[tk] = (conds, float(close.iloc[n]), df.index[n].strftime('%Y-%m-%d'))
+    print(f"  조건 계산 완료: {len(candidate_conds)}개 종목 ({time.time()-phase3_t0:.1f}초)")
+
+    # Step 2: 캐시된 조건으로 296개 전략 체크 (추가 계산 없음)
     for sk in sorted(new_strategy_keys, key=lambda x: int(x)):
-        sigs = phase3_check_new_strategies(candidates_phase1, sk)
+        conditions_list = STRATEGY_CONDITIONS.get(sk)
+        if conditions_list is None:
+            continue
+        cfg = STRATEGY_CONFIG.get(sk, {})
+        tp_pct = cfg.get('tp_pct', 0.10)
+
+        sigs = []
+        for tk, (conds, price, date_s) in candidate_conds.items():
+            if all(conds.get(c, False) for c in conditions_list):
+                tp_price = math.floor(price * (1 + tp_pct) * 100) / 100
+                sigs.append({
+                    'ticker': tk,
+                    'strategy': sk,
+                    'price': round(price, 2),
+                    'tp_price': tp_price,
+                    'date': date_s,
+                })
         if sigs:
             new_strat_signals[sk] = sigs
             print(f"  Strategy {sk}: {len(sigs)} signals")
