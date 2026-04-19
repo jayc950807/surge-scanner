@@ -1476,11 +1476,11 @@ def get_all_tickers():
 # ─── Shared yfinance Batch Download ─────────────────────────────────────────
 
 def download_batch(tickers, period='60d'):
-    """yfinance 배치 다운로드 (rate limit 백오프 포함)"""
+    """yfinance 배치 다운로드 (재시도 포함)"""
     import yfinance as yf
     import time
 
-    for attempt in range(5):
+    for attempt in range(3):
         try:
             data = yf.download(
                 ' '.join(tickers), period=period,
@@ -1488,18 +1488,11 @@ def download_batch(tickers, period='60d'):
             )
             return data
         except Exception as e:
-            err_str = str(e)
-            is_rate_limit = 'Rate' in err_str or 'Too Many' in err_str or '429' in err_str
-
-            if is_rate_limit:
-                wait_time = 30 * (attempt + 1)  # 30s, 60s, 90s... 점진적 대기
-                print(f"    ⚠ Rate limited (attempt {attempt+1}/5). {wait_time}s 대기...")
-                time.sleep(wait_time)
-            elif attempt < 4:
-                print(f"    Download retry {attempt+1}/5: {e}")
-                time.sleep(5)
+            if attempt < 2:
+                print(f"    Download retry {attempt+1}/3: {e}")
+                time.sleep(3)
             else:
-                print(f"    Download failed after 5 attempts: {e}")
+                print(f"    Download failed after 3 attempts: {e}")
     return None
 
 
