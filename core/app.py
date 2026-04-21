@@ -15,7 +15,7 @@ from collections import defaultdict
 
 # shared_config에서 공통 상수/함수 import (없으면 로컬 fallback)
 try:
-    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES, STRATEGY_WINRATE, is_us_dst
+    from shared_config import KST, STRATEGY_CONFIG, STRATEGY_NAMES, is_us_dst
 except ImportError:
     KST = timezone(timedelta(hours=9))
     def is_us_dst(dt_date):
@@ -660,29 +660,6 @@ STRAT_MAX_HOLD = {'1': 5, '2': 10, '3': 5, '4': 30, '5': 30, '6': 20, '7': 20, '
 # 탭 표시 순서: TP% 오름차순, 동일 TP%일 때 보유일 오름차순
 STRAT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
 
-# Populate strategy dicts for new strategies (11-306) from STRATEGY_CONFIG
-try:
-    _new_keys = sorted([k for k in STRATEGY_CONFIG.keys() if k not in STRAT_KR], key=lambda x: int(x) if x.isdigit() else 999)
-    for _i, _k in enumerate(_new_keys, start=1):
-        _cfg = STRATEGY_CONFIG[_k]
-        _tp = _cfg.get('tp_pct', 0)
-        _mh = _cfg.get('max_hold', 5)
-        STRAT_KR[_k] = f'3차_{_i}'
-        STRAT_TP[_k] = f'+{int(_tp*100)}%'
-        STRAT_TP_NUM[_k] = int(_tp * 100)
-        STRAT_MAX_HOLD[_k] = _mh
-        STRAT_TAB[_k] = f'3차_{_i}_+{int(_tp*100)}%{_mh}일'
-        STRAT_NAMES[_k] = f'3차_{_i}_+{int(_tp*100)}%{_mh}일'
-except NameError:
-    pass
-
-# Populate STRAT_BT_WR for new strategies from shared_config
-try:
-    for _k, _v in STRATEGY_WINRATE.items():
-        if _k not in STRAT_BT_WR:
-            STRAT_BT_WR[_k] = _v
-except NameError:
-    pass
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def safe_str(val, fb='—'):
@@ -833,8 +810,8 @@ history = load_history()
 _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-tab_today, tab_1, tab_3, tab_9, tab_10, tab_5, tab_2, tab_7, tab_8, tab_6, tab_4, tab_new, tab_history = st.tabs([
-    _today_label, "1차_1 +5%5일", "1차_3 +5%5일", "2차_4 +10%5일", "2차_5 +10%5일", "1차_5 +10%30일", "1차_2 +15%10일", "2차_2 +40%20일", "2차_3 +40%20일", "2차_1 +50%20일", "1차_4 +20%30일", "3차 (11+)", "Performance"
+tab_today, tab_1, tab_3, tab_9, tab_10, tab_5, tab_2, tab_7, tab_8, tab_6, tab_4, tab_history = st.tabs([
+    _today_label, "1차_1 +5%5일", "1차_3 +5%5일", "2차_4 +10%5일", "2차_5 +10%5일", "1차_5 +10%30일", "1차_2 +15%10일", "2차_2 +40%20일", "2차_3 +40%20일", "2차_1 +50%20일", "1차_4 +20%30일", "Performance"
 ])
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
@@ -1195,32 +1172,6 @@ with tab_today:
                 html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
                 html += f'</tr>'
 
-        # New strategies (11+)
-        if 'strategy' in today_signals.columns:
-            new_keys = sorted([k for k in today_signals['strategy'].unique() if k not in STRAT_ORDER], key=lambda x: int(x) if x.isdigit() else 999)
-            for s_key in new_keys:
-                s_sig = today_signals[today_signals['strategy'] == s_key]
-                for idx, row in s_sig.iterrows():
-                    tk = safe_str(row.get('ticker'))
-                    pr = safe_float(row.get('price', 0))
-                    tp = safe_float(row.get('tp_price', 0))
-                    sig_date = safe_str(row.get('date'))
-                    mh = STRAT_MAX_HOLD.get(s_key, 5)
-                    pr_h = f'${pr:.2f}' if pr > 0 else '—'
-                    tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
-                    sell_by = calc_sell_date_kst(sig_date, mh)
-                    _awr = _actual_wr.get(s_key, '—')
-                    html += f'<tr>'
-                    html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
-                    html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
-                    html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
-                    html += f'<td>{pr_h}</td>'
-                    html += f'<td>{tp_h}</td>'
-                    html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
-                    html += f'<td style="color:var(--green-bright);font-weight:600">{_awr}</td>'
-                    html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
-                    html += f'</tr>'
-
         html += '</tbody></table></div>'
         st.markdown(html, unsafe_allow_html=True)
 
@@ -1242,43 +1193,6 @@ with tab_today:
 
 for k, t in [('1', tab_1), ('3', tab_3), ('9', tab_9), ('10', tab_10), ('5', tab_5), ('2', tab_2), ('7', tab_7), ('8', tab_8), ('6', tab_6), ('4', tab_4)]:
     render_strategy_tab(k, t)
-
-with tab_new:
-    st.markdown('<div class="rr-legend" style="color:var(--gold);font-size:0.95em;margin-bottom:12px">New Strategies (11~306) — 백테스트 90%+ 적중률 전략</div>', unsafe_allow_html=True)
-    if not today_signals.empty and 'strategy' in today_signals.columns:
-        new_sig = today_signals[~today_signals['strategy'].isin(['1','2','3','4','5','6','7','8','9','10'])]
-        if not new_sig.empty:
-            html = '<div class="rr-table-wrap"><table class="rr-table"><thead><tr>'
-            html += '<th>Strategy</th><th>Target</th><th>Ticker</th>'
-            html += '<th>Price</th><th>TP Price</th><th>매도기한</th><th>실제승률</th><th>BT승률</th>'
-            html += '</tr></thead><tbody>'
-            for _, row in new_sig.iterrows():
-                s_key = safe_str(row.get('strategy'))
-                tk = safe_str(row.get('ticker'))
-                pr = safe_float(row.get('price', 0))
-                tp = safe_float(row.get('tp_price', 0))
-                sig_date = safe_str(row.get('date'))
-                mh = STRAT_MAX_HOLD.get(s_key, 5)
-                pr_h = f'${pr:.2f}' if pr > 0 else '—'
-                tp_h = f'<span style="color:var(--gold);font-weight:600">${tp:.2f}</span>' if tp > 0 else '—'
-                sell_by = calc_sell_date_kst(sig_date, mh)
-                _awr = _actual_wr.get(s_key, '—')
-                html += f'<tr>'
-                html += f'<td>{stag(s_key)} <span style="color:var(--text-muted);font-size:0.85em">{STRAT_KR.get(s_key,"")}</span></td>'
-                html += f'<td style="color:var(--gold);font-weight:700;font-size:1.05em">{STRAT_TP.get(s_key,"")}</td>'
-                html += f'<td style="font-weight:700;color:var(--text-primary);font-size:1.05em">{tk}</td>'
-                html += f'<td>{pr_h}</td>'
-                html += f'<td>{tp_h}</td>'
-                html += f'<td style="color:var(--red-bright);font-weight:600">{sell_by} <span style="font-size:0.8em;color:var(--text-muted)">({mh}일)</span></td>'
-                html += f'<td style="color:var(--green-bright);font-weight:600">{_awr}</td>'
-                html += f'<td style="color:var(--text-muted)">{STRAT_BT_WR.get(s_key,"—")}</td>'
-                html += f'</tr>'
-            html += '</tbody></table></div>'
-            st.markdown(html, unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="rr-empty">오늘 New Strategy 신호 없음</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
 
 # ─── Tab: Performance ─────────────────────────────────────────────────────────
 with tab_history:
@@ -1310,7 +1224,7 @@ with tab_history:
 
     strategies = list(STRAT_ORDER)
     if not all_records.empty and 'strategy' in all_records.columns:
-        extra = sorted([s for s in all_records['strategy'].unique() if s not in strategies], key=lambda x: int(x) if x.isdigit() else 999)
+        extra = sorted([s for s in all_records['strategy'].dropna().unique() if s not in strategies], key=lambda x: int(x) if isinstance(x, str) and x.isdigit() else 999)
         strategies.extend(extra)
     rs_col = 'result_status' if (not closed_pos.empty and 'result_status' in closed_pos.columns) else 'status'
 
