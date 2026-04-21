@@ -1,2 +1,2 @@
 strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price
-1,CAST,2026-04-21,07:00 KST,2.74,14.6,27.4,-28.6,6,3.0,2.88,2.19
+1,CAST,2026-04-21,08:44 KST,2.74,14.6,27.4,-28.6,6,3.0,2.88,2.19
