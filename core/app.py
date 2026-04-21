@@ -552,13 +552,60 @@ def load_latest_scan():
     return None
 
 @st.cache_data(ttl=300)
+def _get_last_us_trading_date():
+    """현재 KST 시각 기준으로 가장 최근 미국 거래일(날짜)을 반환"""
+    import re as _re
+    now_kst = datetime.now(KST)
+    # 미국 ET = KST - 13h(서머타임) or KST - 14h(겨울)
+    # 스캐너는 UTC 21:00 = KST 06:00에 실행, 결과는 직전 거래일 기준
+    # → KST 06:00 이후면 "오늘 스캔 완료" = 직전 미국 거래일 시그널이 유효
+    # → KST 06:00 이전이면 아직 스캔 전 = 그 전 거래일 시그널이 유효
+
+    # 현재 미국 날짜 추정 (KST - 14시간, 대략)
+    us_now = now_kst - timedelta(hours=14)
+    us_date = us_now.date()
+
+    # 주말이면 금요일로
+    while us_date.weekday() >= 5:
+        us_date -= timedelta(days=1)
+
+    return us_date
+
+@st.cache_data(ttl=300)
 def load_today_signals():
-    """가장 최근 시그널 파일 로드 (날짜 하드코딩 대신 glob 최신 파일)"""
+    """가장 최근 시그널 파일 로드 — 시그널 날짜가 최근 거래일이 아니면 빈 DataFrame"""
+    import re as _re
     files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
-    if files:
-        df = pd.read_csv(files[0])
-        return _fix_legacy_strategy(df) if len(df) > 0 else pd.DataFrame()
-    return pd.DataFrame()
+    if not files:
+        return pd.DataFrame()
+
+    # 파일명에서 날짜 추출: signal_YYYY-MM-DD.csv
+    m = _re.search(r'signal_(\d{4}-\d{2}-\d{2})\.csv', os.path.basename(files[0]))
+    if not m:
+        return pd.DataFrame()
+
+    file_date = datetime.strptime(m.group(1), '%Y-%m-%d').date()
+    last_trading = _get_last_us_trading_date()
+
+    # 시그널 날짜가 최근 거래일과 일치할 때만 표시
+    if file_date != last_trading:
+        return pd.DataFrame()
+
+    df = pd.read_csv(files[0])
+    return _fix_legacy_strategy(df) if len(df) > 0 else pd.DataFrame()
+
+
+@st.cache_data(ttl=300)
+def get_signal_file_info():
+    """시그널 파일 날짜와 최근 거래일 반환 (Today 탭 안내용)"""
+    import re as _re
+    files = sorted(glob.glob("data/signal_*.csv"), reverse=True)
+    if not files:
+        return None, None
+    m = _re.search(r'signal_(\d{4}-\d{2}-\d{2})\.csv', os.path.basename(files[0]))
+    file_date = m.group(1) if m else None
+    last_trading = _get_last_us_trading_date().strftime('%Y-%m-%d')
+    return file_date, last_trading
 
 @st.cache_data(ttl=300)
 def load_history():
@@ -779,6 +826,7 @@ else:
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
 today_signals = load_today_signals()
+_sig_file_date, _sig_last_trading = get_signal_file_info()
 history = load_history()
 
 # Count today's signals for tab label
@@ -786,13 +834,13 @@ _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
 tab_today, tab_1, tab_3, tab_9, tab_10, tab_5, tab_2, tab_7, tab_8, tab_6, tab_4, tab_new, tab_history = st.tabs([
-    _today_label, "1_5%5일", "3_5%5일", "9_10%5일", "10_10%5일", "5_10%30일", "2_15%10일", "7_40%20일", "8_40%20일", "6_50%20일", "4_20%30일", "New (11+)", "Performance"
+    _today_label, "1차_1 +5%5일", "1차_3 +5%5일", "2차_4 +10%5일", "2차_5 +10%5일", "1차_5 +10%30일", "1차_2 +15%10일", "2차_2 +40%20일", "2차_3 +40%20일", "2차_1 +50%20일", "1차_4 +20%30일", "3차 (11+)", "Performance"
 ])
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
 STRAT_INFO = {
     '1': {
-        'title': 'A_5%5일 — 급락반등',
+        'title': '1차_1 +5%5일 — 급락반등',
         'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
         'bt': '90.1% (236/262)',
@@ -812,7 +860,7 @@ STRAT_INFO = {
         },
     },
     '2': {
-        'title': 'D_15%10일 — 고수익',
+        'title': '1차_2 +15%10일 — 고수익',
         'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
         'bt': '90.3% (28/31)',
@@ -833,7 +881,7 @@ STRAT_INFO = {
         },
     },
     '3': {
-        'title': 'B_5%5일 — 과매도',
+        'title': '1차_3 +5%5일 — 과매도',
         'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
         'bt': '86.9% (542/624)',
@@ -853,7 +901,7 @@ STRAT_INFO = {
         },
     },
     '4': {
-        'title': 'E_20%30일 — 초저가',
+        'title': '1차_4 +20%30일 — 초저가',
         'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
         'bt': '97.7% (127/130)',
@@ -871,7 +919,7 @@ STRAT_INFO = {
         },
     },
     '5': {
-        'title': 'C_10%30일 — 속반등',
+        'title': '1차_5 +10%30일 — 속반등',
         'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
         'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
         'bt': '91.0% (273/300)',
@@ -890,7 +938,7 @@ STRAT_INFO = {
         },
     },
     '6': {
-        'title': 'F_50%20일 — 바닥급등',
+        'title': '2차_1 +50%20일 — 바닥급등',
         'desc': ['20일 변동성 > 10%', '52주 고점 대비 -85% 이하', '볼린저 %B < 0', '전일 수익률 < -5%', '갭업 > 5%'],
         'rules': ['매수: 신호 당일 종가', '익절: +50%', '손절: -20%', '최대 보유: 20일'],
         'bt': '87.5% (7/8)',
@@ -910,7 +958,7 @@ STRAT_INFO = {
         },
     },
     '7': {
-        'title': 'G_40%20일 — MACD전환',
+        'title': '2차_2 +40%20일 — MACD전환',
         'desc': ['20일 변동성 > 10%', 'RSI(7) < 30', 'MACD 히스토그램 골든크로스', '갭업 > 5%', '종가 < SMA(5)'],
         'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
         'bt': '90.0% (9/10)',
@@ -930,7 +978,7 @@ STRAT_INFO = {
         },
     },
     '8': {
-        'title': 'H_40%20일 — ATR확대',
+        'title': '2차_3 +40%20일 — ATR확대',
         'desc': ['RSI(7) < 30', '52주 고점 대비 -85% 이하', '전일 수익률 < -5%', '갭업 > 5%', 'ATR 5일 변화 > 25%'],
         'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
         'bt': '90.0% (9/10)',
@@ -950,7 +998,7 @@ STRAT_INFO = {
         },
     },
     '9': {
-        'title': 'I_10%5일 — 과매도단타',
+        'title': '2차_4 +10%5일 — 과매도단타',
         'desc': ['RSI(14) < 30', '거래량 2배 이상', 'MACD 히스토그램 > 0', '전일 수익률 < -5%', '5일 수익률 > 0'],
         'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
         'bt': '100.0% (8/8)',
@@ -970,7 +1018,7 @@ STRAT_INFO = {
         },
     },
     '10': {
-        'title': 'J_10%5일 — MACD단타',
+        'title': '2차_5 +10%5일 — MACD단타',
         'desc': ['20일 변동성 > 10%', 'RSI(14) < 30', '거래량 2배 이상', 'MACD 골든크로스', '스토캐스틱 K < 20'],
         'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
         'bt': '90.0% (9/10)',
@@ -1103,10 +1151,14 @@ with tab_today:
     # ── Today's Buys (매수) ──
     if today_signals.empty:
         if _today_sells.empty:
-            st.markdown('<div class="rr-empty">오늘 감지된 신호가 없습니다</div>', unsafe_allow_html=True)
+            _no_sig_msg = '오늘 감지된 신호가 없습니다'
+            if _sig_file_date and _sig_file_date != _sig_last_trading:
+                _no_sig_msg += f'<br><span style="font-size:0.8em;color:var(--text-muted)">최근 시그널: {_sig_file_date} (최근 거래일 {_sig_last_trading}과 불일치 → 표시 안 함)</span>'
+            st.markdown(f'<div class="rr-empty">{_no_sig_msg}</div>', unsafe_allow_html=True)
     else:
+        _buy_date_label = f' ({_sig_file_date})' if _sig_file_date else ''
         st.markdown(f'''<div class="rr-legend" style="color:var(--green-bright);font-size:0.9em;margin-bottom:16px">
-            BUY Today — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> 종목 매수
+            BUY Today{_buy_date_label} — <span style="font-weight:700;font-size:1.1em">{len(today_signals)}</span> 종목 매수
         </div>''', unsafe_allow_html=True)
 
         # Build the today table grouped by strategy
