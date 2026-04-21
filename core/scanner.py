@@ -82,8 +82,6 @@ from shared_config import (
     BATCH_SIZE,
     BATCH_DELAY,
     STRATEGY_CONFIG,
-    STRATEGY_CONDITIONS,
-    STRATEGY_WINRATE,
     calc_rsi_wilder,
     get_all_tickers,
     download_batch,
@@ -384,9 +382,6 @@ def phase2_check_all(candidates, strat_str):
     run_i = '9' in strat_str
     run_j = '10' in strat_str
 
-    # Collect (ticker, df) pairs for phase3
-    candidates_phase1_data = []
-
     for b_idx in range(0, len(candidates), 20):
         batch = candidates[b_idx:b_idx + 20]
         batch_num = b_idx // 20 + 1
@@ -427,9 +422,6 @@ def phase2_check_all(candidates, strat_str):
                 avg_vol = float(vol.tail(20).mean())
                 if avg_vol < MIN_VOLUME:
                     continue
-
-                # Save for phase3
-                candidates_phase1_data.append((tk, df))
 
                 # ── 공통 계산 (한 번만) ──
                 intra = (h_last - l_last) / l_last  # FIX #4: low-based for consistency with backtest
@@ -927,204 +919,15 @@ def phase2_check_all(candidates, strat_str):
     signals_i.sort(key=lambda x: x['rsi14'])
     signals_j.sort(key=lambda x: x['rsi14'])
 
-    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, candidates_phase1_data
+    return signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j
 
-
-# ─── New Strategy Functions ──────────────────────────────────────────────────
-
-def evaluate_conditions_for_stock(close, high, low, opn, vol, n):
-    """
-    Evaluate all 36 indicator conditions for a single stock.
-    Parameters: close/high/low/opn/vol are pandas Series (price history), n = index of the day to evaluate.
-    Returns: dict of condition_name → bool
-    """
-    import numpy as np
-
-    conds = {}
-    c = close
-    v = vol
-
-    # Need enough history
-    if len(c) < max(n+1, 201):
-        return {}
-
-    # Precompute indicators at index n
-    # Volatility (20d)
-    ret_series = c.pct_change()
-    vol_20d = ret_series.iloc[max(0,n-19):n+1].std() * np.sqrt(252) if n >= 19 else 0
-    conds["high_vol"] = vol_20d > 0.06
-    conds["very_high_vol"] = vol_20d > 0.10
-
-    # RSI 14
-    rsi14_series = calc_rsi_wilder(c, 14)
-    rsi_14 = rsi14_series.iloc[n] if n < len(rsi14_series) else 50
-    conds["rsi_below_30"] = rsi_14 < 30
-    conds["rsi_below_40"] = rsi_14 < 40
-    conds["rsi_30_50"] = (rsi_14 >= 30) and (rsi_14 <= 50)
-
-    # 52-week high distance
-    if n >= 252:
-        high_52w = high.iloc[n-252:n+1].max()
-    else:
-        high_52w = high.iloc[:n+1].max()
-    dist_52w_high = (c.iloc[n] - high_52w) / high_52w if high_52w > 0 else 0
-    conds["near_52w_low"] = dist_52w_high < -0.70
-    conds["deep_52w_low"] = dist_52w_high < -0.85
-
-    # Volume ratio
-    vol_avg_20 = v.iloc[max(0,n-19):n].mean() if n >= 1 else 1
-    vol_ratio = v.iloc[n] / vol_avg_20 if vol_avg_20 > 0 else 1
-    conds["vol_1_5x"] = vol_ratio > 1.5
-    conds["vol_2x"] = vol_ratio > 2.0
-    conds["vol_3x"] = vol_ratio > 3.0
-
-    # MACD (12,26,9)
-    ema12 = c.ewm(span=12, adjust=False).mean()
-    ema26 = c.ewm(span=26, adjust=False).mean()
-    macd_line = ema12 - ema26
-    macd_signal = macd_line.ewm(span=9, adjust=False).mean()
-    macd_hist = macd_line - macd_signal
-    conds["macd_pos"] = macd_hist.iloc[n] > 0
-    conds["macd_neg"] = macd_hist.iloc[n] < 0
-    conds["macd_cross_up"] = (macd_hist.iloc[n] > 0) and (n > 0 and macd_hist.iloc[n-1] < 0)
-
-    # Bollinger Bands (20, 2)
-    sma20 = c.rolling(20).mean()
-    std20 = c.rolling(20).std()
-    bb_upper = sma20 + 2 * std20
-    bb_lower = sma20 - 2 * std20
-    bb_range = bb_upper - bb_lower
-    bb_pctb = (c.iloc[n] - bb_lower.iloc[n]) / bb_range.iloc[n] if bb_range.iloc[n] > 0 else 0.5
-    conds["bb_below_lower"] = bb_pctb < 0
-    conds["bb_below_mid"] = bb_pctb < 0.5
-
-    # Returns
-    ret_1d = (c.iloc[n] - c.iloc[n-1]) / c.iloc[n-1] if n >= 1 and c.iloc[n-1] > 0 else 0
-    conds["prev_up"] = ret_1d > 0
-    conds["prev_down"] = ret_1d < 0
-    conds["prev_big_drop"] = ret_1d < -0.05
-
-    ret_5d = (c.iloc[n] - c.iloc[n-5]) / c.iloc[n-5] if n >= 5 and c.iloc[n-5] > 0 else 0
-    conds["ret5d_neg"] = ret_5d < 0
-    conds["ret5d_pos"] = ret_5d > 0
-
-    ret_20d = (c.iloc[n] - c.iloc[n-20]) / c.iloc[n-20] if n >= 20 and c.iloc[n-20] > 0 else 0
-    conds["ret20d_neg"] = ret_20d < 0
-    conds["ret20d_strong_neg"] = ret_20d < -0.15
-    conds["ret20d_very_neg"] = ret_20d < -0.30
-
-    # Gap
-    gap_pct = (opn.iloc[n] - c.iloc[n-1]) / c.iloc[n-1] if n >= 1 and c.iloc[n-1] > 0 else 0
-    conds["gap_up"] = gap_pct > 0.02
-    conds["gap_up_big"] = gap_pct > 0.05
-
-    # ATR (14)
-    tr_series = pd.concat([
-        high - low,
-        (high - c.shift(1)).abs(),
-        (low - c.shift(1)).abs()
-    ], axis=1).max(axis=1)
-    atr_14 = tr_series.rolling(14).mean()
-    if n >= 19:
-        atr_now = atr_14.iloc[n]
-        atr_5ago = atr_14.iloc[n-5] if n >= 5 else atr_now
-        atr_change_5d = (atr_now - atr_5ago) / atr_5ago if atr_5ago > 0 else 0
-    else:
-        atr_change_5d = 0
-    conds["atr_expanding"] = atr_change_5d > 0.10
-    conds["atr_strongly_expanding"] = atr_change_5d > 0.25
-
-    # SMA
-    sma5 = c.rolling(5).mean()
-    sma50 = c.rolling(50).mean()
-    sma200 = c.rolling(200).mean()
-    conds["price_below_sma5"] = c.iloc[n] < sma5.iloc[n] if n >= 4 else False
-    conds["price_below_sma20"] = c.iloc[n] < sma20.iloc[n] if n >= 19 else False
-    conds["sma5_below_sma20"] = sma5.iloc[n] < sma20.iloc[n] if n >= 19 else False
-    ratio_sma = (sma5.iloc[n] - sma20.iloc[n]) / sma20.iloc[n] if n >= 19 and sma20.iloc[n] > 0 else 0
-    conds["golden_cross_near"] = (ratio_sma > -0.02) and (ratio_sma < 0.02)
-    conds["price_below_sma50"] = c.iloc[n] < sma50.iloc[n] if n >= 49 else False
-    conds["price_below_sma200"] = c.iloc[n] < sma200.iloc[n] if n >= 199 else False
-
-    # Volume 3-day increase
-    if n >= 2:
-        conds["vol_3day_increase"] = (v.iloc[n] > v.iloc[n-1]) and (v.iloc[n-1] > v.iloc[n-2])
-    else:
-        conds["vol_3day_increase"] = False
-
-    # Stochastic K (14,3)
-    if n >= 13:
-        low14 = low.iloc[n-13:n+1].min()
-        high14 = high.iloc[n-13:n+1].max()
-        stoch_k = ((c.iloc[n] - low14) / (high14 - low14) * 100) if (high14 - low14) > 0 else 50
-    else:
-        stoch_k = 50
-    conds["stoch_oversold"] = stoch_k < 20
-
-    # Williams %R (14)
-    if n >= 13:
-        williams_r = ((high14 - c.iloc[n]) / (high14 - low14) * -100) if (high14 - low14) > 0 else -50
-    else:
-        williams_r = -50
-    conds["williams_oversold"] = williams_r < -80
-
-    return conds
-
-
-def phase3_check_new_strategies(candidates, strat_str):
-    """
-    Check new strategies (11-306) using data-driven condition evaluation.
-    candidates: list of (ticker, df) from phase1
-    strat_str: strategy key string like '11', '12', etc.
-    Returns: list of signal dicts
-    """
-    import math
-    conditions_list = STRATEGY_CONDITIONS.get(strat_str)
-    if conditions_list is None:
-        return []
-
-    cfg = STRATEGY_CONFIG.get(strat_str, {})
-    tp_pct = cfg.get('tp_pct', 0.10)
-
-    signals = []
-    for tk, df in candidates:
-        if len(df) < 30:
-            continue
-
-        close = df['Close']
-        high = df['High']
-        low = df['Low']
-        opn = df['Open']
-        vol = df['Volume']
-        n = len(df) - 1  # last day
-
-        conds = evaluate_conditions_for_stock(close, high, low, opn, vol, n)
-        if not conds:
-            continue
-
-        # Check if ALL conditions are met
-        if all(conds.get(c, False) for c in conditions_list):
-            price = close.iloc[n]
-            tp_price = math.floor(price * (1 + tp_pct) * 100) / 100
-            signals.append({
-                'ticker': tk,
-                'strategy': strat_str,
-                'price': round(price, 2),
-                'tp_price': tp_price,
-                'date': df.index[n].strftime('%Y-%m-%d'),
-            })
-
-    return signals
 
 
 # ─── Output ───────────────────────────────────────────────────────────────────
 
-def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals=None):
+def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
     """결과 출력"""
     all_sigs = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
-    if new_strat_signals:
-        for sigs in new_strat_signals.values():
-            all_sigs += sigs
     date_str = all_sigs[0]['date'] if all_sigs else datetime.now(KST).strftime('%Y-%m-%d')
 
     # Strategy 1
@@ -1333,30 +1136,12 @@ def print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals
                   f"${s['tp_price']:>9.2f} ${s['sl_price']:>9.2f}")
         print(f"  Total: {len(signals_j)} signals")
 
-    # New strategies (11-306)
-    if new_strat_signals:
-        print(f"\n{'='*90}")
-        print(f"  ★ NEW STRATEGIES (11-306) — {date_str}")
-        print(f"{'='*90}")
-        for sk in sorted(new_strat_signals.keys(), key=lambda x: int(x)):
-            sigs = new_strat_signals[sk]
-            winrate = STRATEGY_WINRATE.get(sk, 0)
-            print(f"\n  Strategy {sk} (winrate: {winrate:.1f}%): {len(sigs)} signals")
-            print(f"  {'Ticker':<8} {'Price':>8} {'TP':>8}")
-            print(f"  {'-'*26}")
-            for s in sigs:
-                print(f"  {s['ticker']:<8} {s['price']:>8.2f} {s['tp_price']:>8.2f}")
 
 
-def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals=None):
+def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j):
     """CSV 저장: data/signal_YYYY-MM-DD.csv + data/history.csv"""
     os.makedirs('data', exist_ok=True)
     all_signals = signals_a + signals_b + signals_c + signals_d + signals_e + signals_f + signals_g + signals_h + signals_i + signals_j
-
-    # Include new strategy signals
-    if new_strat_signals:
-        for sigs in new_strat_signals.values():
-            all_signals += sigs
 
     # 실제 거래일 기준 파일명 (신호가 있으면 신호의 date, 없으면 KST 날짜)
     if all_signals:
@@ -1437,10 +1222,6 @@ def save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_
         'total_count': len(all_signals),
         'dq_warnings': len(dq_warnings),
     }
-    # Add new strategy counts
-    if new_strat_signals:
-        for sk, sigs in new_strat_signals.items():
-            summary[f'strategy_{sk}_count'] = len(sigs)
     with open('data/latest_scan.json', 'w') as f:
         json.dump(summary, f, indent=2)
 
@@ -1480,60 +1261,15 @@ def main():
 
     # [3] Phase 2: 전략별 정밀 분석 (한 번의 다운로드)
     print("\n[3] Phase 2: 전략별 정밀 분석...")
-    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, candidates_phase1 = phase2_check_all(candidates, strat_str)
-
-    # Phase 3: New strategies (11-306) — 조건을 종목당 1회만 계산
-    new_strat_signals = {}
-    new_strategy_keys = [k for k in STRATEGY_CONFIG.keys() if k not in ('1','2','3','4','5','6','7','8','9','10')]
-    print(f"\n{'='*60}")
-    print(f"Phase 3: Checking {len(new_strategy_keys)} new strategies...")
-    print(f"{'='*60}")
-
-    # Step 1: 종목별 조건을 한 번만 계산 (캐시)
-    import math
-    candidate_conds = {}  # {ticker: (conds_dict, price, date_str, df)}
-    phase3_t0 = time.time()
-    for tk, df in candidates_phase1:
-        if len(df) < 30:
-            continue
-        close = df['Close']
-        n = len(df) - 1
-        conds = evaluate_conditions_for_stock(close, df['High'], df['Low'], df['Open'], df['Volume'], n)
-        if conds:
-            candidate_conds[tk] = (conds, float(close.iloc[n]), df.index[n].strftime('%Y-%m-%d'))
-    print(f"  조건 계산 완료: {len(candidate_conds)}개 종목 ({time.time()-phase3_t0:.1f}초)")
-
-    # Step 2: 캐시된 조건으로 296개 전략 체크 (추가 계산 없음)
-    for sk in sorted(new_strategy_keys, key=lambda x: int(x)):
-        conditions_list = STRATEGY_CONDITIONS.get(sk)
-        if conditions_list is None:
-            continue
-        cfg = STRATEGY_CONFIG.get(sk, {})
-        tp_pct = cfg.get('tp_pct', 0.10)
-
-        sigs = []
-        for tk, (conds, price, date_s) in candidate_conds.items():
-            if all(conds.get(c, False) for c in conditions_list):
-                tp_price = math.floor(price * (1 + tp_pct) * 100) / 100
-                sigs.append({
-                    'ticker': tk,
-                    'strategy': sk,
-                    'price': round(price, 2),
-                    'tp_price': tp_price,
-                    'date': date_s,
-                })
-        if sigs:
-            new_strat_signals[sk] = sigs
-            print(f"  Strategy {sk}: {len(sigs)} signals")
+    signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j = phase2_check_all(candidates, strat_str)
 
     # [4] 결과 출력 및 저장
-    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals)
-    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j, new_strat_signals)
+    print_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
+    save_results(signals_a, signals_b, signals_c, signals_d, signals_e, signals_f, signals_g, signals_h, signals_i, signals_j)
 
     elapsed = time.time() - t0
     print(f"\n  스캔 완료: {elapsed:.0f}초")
-    new_total = sum(len(s) for s in new_strat_signals.values()) if new_strat_signals else 0
-    print(f"  Strategy 1: {len(signals_a)}건 | 2: {len(signals_b)}건 | 3: {len(signals_c)}건 | 4: {len(signals_d)}건 | 5: {len(signals_e)}건 | 6: {len(signals_f)}건 | 7: {len(signals_g)}건 | 8: {len(signals_h)}건 | 9: {len(signals_i)}건 | 10: {len(signals_j)}건 | New(11-306): {new_total}건")
+    print(f"  Strategy 1: {len(signals_a)}건 | 2: {len(signals_b)}건 | 3: {len(signals_c)}건 | 4: {len(signals_d)}건 | 5: {len(signals_e)}건 | 6: {len(signals_f)}건 | 7: {len(signals_g)}건 | 8: {len(signals_h)}건 | 9: {len(signals_i)}건 | 10: {len(signals_j)}건")
 
 
 if __name__ == '__main__':
