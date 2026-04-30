@@ -1,1 +1,4 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d,rsi14,ret5d,hold_days
+1,DGNX,2026-04-30,07:10 KST,1.82,7.2,33.3,-48.3,7.0,1.1,1.91,1.46,,,,
+3,DGNX,2026-04-30,07:10 KST,1.82,7.2,33.3,,7.0,1.11,1.91,1.46,-23.8,,,
+4,DGNX,2026-04-30,07:10 KST,1.82,,33.3,,,,2.18,,,17.8,-53.6,30.0
