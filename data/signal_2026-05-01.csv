@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,dist_52w,ret_1d,gap_pct,atr_change,hold_days
+3,INDP,2026-05-01,07:02 KST,2.14,27.0,30.4,-23.6,4.0,0.0,2.25,1.71,,,,,
+8,WTO,2026-05-01,07:02 KST,1.5,9.2,,,,,2.1,1.2,-99.9,-19.1,26.1,53.3,20.0
