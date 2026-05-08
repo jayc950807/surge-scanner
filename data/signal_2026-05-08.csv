@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price
+3,GIG,2026-05-08,07:17 KST,5.8,1.0,22.4,-13.9,4,1.4,6.09,4.64
