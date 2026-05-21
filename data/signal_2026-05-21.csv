@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,ret5d,intraday,consec_down,vol_avg,tp_price,hold_days
+5,ASTN,2026-05-21,07:35 KST,6.92,-28.0,23.1,7,872581,7.61,30
