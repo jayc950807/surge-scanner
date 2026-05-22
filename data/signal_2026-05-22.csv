@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg
+3,STRO,2026-05-22,07:21 KST,25.57,15.1,24.3,-16.5,5.0,1.23,26.85,20.46,,,,
+4,YMT,2026-05-22,07:21 KST,1.05,,34.8,,,,1.26,,23.5,-43.5,30.0,
+5,ASTN,2026-05-22,07:21 KST,5.51,,24.8,,8.0,,6.06,,,-41.3,30.0,1066011.0
