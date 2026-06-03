@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg
+3,BLSG,2026-06-03,08:18 KST,2.67,17.8,20.3,-15.8,4.0,0.38,2.8,2.14,,,,
+4,KUST,2026-06-03,08:18 KST,1.81,,89.1,,,,2.17,,21.0,-42.9,30.0,
+5,PCLA,2026-06-03,08:18 KST,6.17,,22.2,,6.0,,6.79,,,-37.6,30.0,4416369.0
