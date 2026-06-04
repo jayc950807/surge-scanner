@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,ret5d,intraday,consec_down,vol_avg,tp_price,hold_days
+5,QNTM,2026-06-04,07:35 KST,4.48,-36.2,21.4,6,494298,4.93,30
