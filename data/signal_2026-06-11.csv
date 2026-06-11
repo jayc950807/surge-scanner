@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+4,PPBT,2026-06-11,08:06 KST,1.54,20.8,55.4,-50.2,1.85,30
+4,CRMT,2026-06-11,08:06 KST,2.69,22.6,52.6,-65.7,3.23,30
