@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days,consec_down,vol_avg
+4,AVAT,2026-06-15,08:14 KST,1.17,7.9,38.7,-82.1,1.4,30,,
+4,CRMT,2026-06-15,08:14 KST,2.41,23.7,36.5,-63.0,2.89,30,,
+5,TDIC,2026-06-15,08:14 KST,5.43,,22.6,-56.6,5.97,30,5.0,1659618.0
