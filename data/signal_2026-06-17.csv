@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,ret5d,vol_avg,hold_days
+3,UPLD,2026-06-17,07:57 KST,5.17,20.7,29.4,-14.7,4,0.58,5.43,4.14,,,
+5,NBIZ,2026-06-17,07:57 KST,6.88,,32.8,,5,,7.57,,-47.2,2883620.0,30.0
