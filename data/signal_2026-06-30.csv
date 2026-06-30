@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d,rsi14,ret5d,hold_days,vol_avg
+1,WHLR,2026-06-30,07:31 KST,1.25,16.7,28.3,-33.9,6.0,1.6,1.31,1.0,,,,,
+3,ZJYL,2026-06-30,07:31 KST,1.82,16.5,20.3,,4.0,0.0,1.91,1.46,-18.4,,,,
+4,TC,2026-06-30,07:31 KST,1.85,,477.9,,,,2.22,,,13.1,-79.3,30.0,
+5,SOC,2026-06-30,07:31 KST,3.08,,49.0,,8.0,,3.39,,,,-65.5,30.0,8668821.0
