@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days,consec_down,vol_avg
+4,JAGX,2026-07-17,07:05 KST,1.3,20.5,39.2,-43.7,1.56,30,,
+4,VIVK,2026-07-17,07:05 KST,2.26,19.6,97.9,-56.9,2.71,30,,
+5,RGNX,2026-07-17,07:05 KST,9.89,,21.6,-29.1,10.88,30,6.0,3182921.0
