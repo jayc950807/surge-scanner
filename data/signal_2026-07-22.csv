@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days,vol_avg,vol_20d,vol_ratio,macd_hist,stoch_k
+3,WBX,2026-07-22,07:30 KST,3.6,28.3,20.8,-12.6,6.0,1.41,3.78,2.88,,,,,,,,
+4,VIVK,2026-07-22,07:30 KST,1.63,,44.0,,,,1.96,,22.5,-63.7,30.0,,,,,
+5,NXTC,2026-07-22,07:30 KST,4.4,,22.9,,5.0,,4.84,,,-33.6,30.0,6225987.0,,,,
+10,ENRD,2026-07-22,07:30 KST,5.46,,,,,,6.01,4.37,29.7,,5.0,,11.1,2.24,0.0216,14.2
