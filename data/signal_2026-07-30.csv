@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,rsi14,ret5d,hold_days
+1,CVLG,2026-07-30,07:23 KST,36.85,14.2,20.8,-18.0,7.0,3.4,38.69,29.48,,,
+4,MBRX,2026-07-30,07:23 KST,1.02,,32.7,,,,1.22,,21.2,-51.0,30.0
