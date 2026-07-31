@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days,rsi7,vol_20d,macd_hist,gap_pct,sma5,sl_price
+4,KPTI,2026-07-31,07:13 KST,1.92,16.0,35.0,-74.1,2.3,30,,,,,,
+7,TEUP,2026-07-31,07:13 KST,2.54,,,,3.56,20,23.4,16.0,0.0212,9.8,2.69,2.03
+7,CRMU,2026-07-31,07:13 KST,1.54,,,,2.16,20,27.5,10.3,0.0207,6.9,1.62,1.23
