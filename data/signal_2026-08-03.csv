@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+4,EMAT,2026-08-03,07:18 KST,2.95,16.7,30.9,-41.2,3.54,30
