@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d
+1,TWG,2026-08-04,07:19 KST,1.49,15.9,25.0,-32.9,6,3.5,1.56,1.19,
+3,INTJ,2026-08-04,07:19 KST,2.5,22.6,29.2,,6,0.0,2.63,2.0,-16.7
+3,SMCZ,2026-08-04,07:19 KST,5.57,29.7,23.7,,4,0.91,5.85,4.46,-21.8
