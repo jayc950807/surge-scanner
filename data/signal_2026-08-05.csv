@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,rsi14,atr_ratio,intra_pct,ma20_pos,rev_growth,ret1d,vol_ratio,macd_hist,ret_1d,ret_5d,hold_days
+1,VWAV,2026-08-05,07:20 KST,1.3,7.3,24.8,-24.4,12.0,0.8,1.36,1.04,,,,,,,,,,,
+2,INHD,2026-08-05,07:20 KST,8.9,0.4,,,,,10.23,7.12,7.4,4.0,17.4,-73.7,94.9,,,,,,
+3,VWAV,2026-08-05,07:20 KST,1.3,7.3,24.8,,12.0,0.78,1.36,1.04,,,,,,-12.8,,,,,
+9,GFSG,2026-08-05,07:20 KST,4.13,,,,,,4.54,3.3,25.3,,,,,,4.94,0.0945,-12.3,7.6,5.0
