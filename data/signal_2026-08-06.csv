@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,rsi14,atr_ratio,intra_pct,ma20_pos,rev_growth,tp_price,sl_price,ret5d,intraday,consec_down,vol_avg,hold_days
+2,INHD,2026-08-06,10:14 KST,8.93,0.6,7.5,4.0,19.5,-72.4,94.9,10.27,7.14,,,,,
+2,JDZG,2026-08-06,10:14 KST,3.59,1.9,5.8,4.0,18.4,-90.7,66.2,4.13,2.87,,,,,
+5,RKLZ,2026-08-06,10:14 KST,3.45,,,,,,,3.8,,-29.9,24.1,6.0,7956246.0,30.0
