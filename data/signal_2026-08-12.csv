@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d,rsi14,ret5d,hold_days
+1,CRIS,2026-08-12,06:53 KST,1.67,8.8,47.2,-58.5,7.0,2.5,1.75,1.34,,,,
+3,CRIS,2026-08-12,06:53 KST,1.67,8.8,47.2,,7.0,2.45,1.75,1.34,-27.7,,,
+4,CRIS,2026-08-12,06:53 KST,1.67,,47.2,,,,2.0,,,22.3,-63.3,30.0
