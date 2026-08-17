@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+4,WATR,2026-08-17,06:41 KST,2.51,12.1,55.0,-43.5,3.01,30
