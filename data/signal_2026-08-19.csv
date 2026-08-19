@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,vol_20d,dist_52w,bb_pctb,ret_1d,gap_pct,hold_days
+3,BDRX,2026-08-19,06:35 KST,1.26,24.5,21.1,-9.4,4.0,0.0,1.32,1.01,,,,,,
+6,EHGO,2026-08-19,06:35 KST,1.21,,,,,,1.82,0.97,15.7,-90.5,-0.189,-33.1,49.2,20.0
