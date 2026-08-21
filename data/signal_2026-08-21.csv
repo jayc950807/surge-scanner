@@ -1,1 +1,2 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+4,MI,2026-08-21,06:35 KST,3.0,22.6,42.9,-63.0,3.6,30
