@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days,consec_down,vol_avg,rsi7,dist_52w,ret_1d,gap_pct,atr_change,sl_price
+4,SMJF,2026-08-27,14:21 KST,1.47,22.2,1150.0,-86.9,1.76,30,,,,,,,,
+4,KXIN,2026-08-27,14:21 KST,1.5,14.4,295.5,-72.1,1.8,30,,,,,,,,
+5,IPST,2026-08-27,14:21 KST,4.71,,28.0,-54.3,5.18,30,5.0,7460770.0,,,,,,
+8,MIMI,2026-08-27,14:21 KST,1.29,,,,1.81,20,,,17.4,-99.1,-28.3,27.8,35.7,1.03
