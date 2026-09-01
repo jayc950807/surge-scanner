@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,ret5d,vol_avg,hold_days,vol_20d,rsi14,vol_ratio,macd_hist,stoch_k
+3,NTCL,2026-09-01,08:17 KST,1.88,16.9,21.3,-17.2,4.0,2.73,1.97,1.5,,,,,,,,
+5,ALMS,2026-09-01,08:17 KST,9.47,,26.2,,5.0,,10.42,,-60.5,2210047.0,30.0,,,,,
+5,DBGI,2026-09-01,08:17 KST,4.89,,42.6,,8.0,,5.38,,-41.4,252774.0,30.0,,,,,
+10,FGL,2026-09-01,08:17 KST,17.23,,,,,,18.95,13.78,,,5.0,11.5,18.1,2.74,0.1178,12.4
