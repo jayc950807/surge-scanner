@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,price,ret5d,intraday,consec_down,vol_avg,tp_price,hold_days
+5,PSQL,2026-09-04,07:56 KST,7.96,-58.3,30.6,5,1020644,8.76,30
