@@ -1,1 +1,6 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret1d,consec_down,dist_low5,tp_price,sl_price,ret5d,vol_avg,hold_days
+3,CRBP,2026-09-09,08:15 KST,8.86,19.9,21.1,-16.4,4,0.11,9.3,7.09,,,
+3,BANL,2026-09-09,08:15 KST,5.62,21.0,23.7,-13.1,4,0.0,5.9,4.5,,,
+3,TNON,2026-09-09,08:15 KST,2.44,21.0,52.9,-27.4,14,1.67,2.56,1.95,,,
+3,NCTY,2026-09-09,08:15 KST,3.79,29.7,22.1,-15.8,4,2.16,3.98,3.03,,,
+5,FGL,2026-09-09,08:15 KST,6.79,,50.3,,5,,7.47,,-60.6,292471.0,30.0
