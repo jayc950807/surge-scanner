@@ -1,10 +1,10 @@
 {
-  "last_tracked": "2026-09-17 23:42:29",
-  "open_count": 10,
+  "last_tracked": "2026-09-18 23:27:07",
+  "open_count": 6,
   "pending_count": 0,
-  "closed_count": 448,
-  "win_count": 305,
+  "closed_count": 452,
+  "win_count": 308,
   "loss_count": 129,
-  "expired_count": 14,
-  "fail_count": 143
+  "expired_count": 15,
+  "fail_count": 144
 }
