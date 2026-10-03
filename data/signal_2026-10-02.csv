@@ -1,1 +1,2 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,price,rsi14,intraday,ret5d,tp_price,hold_days
+4,SAIQ,2026-10-02,09:17 KST,1.85,12.6,44.8,-82.3,2.22,30
