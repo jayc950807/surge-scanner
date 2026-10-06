@@ -1,0 +1,5 @@
+strategy,ticker,date,scan_time,price,rsi7,intraday,ret3d,consec_down,dist_low5,tp_price,sl_price,ret1d,ret5d,vol_avg,hold_days
+1,NXH,2026-10-05,10:52 KST,2.06,4.9,28.7,-29.9,9,2.0,2.16,1.65,,,,
+1,WOK,2026-10-05,10:52 KST,1.47,11.5,22.9,-17.2,6,4.6,1.54,1.17,,,,
+3,NXH,2026-10-05,10:52 KST,2.06,4.9,28.7,,9,1.98,2.16,1.65,-25.4,,,
+5,HOST,2026-10-05,10:52 KST,3.09,,24.1,,7,,3.4,,,-37.6,202585.0,30.0
