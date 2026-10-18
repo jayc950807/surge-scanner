@@ -43,6 +43,7 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 # ─── Import from shared_config ────────────────────────────────────────────────
 from shared_config import (
     STRATEGY_CONFIG, STRATEGY_NAMES, ACTIVE_STRATEGIES, COST_PCT, DATA_DIR, KST,
+    get_expected_trading_date,
     download_batch, extract_ticker_df
 )
 
@@ -87,7 +88,7 @@ def _fix_legacy_strategy(df):
 def load_csv(path, cols=None):
     """Load CSV file with optional column validation."""
     if os.path.exists(path):
-        df = pd.read_csv(path, dtype=str)
+        df = pd.read_csv(path, dtype=str, keep_default_na=False, na_filter=False)
         if cols:
             for c in cols:
                 if c not in df.columns:
@@ -161,6 +162,29 @@ def get_entry_for_signal(ticker, signal_date):
     except Exception as e:
         logging.warning(f"get_entry_for_signal({ticker}, {signal_date}) failed: {e}")
     return None, None, None
+
+
+def drop_unfinished_bar(hist):
+    """장 마감 전에 실행되면 오늘의 미완성 일봉을 판정에서 뺀다."""
+    if hist is None or hist.empty:
+        return hist
+    try:
+        last_done = pd.Timestamp(get_expected_trading_date())
+        return hist[hist.index.normalize() <= last_done]
+    except Exception:
+        return hist
+
+
+def safe_int(v, default):
+    try:
+        x = float(v)
+        return int(x) if not np.isnan(x) else default
+    except (TypeError, ValueError):
+        return default
+
+
+CLOSE_FIELDS = ['close_date', 'close_price', 'result_pct', 'result_status',
+                'tp_hit_date', 'gross_pct', 'cost_pct', 'max_achievement_pct']
 
 
 def net_of_cost(gross_pct):
@@ -323,7 +347,7 @@ def archive_removed_strategies():
         path = os.path.join(DATA_DIR, name)
         if not os.path.exists(path):
             continue
-        df = pd.read_csv(path, dtype=str)
+        df = pd.read_csv(path, dtype=str, keep_default_na=False, na_filter=False)
         if df.empty or 'strategy' not in df.columns:
             continue
         df['strategy'] = df['strategy'].replace(_LEGACY_STRAT_MAP)
@@ -347,7 +371,11 @@ def migrate_to_v5():
     if os.path.exists(V5_MARKER):
         return
     print("  [v5] 최초 1회 — 전체 기록을 새 규칙으로 재계산합니다")
-    reverify_all()
+    res = reverify_all() or {'attempted': 0, 'failed': 0}
+    # 데이터 조회 실패가 많으면(5% 초과) 완료 표시를 남기지 않고 다음 실행 때 다시 시도
+    if res['attempted'] and res['failed'] > max(3, 0.05 * res['attempted']):
+        print(f"  [v5] 재계산 실패 {res['failed']}/{res['attempted']}건 → 다음 실행 때 다시 시도")
+        return
     with open(V5_MARKER, 'w') as f:
         f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
 
@@ -562,7 +590,7 @@ def update_open_positions():
         entry_date = row['entry_date']
         tp_price = float(row['tp_price']) if row['tp_price'] else 0
         sl_price_val = float(row['sl_price']) if row['sl_price'] else 0
-        max_hold = int(row['max_hold']) if row['max_hold'] else config.get('max_hold', 5)
+        max_hold = safe_int(row.get('max_hold'), config.get('max_hold', 5))
 
         # 히스토리 가져오기 (캐시)
         cache_key = (ticker, entry_date)
@@ -570,10 +598,24 @@ def update_open_positions():
             hist = fetch_price_data(ticker, entry_date)
             hist_cache[cache_key] = hist
 
-        hist = hist_cache[cache_key]
+        hist = drop_unfinished_bar(hist_cache[cache_key])
 
         if hist is None or hist.empty:
             continue
+
+        # [v5] 보유 중 역분할이 있으면 새로 받은 가격은 분할 보정돼 있으므로,
+        # 진입가·목표가·손절가를 같은 기준(새 데이터의 진입일 시가)으로 맞춘다.
+        if row.get('method', '') == METHOD_V5:
+            on_entry = hist[hist.index.normalize() == pd.to_datetime(entry_date)]
+            if len(on_entry):
+                o_new = float(on_entry['Open'].iloc[0])
+                if o_new > 0 and abs(o_new / entry_price - 1) > 0.02:
+                    entry_price = o_new
+                    tp_price = round(o_new * (1 + config.get('tp_pct', 0.05)), 4)
+                    sl_price_val = round(o_new * (1 + config.get('sl_pct', -0.2)), 4)
+                    open_pos.at[idx, 'entry_price'] = str(round(o_new, 4))
+                    open_pos.at[idx, 'tp_price'] = str(tp_price)
+                    open_pos.at[idx, 'sl_price'] = str(sl_price_val)
 
         # [v5] 진입일(D+1) 시가에 매수 → 진입일부터 추적.
         # (예전 v4 기록이 남아 있다면 신호일 종가 매수였으므로 다음 날부터)
@@ -731,18 +773,25 @@ def reverify_all():
 
     if not closed_pos.empty:
         for _, row in closed_pos.iterrows():
-            all_positions.append(row.to_dict())
+            d = row.to_dict(); d['_src'] = 'closed'
+            all_positions.append(d)
 
     if not open_pos.empty:
         active = open_pos[open_pos['status'] == 'OPEN']
         for _, row in active.iterrows():
-            all_positions.append(row.to_dict())
+            d = row.to_dict(); d['_src'] = 'open'
+            all_positions.append(d)
 
     if not all_positions:
         print("  재검증할 포지션 없음")
-        return
+        return {'attempted': 0, 'failed': 0}
 
     print(f"  총 {len(all_positions)}건 재검증 시작...")
+    failed = 0
+
+    def keep_as_is(p):
+        # 다시 계산하지 못한 건은 원래 있던 파일로 그대로 돌려놓는다
+        (new_closed if p.get('_src') == 'closed' else new_open).append(p)
 
     # entry 캐시: 동일 티커/날짜 → 동일 entry_price 보장
     entry_cache = {}
@@ -775,11 +824,8 @@ def reverify_all():
 
         if entry_date is None or entry_price is None:
             print(f"    SKIP: [{strategy}] {ticker} {signal_date} — D+1 데이터 없음")
-            # 데이터 없는 건: 이미 청산된 기록이면 그대로 두고, 진행 중이던 건은 OPEN 으로 남긴다
-            if pos.get('status') == 'CLOSED' or pos.get('result_status'):
-                new_closed.append(pos)
-            else:
-                new_open.append(pos)
+            failed += 1
+            keep_as_is(pos)
             continue
 
         # 2. TP/SL 재계산
@@ -798,12 +844,12 @@ def reverify_all():
             hist_cache[hist_key] = hist
             time.sleep(0.5)
 
-        hist = hist_cache[hist_key]
+        hist = drop_unfinished_bar(hist_cache[hist_key])
 
         if hist is None or hist.empty:
             print(f"    SKIP: [{strategy}] {ticker} — 가격 데이터 없음")
-            pos['result_status'] = pos.get('result_status', 'NO_DATA')
-            new_closed.append(pos)
+            failed += 1
+            keep_as_is(pos)
             continue
 
         entry_dt = pd.to_datetime(entry_date)
@@ -811,8 +857,8 @@ def reverify_all():
         hist_tracking = hist[hist.index.normalize() >= entry_dt]
 
         if hist_tracking.empty:
-            pos['result_status'] = 'NO_DATA'
-            new_closed.append(pos)
+            failed += 1
+            keep_as_is(pos)
             continue
 
         # 4. [v4] 날짜순 TP/SL 선도달 체크로 재판정 (trailing 제거)
@@ -874,6 +920,9 @@ def reverify_all():
 
             pos['status'] = 'OPEN'
             pos['last_updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            for f_ in CLOSE_FIELDS:      # 예전(v4) 청산 결과가 남지 않게 비운다
+                pos[f_] = ''
+            pos['achievement_pct'] = str(round(max_ach, 1)) if max_ach else ''
 
             if old_result:
                 print(f"    CHANGED: [{strategy}] {ticker} {signal_date}: {old_result} → STILL OPEN "
@@ -894,6 +943,8 @@ def reverify_all():
             pending_positions.append(row.to_dict())
 
     # 저장
+    for p_ in new_closed + new_open:
+        p_.pop('_src', None)
     new_closed_df = pd.DataFrame(new_closed)
     if not new_closed_df.empty:
         for c in CLOSED_COLS:
@@ -924,6 +975,8 @@ def reverify_all():
     closed_n = n_win + n_loss + n_exp
     win_rate = n_win / closed_n * 100 if closed_n > 0 else 0
     print(f"    승률: {win_rate:.1f}%  (실패 = LOSS + EXPIRED = {n_loss + n_exp}건)")
+    print(f"    다시 계산 못 한 건: {failed}건")
+    return {'attempted': len(all_positions), 'failed': failed}
 
 
 # ─── Init: Backfill from history.csv ─────────────────────────────────────────
@@ -1023,14 +1076,11 @@ def main():
     archive_removed_strategies()
 
     if args.reverify or args.reset:
-        reverify_all()
-        with open(V5_MARKER, 'w') as f:
-            f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
-        print("\n[+] 요약 업데이트")
-        generate_tracker_summary()
-        elapsed = time.time() - t0
-        print(f"\n  완료: {elapsed:.0f}초")
-        return
+        res = reverify_all() or {'attempted': 0, 'failed': 0}
+        if not (res['attempted'] and res['failed'] > max(3, 0.05 * res['attempted'])):
+            with open(V5_MARKER, 'w') as f:
+                f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
+        # 재검증한 날에도 그날 신호 등록·추적은 이어서 한다
 
     if args.init:
         print("\n[0] 초기화: history.csv → open_positions.csv")
