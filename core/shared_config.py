@@ -23,59 +23,27 @@ LEVERAGED_ETF = {
     'TSLL','TSDD','NVDL','NVDS','CONL','CONY','BITX','BITU',
 }
 
-# ─── Strategy Configuration ──────────────────────────────────────────────────
-# v4: trailing_pct 필드 제거. 모든 전략이 TP / SL / max_hold 세 기준만 사용.
+# ─── Strategy Configuration (v5) ─────────────────────────────────────────────
+# v5: 전략 1·3만 운영. 2·4~10 은 제거(기록은 data/archive_removed_strategies/ 에 보관).
+ACTIVE_STRATEGIES = ['1', '3']
+
 STRATEGY_CONFIG = {
     '1': {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5},
-    '2': {'tp_pct': 0.15, 'sl_pct': -0.2, 'max_hold': 10},
     '3': {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5},
-    '4': {'tp_pct': 0.2, 'sl_pct': -0.2, 'max_hold': 30},
-    '5': {'tp_pct': 0.1, 'sl_pct': -0.2, 'max_hold': 30},
-    '6': {'tp_pct': 0.5, 'sl_pct': -0.2, 'max_hold': 20},
-    '7': {'tp_pct': 0.4, 'sl_pct': -0.2, 'max_hold': 20},
-    '8': {'tp_pct': 0.4, 'sl_pct': -0.2, 'max_hold': 20},
-    '9': {'tp_pct': 0.1, 'sl_pct': -0.2, 'max_hold': 5},
-    '10': {'tp_pct': 0.1, 'sl_pct': -0.2, 'max_hold': 5},
 }
 
 STRATEGY_NAMES = {
     '1': '1차_1_+5%5일 · 급락반등',
-    '2': '1차_2_+15%10일 · 고수익',
     '3': '1차_3_+5%5일 · 과매도',
-    '4': '1차_4_+20%30일 · 초저가',
-    '5': '1차_5_+10%30일 · 속반등',
-    '6': '2차_1_+50%20일 · 바닥급등',
-    '7': '2차_2_+40%20일 · MACD전환',
-    '8': '2차_3_+40%20일 · ATR확대',
-    '9': '2차_4_+10%5일 · 과매도단타',
-    '10': '2차_5_+10%5일 · MACD단타',
 }
 
-STRATEGY_CONDITIONS = {
-    '1': None,
-    '2': None,
-    '3': None,
-    '4': None,
-    '5': None,
-    '6': None,
-    '7': None,
-    '8': None,
-    '9': None,
-    '10': None,
-}
-
-STRATEGY_WINRATE = {
-    '1': '90.1%',
-    '2': '90.3%',
-    '3': '86.9%',
-    '4': '97.7%',
-    '5': '91.0%',
-    '6': '87.5%',
-    '7': '90.0%',
-    '8': '90.0%',
-    '9': '100.0%',
-    '10': '90.0%',
-}
+# ─── Execution Model (v5) ────────────────────────────────────────────────────
+# 스캔은 장 마감 뒤에 돌기 때문에 신호일 종가에는 살 수 없다 → 다음 거래일 시가 진입.
+ENTRY_MODE = 'next_open'
+# 왕복 거래비용(수수료+호가차이+슬리피지). 결과(result_pct)에서 차감된다.
+COST_PCT = 1.0
+# 실험 지표: 신호일 종가에 사서 다음날 시가에 판다면? (일봉 기준, 호가 차이 착시 가능 → 참고용)
+TRACK_OVERNIGHT = True
 
 # ─── Common Filters ──────────────────────────────────────────────────────────
 MIN_PRICE = 1.0
@@ -248,6 +216,7 @@ def get_all_tickers():
     import requests
 
     tickers = set()
+    excluded_etf = set()
     urls = [
         "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt",
         "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
@@ -257,12 +226,24 @@ def get_all_tickers():
         try:
             resp = requests.get(url, timeout=15)
             if resp.status_code == 200:
-                for line in resp.text.strip().split('\n')[1:]:
+                lines = resp.text.strip().split('\n')
+                header = [h.strip() for h in lines[0].split('|')]
+                sym_col = 'Symbol' if 'Symbol' in header else ('ACT Symbol' if 'ACT Symbol' in header else None)
+                etf_col = header.index('ETF') if 'ETF' in header else None
+                test_col = header.index('Test Issue') if 'Test Issue' in header else None
+                for line in lines[1:]:
                     parts = line.split('|')
-                    if len(parts) >= 2:
-                        sym = parts[1].strip() if 'nasdaqtraded' in url else parts[0].strip()
-                        if sym and sym.isalpha() and 1 <= len(sym) <= 5 and sym != 'Symbol':
-                            tickers.add(sym)
+                    if sym_col is None or len(parts) < len(header):
+                        continue
+                    sym = parts[header.index(sym_col)].strip()
+                    # v5: ETF·ETN·레버리지 상품과 테스트 종목은 제외 (전략은 개별 주식 대상)
+                    if etf_col is not None and parts[etf_col].strip() == 'Y':
+                        excluded_etf.add(sym)
+                        continue
+                    if test_col is not None and parts[test_col].strip() == 'Y':
+                        continue
+                    if sym and sym.isalpha() and 1 <= len(sym) <= 5 and sym != 'Symbol':
+                        tickers.add(sym)
                 print(f"  [{url.split('/')[-1]}] {len(tickers)} tickers")
         except requests.RequestException as e:
             print(f"  Warning: {url.split('/')[-1]}: {e}")
@@ -284,8 +265,9 @@ def get_all_tickers():
             print(f"  Warning: SEC fallback failed: {e}")
 
     tickers -= LEVERAGED_ETF
+    tickers -= excluded_etf   # 다른 목록에서 ETF 표시 없이 들어온 경우도 제외
     tickers = {t for t in tickers if not t.endswith('W') and not any(c.isdigit() for c in t)}
-    print(f"  Total: {len(tickers)} tickers")
+    print(f"  Total: {len(tickers)} tickers (ETF/ETN {len(excluded_etf)}개 제외)")
     return sorted(tickers)
 
 

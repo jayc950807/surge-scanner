@@ -28,42 +28,17 @@ from shared_config import (
 # ============================================================================
 
 class TestStrategyConfig:
-    """전략 설정값이 올바른지 검증"""
+    """v5: 전략 1·3만 운영"""
 
-    def test_all_strategies_exist(self):
-        for s in ['A', 'B', 'C', 'D', 'E']:
-            assert s in STRATEGY_CONFIG, f"Strategy {s} missing"
+    def test_only_active_strategies(self):
+        assert set(STRATEGY_CONFIG) == {'1', '3'}
+        assert set(STRATEGY_NAMES) == {'1', '3'}
 
-    def test_tp_values(self):
-        assert STRATEGY_CONFIG['A']['tp_pct'] == 0.05
-        assert STRATEGY_CONFIG['B']['tp_pct'] == 0.15
-        assert STRATEGY_CONFIG['C']['tp_pct'] == 0.05
-        assert STRATEGY_CONFIG['D']['tp_pct'] == 0.20
-        assert STRATEGY_CONFIG['E']['tp_pct'] == 0.10
-
-    def test_sl_values(self):
-        assert STRATEGY_CONFIG['A']['sl_pct'] == -0.20
-        assert STRATEGY_CONFIG['B']['sl_pct'] == -0.20
-        assert STRATEGY_CONFIG['C']['sl_pct'] == -0.20
-        assert STRATEGY_CONFIG['D']['sl_pct'] is None  # 손절 없음
-        assert STRATEGY_CONFIG['E']['sl_pct'] is None  # 손절 없음
-
-    def test_max_hold(self):
-        assert STRATEGY_CONFIG['A']['max_hold'] == 5
-        assert STRATEGY_CONFIG['B']['max_hold'] == 10
-        assert STRATEGY_CONFIG['C']['max_hold'] == 5
-        assert STRATEGY_CONFIG['D']['max_hold'] == 30
-        assert STRATEGY_CONFIG['E']['max_hold'] == 30
-
-    def test_trailing_only_strategy_a(self):
-        """트레일링 스탑은 A만 -3%"""
-        assert STRATEGY_CONFIG['A']['trailing_pct'] == -0.03
-        for s in ['B', 'C', 'D', 'E']:
-            assert STRATEGY_CONFIG[s]['trailing_pct'] is None
-
-    def test_strategy_names(self):
-        for s in ['A', 'B', 'C', 'D', 'E']:
-            assert s in STRATEGY_NAMES
+    def test_values(self):
+        for s in ('1', '3'):
+            assert STRATEGY_CONFIG[s]['tp_pct'] == 0.05
+            assert STRATEGY_CONFIG[s]['sl_pct'] == -0.20
+            assert STRATEGY_CONFIG[s]['max_hold'] == 5
 
     def test_leveraged_etf_exclusion(self):
         """주요 레버리지 ETF가 제외 목록에 있는지"""
@@ -206,46 +181,20 @@ class TestTPSLLogic:
     """TP/SL 판정이 전략 설정과 일치하는지"""
 
     def _check_tp(self, strategy, entry_price, high_price):
-        """고가가 TP에 도달했는지"""
-        tp_pct = STRATEGY_CONFIG[strategy]['tp_pct']
-        tp_price = entry_price * (1 + tp_pct)
-        return high_price >= tp_price
+        return high_price >= entry_price * (1 + STRATEGY_CONFIG[strategy]['tp_pct'])
 
     def _check_sl(self, strategy, entry_price, low_price):
-        """저가가 SL에 도달했는지"""
-        sl_pct = STRATEGY_CONFIG[strategy]['sl_pct']
-        if sl_pct is None:
-            return False  # D, E는 손절 없음
-        sl_price = entry_price * (1 + sl_pct)
-        return low_price <= sl_price
+        return low_price <= entry_price * (1 + STRATEGY_CONFIG[strategy]['sl_pct'])
 
-    def test_strategy_a_tp_5pct(self):
-        assert self._check_tp('A', 10.0, 10.50) is True
-        assert self._check_tp('A', 10.0, 10.49) is False
+    def test_tp_5pct(self):
+        for s in ('1', '3'):
+            assert self._check_tp(s, 10.0, 10.50) is True
+            assert self._check_tp(s, 10.0, 10.49) is False
 
-    def test_strategy_b_tp_15pct(self):
-        assert self._check_tp('B', 10.0, 11.50) is True
-        assert self._check_tp('B', 10.0, 11.49) is False
-
-    def test_strategy_d_no_sl(self):
-        """D는 손절 없음"""
-        assert self._check_sl('D', 10.0, 1.0) is False
-
-    def test_strategy_e_no_sl(self):
-        """E는 손절 없음"""
-        assert self._check_sl('E', 10.0, 1.0) is False
-
-    def test_strategy_a_sl_20pct(self):
-        assert self._check_sl('A', 10.0, 8.00) is True   # -20%
-        assert self._check_sl('A', 10.0, 8.01) is False  # -19.9%
-
-    def test_max_hold_expired(self):
-        """보유기간 초과 = EXPIRED"""
-        for s in ['A', 'B', 'C', 'D', 'E']:
-            max_hold = STRATEGY_CONFIG[s]['max_hold']
-            assert max_hold > 0
-            # 보유일 > max_hold → 만기
-            assert max_hold + 1 > max_hold
+    def test_sl_20pct(self):
+        for s in ('1', '3'):
+            assert self._check_sl(s, 10.0, 8.00) is True
+            assert self._check_sl(s, 10.0, 8.01) is False
 
 
 if __name__ == '__main__':
