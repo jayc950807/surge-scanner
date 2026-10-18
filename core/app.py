@@ -32,8 +32,24 @@ STRAT_KR = {'1': '급락반등', '3': '과매도'}
 st.markdown(f"""
 <style>
 :root {{ color-scheme: dark; }}
+header[data-testid="stHeader"] {{ background:transparent; height:0; }}
+#MainMenu, footer, .stDeployButton {{ display:none; }}
+.grid {{ display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }}
+.grid2 {{ display:grid; gap:8px; grid-template-columns:1fr 1fr; }}
+.kpi.hero {{ grid-column:1 / -1; }}
+.row {{ display:flex; justify-content:space-between; align-items:center; gap:8px; }}
+.chips {{ display:flex; flex-wrap:wrap; gap:6px 12px; color:{C['sub']}; font-size:0.84rem; margin-top:8px; }}
+.chips b {{ color:{C['text']}; font-weight:600; }}
+@media (max-width:640px) {{
+  .block-container {{ padding-left:0.9rem; padding-right:0.9rem; padding-top:1.2rem; }}
+  .ss-h1 {{ font-size:1.35rem; }}
+  .kpi {{ padding:12px 13px; min-height:0; }}
+  .kpi .v {{ font-size:1.35rem; }}
+  .kpi.hero .v {{ font-size:1.8rem; }}
+  .ss-sec {{ margin:22px 0 8px; }}
+}}
 .stApp {{ background:{C['bg']}; color:{C['text']}; }}
-.block-container {{ padding-top:3.2rem; padding-bottom:3rem; max-width:1180px; }}
+.block-container {{ padding-top:2.2rem; padding-bottom:3rem; max-width:1180px; }}
 h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .ss-h1 {{ font-size:1.6rem; font-weight:700; margin:0; }}
 .ss-sub {{ color:{C['sub']}; font-size:0.95rem; margin-top:2px; }}
@@ -45,7 +61,7 @@ h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .kpi .d {{ color:{C['muted']}; font-size:0.78rem; margin-top:2px; }}
 .card {{ background:{C['surface']}; border:1px solid {C['line']}; border-radius:12px; padding:14px 16px; margin-bottom:10px; }}
 .tk {{ font-size:1.25rem; font-weight:700; letter-spacing:0.02em; }}
-.badge {{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.74rem; font-weight:600; border:1px solid {C['line']}; color:{C['sub']}; margin-right:4px; vertical-align:middle; }}
+.badge {{ display:inline-block; white-space:nowrap; padding:2px 8px; border-radius:999px; font-size:0.74rem; font-weight:600; border:1px solid {C['line']}; color:{C['sub']}; margin-right:4px; vertical-align:middle; }}
 .b1 {{ border-color:{C['blue']}66; color:{C['blue']}; }}
 .b3 {{ border-color:{C['warn']}66; color:{C['warn']}; }}
 .pill {{ display:inline-block; padding:3px 10px; border-radius:6px; font-weight:700; font-size:0.85rem; }}
@@ -140,8 +156,8 @@ def pill(status):
     return f'<span class="pill {cls}">{txt}</span>'
 
 
-def badges(strats):
-    return ''.join(f'<span class="badge b{s}">{STRAT_SHORT.get(s, s)} {STRAT_KR.get(s, "")}</span>' for s in sorted(set(strats)))
+def badges(strats, short=False):
+    return ''.join(f'<span class="badge b{s}">{STRAT_SHORT.get(s, s)}{"" if short else " " + STRAT_KR.get(s, "")}</span>' for s in sorted(set(strats)))
 
 
 def fmt_pct(x, plus=True):
@@ -211,15 +227,16 @@ avg = uniq['result_pct'].mean() if n else np.nan
 n_open = int((open_pos['status'] == 'OPEN').sum()) if not open_pos.empty and 'status' in open_pos else 0
 ret = (final / 1_000_000 - 1) * 100 if n else np.nan
 
-k1, k2, k3, k4, k5 = st.columns(5)
-for col, l, v, dsc, vc in (
-    (k1, '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목", color_pct(ret)),
-    (k2, '중간에 가장 많이 줄었을 때', fmt_pct(mdd * 100) if n else '—', '최고점 대비', C['red'] if n else C['muted']),
-    (k3, '+5% 도달률', fmt_pct(wr, False) if n else '—', f"{n}건 (같은 날 같은 종목은 1건)", C['text']),
-    (k4, '한 번 살 때 평균', fmt_pct(avg) if n else '—', f"비용 {COST_PCT:.0f}% 뺀 값", color_pct(avg)),
-    (k5, '지금 들고 있는 것', f"{n_open}건", '진행 중 포지션', C['text']),
-):
-    col.markdown(f'<div class="kpi"><div class="l">{l}</div><div class="v" style="color:{vc}">{v}</div><div class="d">{dsc}</div></div>', unsafe_allow_html=True)
+kpis = [
+    ('hero', '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목 · 비용 {COST_PCT:.0f}% 포함", color_pct(ret)),
+    ('', '중간에 가장 많이 줄었을 때', fmt_pct(mdd * 100) if n else '—', '최고점 대비', C['red'] if n else C['muted']),
+    ('', '+5% 도달률', fmt_pct(wr, False) if n else '—', f"{n}건", C['text']),
+    ('', '한 번 살 때 평균', fmt_pct(avg) if n else '—', '비용 뺀 값', color_pct(avg)),
+    ('', '지금 들고 있는 것', f"{n_open}건", '진행 중', C['text']),
+]
+st.markdown('<div class="grid2">' + ''.join(
+    f'<div class="kpi {cls}"><div class="l">{l}</div><div class="v" style="color:{vc}">{v}</div><div class="d">{dsc}</div></div>'
+    for cls, l, v, dsc, vc in kpis) + '</div>', unsafe_allow_html=True)
 
 if not has_v5:
     st.markdown(f'<div class="note" style="margin-top:10px">아직 예전 방식(신호일 종가 매수·비용 0)으로 계산된 기록이에요. 다음 스캔 때 전부 새 규칙(다음날 시가 매수·갭 체결·비용 {COST_PCT:.0f}%)으로 다시 계산돼요.</div>', unsafe_allow_html=True)
@@ -241,13 +258,20 @@ else:
     both = sum(1 for r in rows if len(r['strats']) > 1)
     st.markdown(f'<div class="muted" style="margin-bottom:8px">{len(rows)}종목 · 두 전략 모두 해당 {both}종목 · '
                 f'추적상 매수 시점: <b style="color:{C["text"]}">{kst_of_us(sig_date)} 한국시간 시가</b> · 목표 +5% · 손절 −20% · 최대 5거래일</div>', unsafe_allow_html=True)
-    h = '<table class="ss"><tr><th>종목</th><th>전략</th><th class="r">종가</th><th class="r">참고 +5%</th><th class="r">참고 −20%</th><th class="r">RSI7</th><th class="r">일중변동</th><th class="r">당일</th><th class="r">연속하락</th></tr>'
+    cards = ''
     for r in rows:
         p = r['price']
-        h += (f'<tr><td class="tk">{r["ticker"]}</td><td>{badges(r["strats"])}</td>'
-              f'<td class="r">${p:,.2f}</td><td class="r" style="color:#5fd35f">${p*1.05:,.2f}</td><td class="r" style="color:{C["red"]}">${p*0.8:,.2f}</td>'
-              f'<td class="r">{r["rsi"]:.0f}</td><td class="r">{r["intra"]:.0f}%</td><td class="r">{fmt_pct(r["ret1"])}</td><td class="r">{int(float(r["down"])) if str(r["down"]).replace('.','',1).isdigit() else r["down"]}일</td></tr>')
-    st.markdown(h + '</table>', unsafe_allow_html=True)
+        down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
+        cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f}</span></div>'
+                  f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
+                  f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.8:,.2f}</b></span>'
+                  f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
+    cards_list = cards.split('</div></div>')[:-1]
+    head = '</div></div>'.join(cards_list[:6]) + ('</div></div>' if cards_list[:6] else '')
+    st.markdown(f'<div class="grid">{head}</div>', unsafe_allow_html=True)
+    if len(cards_list) > 6:
+        with st.expander(f"나머지 {len(cards_list) - 6}종목 보기"):
+            st.markdown('<div class="grid">' + '</div></div>'.join(cards_list[6:]) + '</div></div></div>', unsafe_allow_html=True)
     st.markdown('<div class="muted" style="margin-top:6px">지금 추적 규칙은 다음 거래일 시가에 산 것으로 계산해요. 신호일 종가에 사서 다음 날 오전에 파는 방식은 별도 실험 지표(하룻밤)로만 기록돼요.</div>', unsafe_allow_html=True)
 
 # ─── 진행 중 ────────────────────────────────────────────────────────────────
@@ -257,9 +281,12 @@ if act.empty:
     st.markdown('<div class="card muted">진행 중인 포지션이 없어요.</div>', unsafe_allow_html=True)
 else:
     act = act.sort_values(['status', 'signal_date'], ascending=[False, False])
-    cols = st.columns(3)
-    i = 0
+    cards = ''; fresh = []
     for tk, x in act.groupby('ticker', sort=False):
+        r0 = x.iloc[0]
+        if r0['status'] == 'OPEN' and (np.isnan(r0.get('days_held', np.nan)) or r0.get('days_held', 0) < 1):
+            fresh.append((tk, list(x['strategy']), r0.get('entry_price')))
+            continue
         r = x.iloc[0]
         ep, cp, ch = r.get('entry_price'), r.get('current_price'), r.get('change_pct')
         if np.isnan(ch) and not np.isnan(ep):
@@ -275,17 +302,21 @@ else:
                     f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted">현재 ${cp:,.2f}</span></div>'
                     f'<div class="bar"><div class="f" style="left:{left}%;width:{max(width,0)}%;background:{fill}"></div><div class="z"></div><div class="m" style="left:calc({pos}% - 2px)"></div></div>'
                     f'<div style="display:flex;justify-content:space-between" class="muted"><span>손절 ${r["sl_price"]:,.2f}</span><span>{int(dh) if not np.isnan(dh) else 0}/{int(mh)}일</span><span>목표 ${r["tp_price"]:,.2f}</span></div>')
-        cols[i % 3].markdown(f'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><span class="tk">{tk}</span>{pill(r["status"])}</div>'
-                             f'<div style="margin:4px 0">{badges(x["strategy"])}</div>{body}</div>', unsafe_allow_html=True)
-        i += 1
+        cards += (f'<div class="card"><div class="row"><span class="tk">{tk}</span>{pill(r["status"])}</div>'
+                  f'<div style="margin:4px 0">{badges(x["strategy"])}</div>{body}</div>')
+    if cards:
+        st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
+    if fresh:
+        with st.expander(f"방금 들어간 {len(fresh)}종목 (아직 변화 없음)"):
+            st.markdown(''.join(f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:1.05rem">{tk}</span> {badges(ss, short=True)}</span>'
+                                f'<span class="muted">진입 ${ep:,.2f}</span></div></div>' for tk, ss, ep in fresh), unsafe_allow_html=True)
 
 # ─── 성과 ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="ss-sec">성과 <small>실제로 사고팔 수 있었던 가격 기준 · 비용 포함</small></div>', unsafe_allow_html=True)
 if n == 0:
     st.markdown('<div class="card muted">아직 끝난 거래가 없어요.</div>', unsafe_allow_html=True)
 else:
-    c1, c2 = st.columns([3, 2])
-    with c1:
+    with st.container():
         st.markdown('<div class="muted">100만 원으로 시작했을 때 잔고</div>', unsafe_allow_html=True)
         base = alt.Chart(curve).encode(x=alt.X('date:T', title=None, axis=alt.Axis(format='%m/%d', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])))
         line = base.mark_line(color=C['blue'], strokeWidth=2).encode(y=alt.Y('equity:Q', title=None, scale=alt.Scale(zero=False), axis=alt.Axis(format=',.0f', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])))
@@ -293,8 +324,8 @@ else:
         hover = alt.selection_point(fields=['date'], nearest=True, on='mouseover', empty=False)
         pts = base.mark_circle(size=60, color=C['blue']).encode(y='equity:Q', opacity=alt.condition(hover, alt.value(1), alt.value(0)),
                                                                 tooltip=[alt.Tooltip('date:T', title='날짜', format='%Y-%m-%d'), alt.Tooltip('equity:Q', title='잔고', format=',.0f')]).add_params(hover)
-        st.altair_chart((rule + line + pts).properties(height=240, background=C['surface']).configure_view(stroke=None), use_container_width=True)
-    with c2:
+        st.altair_chart((rule + line + pts).properties(height=200, background=C['surface']).configure_view(stroke=None), use_container_width=True)
+    with st.container():
         st.markdown('<div class="muted">월별 평균 손익 (건당 %)</div>', unsafe_allow_html=True)
         m = uniq.assign(month=pd.to_datetime(uniq['signal_date'], errors='coerce').dt.strftime('%y-%m')).groupby('month').agg(평균=('result_pct', 'mean'), 건수=('result_pct', 'size')).reset_index()
         m['sign'] = np.where(m['평균'] >= 0, '플러스', '마이너스')
@@ -303,7 +334,7 @@ else:
             y=alt.Y('평균:Q', title=None, axis=alt.Axis(labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
             color=alt.Color('sign:N', scale=alt.Scale(domain=['플러스', '마이너스'], range=[C['blue'], C['red']]), legend=None),
             tooltip=[alt.Tooltip('month:N', title='월'), alt.Tooltip('평균:Q', title='평균 %', format='+.2f'), alt.Tooltip('건수:Q', title='건수')])
-        st.altair_chart(bar.properties(height=240, background=C['surface']).configure_view(stroke=None), use_container_width=True)
+        st.altair_chart(bar.properties(height=160, background=C['surface']).configure_view(stroke=None), use_container_width=True)
 
     # 전략별 표
     rows = []
@@ -314,11 +345,14 @@ else:
         on = x['overnight_pct'].dropna() if 'overnight_pct' in x else pd.Series(dtype=float)
         rows.append((s, len(x), (x['result_status'] == 'WIN').sum(), (x['result_status'] == 'LOSS').sum(), (x['result_status'] == 'EXPIRED').sum(),
                      (x['result_status'] == 'WIN').mean() * 100, x['result_pct'].mean(), x['result_pct'].median(), on.mean() if len(on) else np.nan))
-    h = '<table class="ss"><tr><th>전략</th><th class="r">건수</th><th class="r">익절</th><th class="r">손절</th><th class="r">만기</th><th class="r">도달률</th><th class="r">건당 평균</th><th class="r">중간값</th><th class="r">하룻밤 실험</th></tr>'
-    for s, nn, w, l, e, w_, a, md, on in rows:
-        h += (f'<tr><td>{badges([s])}</td><td class="r">{nn}</td><td class="r" style="color:#5fd35f">{w}</td><td class="r" style="color:{C["red"]}">{l}</td><td class="r" style="color:{C["warn"]}">{e}</td>'
-              f'<td class="r">{w_:.0f}%</td><td class="r" style="color:{color_pct(a)}">{fmt_pct(a)}</td><td class="r">{fmt_pct(md)}</td><td class="r">{fmt_pct(on)}</td></tr>')
-    st.markdown(h + '</table>', unsafe_allow_html=True)
+    cards = ''
+    for s_, nn, w, l, e, w_, a_, md, on in rows:
+        cards += (f'<div class="card"><div class="row"><span>{badges([s_])}</span><span class="muted">{nn}건</span></div>'
+                  f'<div class="row" style="margin-top:8px"><div><div class="muted">건당 평균</div><div style="font-size:1.3rem;font-weight:700;color:{color_pct(a_)}">{fmt_pct(a_)}</div></div>'
+                  f'<div><div class="muted">도달률</div><div style="font-size:1.3rem;font-weight:700">{w_:.0f}%</div></div>'
+                  f'<div><div class="muted">중간값</div><div style="font-size:1.3rem;font-weight:700">{fmt_pct(md)}</div></div></div>'
+                  f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on)}</b></span></div></div>')
+    st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="muted" style="margin-top:6px">도달률이 70%여도 평균이 0 근처인 이유: 이기면 +5%, 지면 −20%라서 한 번 지면 네 번 이긴 걸 다 까먹어요. '
                 f'하룻밤 실험 = 신호일 종가에 사서 다음날 시가에 팔았다면(비용 {COST_PCT:.0f}% 뺀 값, 기록용).</div>', unsafe_allow_html=True)
 
@@ -337,13 +371,15 @@ with st.expander(f"끝난 거래 {len(closed)}건 보기", expanded=False):
         if res != '전체':
             x = x[x['result_status'] == {'익절': 'WIN', '손절': 'LOSS', '만기': 'EXPIRED'}[res]]
         x = x.sort_values(['close_date', 'signal_date'], ascending=False).head(300)
-        h = '<table class="ss"><tr><th>신호일</th><th>종목</th><th>전략</th><th class="r">진입</th><th class="r">청산</th><th>결과</th><th class="r">손익</th><th class="r">보유</th><th class="r">하룻밤</th></tr>'
+        cards = ''
         for r in x.itertuples():
             on = getattr(r, 'overnight_pct', np.nan) if 'overnight_pct' in x.columns else np.nan
-            h += (f'<tr><td>{r.signal_date}</td><td class="tk" style="font-size:1rem">{r.ticker}</td><td>{badges([r.strategy])}</td>'
-                  f'<td class="r">${r.entry_price:,.2f}</td><td class="r">${r.close_price:,.2f}</td><td>{pill(r.result_status)}</td>'
-                  f'<td class="r" style="font-weight:700;color:{color_pct(r.result_pct)}">{fmt_pct(r.result_pct)}</td><td class="r">{int(r.days_held) if not np.isnan(r.days_held) else "—"}일</td><td class="r">{fmt_pct(on)}</td></tr>')
-        st.markdown(h + '</table>', unsafe_allow_html=True)
+            dh = int(r.days_held) if not np.isnan(r.days_held) else '—'
+            cards += (f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:1.05rem">{r.ticker}</span> '
+                      f'<span class="muted">{r.signal_date}</span></span><span style="font-weight:700;color:{color_pct(r.result_pct)}">{fmt_pct(r.result_pct)}</span></div>'
+                      f'<div class="row" style="margin-top:4px"><span>{badges([r.strategy], short=True)}{pill(r.result_status)}</span>'
+                      f'<span class="muted">${r.entry_price:,.2f} → ${r.close_price:,.2f} · {dh}일</span></div></div>')
+        st.markdown(cards, unsafe_allow_html=True)
         st.download_button('CSV로 받기', closed.to_csv(index=False).encode('utf-8-sig'), 'closed_positions.csv', 'text/csv')
 
 with st.expander("최근 30일 신호 전체", expanded=False):
