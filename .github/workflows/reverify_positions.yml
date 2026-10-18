@@ -19,8 +19,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tracker --reverify
-        working-directory: core
-        run: python tracker.py --reverify
+        # 저장소 루트에서 실행해야 data/ 폴더를 제대로 갱신한다 (core/ 에서 돌면 core/data 에 써짐)
+        run: python core/tracker.py --reverify
 
       - name: Commit results
         run: |

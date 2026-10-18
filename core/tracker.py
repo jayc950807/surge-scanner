@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Scanner — Position Tracker (v4, SIMPLIFIED)
+  US Stock Surge Scanner — Position Tracker (v5)
 
-  [v4 판정 규칙 — 단순화]
-    전제: 탐지된 날짜(signal_date) = 진입 날짜(entry_date). signal_date 당일
-          종가에 매수한 것으로 간주하고, 다음 거래일부터 max_hold일 동안 추적.
-
-    성공/실패 판정은 오직 세 가지 결과만 가진다.
-      1. WIN     : max_hold 이내에 TP(High >= tp_price)에 먼저 도달
-      2. LOSS    : max_hold 이내에 SL(Low  <= sl_price)에 먼저 도달
-                   또는 같은 날 TP/SL이 동시에 도달(일봉만으로는 선후 판별 불가
-                   → 보수적으로 LOSS)
-      3. EXPIRED : max_hold 경과 시까지 TP / SL 모두 미도달 (실패 카테고리)
-
-    ※ Trailing stop 관련 로직(trailing_pct, trailing_level, peak_price 기반
-       청산, 'TRAILING' 상태값)은 v4에서 전면 제거되었다.
-
-  [이전 버전(v3) 대비 변경]
-    - track_position_daywise(): trailing 인자/분기 삭제. WIN/LOSS/EXPIRED만 반환.
-    - update_open_positions() / reverify_all(): trailing_pct 조회·전달 삭제.
-    - generate_tracker_summary(): trailing_count 집계 삭제.
-    - result_status 가능값: WIN / LOSS / EXPIRED (3종)
+  [v5 판정 규칙 — 실제로 체결 가능한 방식]
+    진입: 신호일(signal_date) 다음 거래일 시가 (entry_date = D+1, entry_price = D+1 Open).
+          스캔은 장 마감 뒤에 돌기 때문에 신호일 종가에는 살 수 없다.
+          D+1 시가가 아직 없으면 PENDING 으로 남겨 두고 다음 실행 때 진입한다.
+    추적: 진입일(D+1)부터 max_hold 거래일. 진입일은 시가에 샀으므로 그날 고가·저가도 판정에 쓴다.
+      1. WIN     : TP(High >= tp_price) 먼저 도달 → tp_price 체결
+                   (둘째 날부터 시가가 이미 TP 이상이면 시가 체결)
+      2. LOSS    : SL(Low <= sl_price) 먼저 도달 → sl_price 체결
+                   (둘째 날부터 시가가 이미 SL 이하로 갭하락하면 시가 체결 — 손실이 더 큼)
+                   같은 날 TP·SL 동시 도달은 선후를 알 수 없으므로 보수적으로 LOSS
+      3. EXPIRED : max_hold 경과 → 마지막 날 종가 청산
+    비용: result_pct = 가격 손익 − COST_PCT(왕복). gross_pct 에 비용 전 값을 따로 남긴다.
+    실험 지표: overnight_pct = (D+1 시가 / 신호일 종가 − 1) − COST_PCT
+              ("신호일 종가에 사서 다음날 시가에 판다면" — 일봉 기준이라 호가 차이 착시가 섞일 수 있음)
+    method 열: v5_next_open (새 규칙) / v4_signal_close (예전 규칙으로 계산된 기록)
 
   Usage:
     python tracker.py                # 전체 업데이트
@@ -46,7 +42,7 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
 # ─── Import from shared_config ────────────────────────────────────────────────
 from shared_config import (
-    STRATEGY_CONFIG, STRATEGY_NAMES, STRATEGY_WINRATE, DATA_DIR, KST,
+    STRATEGY_CONFIG, STRATEGY_NAMES, ACTIVE_STRATEGIES, COST_PCT, DATA_DIR, KST,
     download_batch, extract_ticker_df
 )
 
@@ -60,6 +56,7 @@ OPEN_COLS = [
     'min_price', 'min_price_date',
     'change_pct', 'achievement_pct',
     'days_held', 'last_updated',
+    'overnight_pct', 'method',
 ]
 
 CLOSED_COLS = OPEN_COLS + [
@@ -67,7 +64,10 @@ CLOSED_COLS = OPEN_COLS + [
     'result_status',  # WIN, LOSS, EXPIRED  (v4: TRAILING 제거)
     'tp_hit_date',
     'max_achievement_pct',
+    'gross_pct', 'cost_pct',
 ]
+METHOD_V5 = 'v5_next_open'
+METHOD_V4 = 'v4_signal_close'
 
 OPEN_PATH = os.path.join(DATA_DIR, 'open_positions.csv')
 CLOSED_PATH = os.path.join(DATA_DIR, 'closed_positions.csv')
@@ -93,6 +93,9 @@ def load_csv(path, cols=None):
                 if c not in df.columns:
                     df[c] = ''
         _fix_legacy_strategy(df)
+        # v5: 운영 중인 전략(1·3)만 다룬다
+        if 'strategy' in df.columns and not df.empty:
+            df = df[df['strategy'].astype(str).isin(ACTIVE_STRATEGIES)].reset_index(drop=True)
         return df
     if cols:
         return pd.DataFrame(columns=cols)
@@ -136,31 +139,40 @@ def fetch_price_data(ticker, start_date, end_date=None):
 
 def get_entry_for_signal(ticker, signal_date):
     """
-    signal_date 당일 종가로 진입 — entry_date = signal_date, entry_price = 종가.
-    종가 확정 후 바로 매수하는 전략이므로 D+0 종가 기준.
-    동일 티커/날짜 복수 전략 시 동일한 진입가를 보장함.
+    [v5] 신호일 다음 거래일 시가로 진입.
+    반환: (entry_date, entry_price, signal_close)
+      - D+1 데이터가 아직 없으면 (None, None, signal_close) → PENDING 유지
     """
     try:
         hist = fetch_price_data(ticker, signal_date)
-        if hist is not None and len(hist) > 0:
-            # signal_date 당일 데이터 찾기
-            sig_dt = pd.to_datetime(signal_date).strftime('%Y-%m-%d')
-            for dt, row in hist.iterrows():
-                if dt.strftime('%Y-%m-%d') == sig_dt:
-                    entry_price = float(row['Close'])
-                    return sig_dt, entry_price
-            # 당일 데이터 못 찾으면 가장 가까운 데이터 사용
-            entry_date = hist.index[0].strftime('%Y-%m-%d')
-            entry_price = float(hist['Close'].iloc[0])
-            return entry_date, entry_price
+        if hist is None or len(hist) == 0:
+            return None, None, None
+        sig_dt = pd.to_datetime(signal_date)
+        on_sig = hist[hist.index.normalize() == sig_dt]
+        signal_close = float(on_sig['Close'].iloc[0]) if len(on_sig) else None
+        after = hist[hist.index.normalize() > sig_dt]
+        if after.empty:
+            return None, None, signal_close
+        first = after.iloc[0]
+        entry_price = float(first['Open'])
+        if not entry_price or entry_price <= 0 or np.isnan(entry_price):
+            return None, None, signal_close
+        return after.index[0].strftime('%Y-%m-%d'), entry_price, signal_close
     except Exception as e:
         logging.warning(f"get_entry_for_signal({ticker}, {signal_date}) failed: {e}")
-    return None, None
+    return None, None, None
+
+
+def net_of_cost(gross_pct):
+    """가격 손익(%)에서 왕복 비용(%)을 뺀 값"""
+    return gross_pct - COST_PCT
 
 
 def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after_entry):
     """
-    [v4 단순화] 진입일 다음 거래일부터 하루씩 TP/SL 도달 여부만 순차 검사.
+    [v5] hist_after_entry 의 첫 행 = 진입일(D+1, 시가 매수). 하루씩 TP/SL 도달 여부 검사.
+    둘째 날부터는 시가 갭을 먼저 확인한다(갭하락 → 시가 손절, 갭상승 → 시가 익절).
+    result_pct 는 비용 전 가격 손익(%)이다 — 비용 차감은 호출한 쪽에서 한다.
 
     판정 규칙 (반드시 코드와 1:1 일치):
       - max_hold 이내에 TP(High >= tp_price)에 먼저 도달       → WIN
@@ -210,6 +222,23 @@ def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after
         if l < min_price:
             min_price = l
             min_price_date = date_str
+
+        # ── [v5] 둘째 날부터: 시가가 이미 손절가/익절가를 넘어 시작한 경우 시가 체결 ──
+        if day_i > 0:
+            try:
+                o = float(row['Open'])
+            except Exception:
+                o = float('nan')
+            if not np.isnan(o) and o > 0:
+                if sl_price > 0 and o <= sl_price:
+                    result_pct = (o - entry_price) / entry_price * 100
+                    max_ach = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
+                    return ('LOSS', o, date_str, '', max_price, max_price_date,
+                            min_price, min_price_date, days_held, result_pct, min(max_ach, 999))
+                if tp_price > 0 and o >= tp_price:
+                    result_pct = (o - entry_price) / entry_price * 100
+                    return ('WIN', o, date_str, date_str, max_price, max_price_date,
+                            min_price, min_price_date, days_held, result_pct, 100.0)
 
         tp_hit = tp_price > 0 and h >= tp_price
         sl_hit = sl_price > 0 and l <= sl_price
@@ -281,6 +310,48 @@ def get_most_recent_signal_file_date():
         return None
 
 
+# ─── Step 0: v5 정리 — 운영하지 않는 전략 기록 보관 + 1회 재계산 ─────────────
+
+ARCHIVE_DIR = os.path.join(DATA_DIR, 'archive_removed_strategies')
+V5_MARKER = os.path.join(DATA_DIR, '.v5_reverified')
+
+
+def archive_removed_strategies():
+    """open/closed/history 에서 운영하지 않는 전략(2·4~10) 행을 archive 폴더로 옮긴다 (삭제 아님)."""
+    moved = 0
+    for name in ('open_positions.csv', 'closed_positions.csv', 'history.csv'):
+        path = os.path.join(DATA_DIR, name)
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, dtype=str)
+        if df.empty or 'strategy' not in df.columns:
+            continue
+        df['strategy'] = df['strategy'].replace(_LEGACY_STRAT_MAP)
+        keep = df['strategy'].isin(ACTIVE_STRATEGIES)
+        if keep.all():
+            continue
+        os.makedirs(ARCHIVE_DIR, exist_ok=True)
+        apath = os.path.join(ARCHIVE_DIR, name)
+        old = df[~keep]
+        if os.path.exists(apath):
+            old = pd.concat([pd.read_csv(apath, dtype=str), old], ignore_index=True).drop_duplicates()
+        old.to_csv(apath, index=False)
+        df[keep].to_csv(path, index=False)
+        moved += int((~keep).sum())
+    if moved:
+        print(f"  운영하지 않는 전략 기록 {moved}행 → {ARCHIVE_DIR}/ 로 이동")
+
+
+def migrate_to_v5():
+    """처음 v5로 돌 때 한 번: 모든 기록을 v5 규칙(다음날 시가 진입·갭 체결·비용)으로 다시 계산."""
+    if os.path.exists(V5_MARKER):
+        return
+    print("  [v5] 최초 1회 — 전체 기록을 새 규칙으로 재계산합니다")
+    reverify_all()
+    with open(V5_MARKER, 'w') as f:
+        f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
+
+
 # ─── Step 1: Register new signals as PENDING ─────────────────────────────────
 
 def register_new_signals():
@@ -321,6 +392,9 @@ def register_new_signals():
         strategy = str(sig.get('strategy', ''))
         ticker = str(sig.get('ticker', ''))
         date = str(sig.get('date', signal_date))
+        strategy = _LEGACY_STRAT_MAP.get(strategy, strategy)
+        if strategy not in ACTIVE_STRATEGIES:
+            continue  # v5: 운영하지 않는 전략 신호는 등록하지 않음
 
         # 이미 등록된 건 스킵
         already_open = not open_pos.empty and (
@@ -410,13 +484,12 @@ def activate_pending_positions():
         cache_key = (ticker, signal_date)
 
         if cache_key not in entry_cache:
-            entry_date, entry_price = get_entry_for_signal(ticker, signal_date)
-            entry_cache[cache_key] = (entry_date, entry_price)
+            entry_cache[cache_key] = get_entry_for_signal(ticker, signal_date)
 
-        entry_date, entry_price = entry_cache[cache_key]
+        entry_date, entry_price, signal_close = entry_cache[cache_key]
 
         if entry_date is None or entry_price is None or entry_price <= 0:
-            print(f"    Warning: {ticker} D+1 데이터 없음 (signal: {signal_date})")
+            print(f"    대기: {ticker} D+1 시가 아직 없음 (signal: {signal_date}) → 다음 실행 때 진입")
             continue
 
         config = STRATEGY_CONFIG.get(row['strategy'], {})
@@ -428,7 +501,11 @@ def activate_pending_positions():
         sl_price = round(entry_price * (1 + sl_pct), 2) if sl_pct else ''
 
         open_pos.at[idx, 'entry_date'] = entry_date
-        open_pos.at[idx, 'entry_price'] = str(round(entry_price, 2))
+        open_pos.at[idx, 'entry_price'] = str(round(entry_price, 4))
+        if signal_close:
+            open_pos.at[idx, 'signal_price'] = str(round(signal_close, 4))
+            open_pos.at[idx, 'overnight_pct'] = str(round(net_of_cost((entry_price / signal_close - 1) * 100), 2))
+        open_pos.at[idx, 'method'] = METHOD_V5
         open_pos.at[idx, 'tp_price'] = str(tp_price)
         open_pos.at[idx, 'sl_price'] = str(sl_price)
         open_pos.at[idx, 'status'] = 'OPEN'
@@ -498,9 +575,13 @@ def update_open_positions():
         if hist is None or hist.empty:
             continue
 
-        # 진입일 종가에 매수했으므로, 다음 거래일부터 추적
+        # [v5] 진입일(D+1) 시가에 매수 → 진입일부터 추적.
+        # (예전 v4 기록이 남아 있다면 신호일 종가 매수였으므로 다음 날부터)
         entry_dt = pd.to_datetime(entry_date)
-        hist_tracking = hist[hist.index > entry_dt]
+        if row.get('method', '') == METHOD_V5:
+            hist_tracking = hist[hist.index.normalize() >= entry_dt]
+        else:
+            hist_tracking = hist[hist.index.normalize() > entry_dt]
 
         if hist_tracking.empty:
             continue
@@ -555,7 +636,10 @@ def update_open_positions():
         closed_row = row.to_dict()
         closed_row['close_date'] = close_date
         closed_row['close_price'] = str(round(close_price, 2))
-        closed_row['result_pct'] = str(round(result_pct, 2))
+        is_v5 = closed_row.get('method', '') == METHOD_V5
+        closed_row['gross_pct'] = str(round(result_pct, 2))
+        closed_row['cost_pct'] = str(COST_PCT if is_v5 else 0)
+        closed_row['result_pct'] = str(round(net_of_cost(result_pct) if is_v5 else result_pct, 2))
         closed_row['result_status'] = reason
         closed_row['tp_hit_date'] = tp_hit_date
         closed_row['max_achievement_pct'] = str(round(max_ach, 1))
@@ -594,6 +678,24 @@ def generate_tracker_summary():
         summary['expired_count'] = len(closed_pos[closed_pos['result_status'] == 'EXPIRED'])
         # v4: 성공/실패 이분법 집계 (WIN = 성공, LOSS+EXPIRED = 실패)
         summary['fail_count'] = summary['loss_count'] + summary['expired_count']
+        # [v5] 전략별 실제 추적 성적 (비용 차감 후). 화면의 '승률' 표시는 이 값을 쓴다.
+        per = {}
+        cp = closed_pos.copy()
+        if 'method' in cp.columns:
+            cp = cp[cp['method'] == METHOD_V5]
+        for strat in ACTIVE_STRATEGIES:
+            sd = cp[cp['strategy'] == strat]
+            r = pd.to_numeric(sd.get('result_pct', pd.Series(dtype=float)), errors='coerce').dropna()
+            on = pd.to_numeric(sd.get('overnight_pct', pd.Series(dtype=float)), errors='coerce').dropna()
+            per[strat] = {
+                'n': int(len(r)),
+                'win_rate': round(float((sd['result_status'] == 'WIN').mean() * 100), 1) if len(sd) else None,
+                'mean_pct': round(float(r.mean()), 2) if len(r) else None,
+                'median_pct': round(float(r.median()), 2) if len(r) else None,
+                'overnight_mean_pct': round(float(on.mean()), 2) if len(on) else None,
+                'cost_pct': COST_PCT,
+            }
+        summary['live_stats'] = per
 
     try:
         with open(os.path.join(DATA_DIR, 'tracker_summary.json'), 'w') as f:
@@ -666,20 +768,18 @@ def reverify_all():
         # 1. Entry price 재조회 (D+1 시가)
         cache_key = (ticker, signal_date)
         if cache_key not in entry_cache:
-            entry_date, entry_price = get_entry_for_signal(ticker, signal_date)
-            if entry_date and entry_price and entry_price > 0:
-                entry_cache[cache_key] = (entry_date, entry_price)
-            else:
-                entry_cache[cache_key] = (None, None)
+            entry_cache[cache_key] = get_entry_for_signal(ticker, signal_date)
             time.sleep(0.5)  # rate limiting
 
-        entry_date, entry_price = entry_cache[cache_key]
+        entry_date, entry_price, signal_close = entry_cache[cache_key]
 
         if entry_date is None or entry_price is None:
             print(f"    SKIP: [{strategy}] {ticker} {signal_date} — D+1 데이터 없음")
-            # 데이터 없는 건은 그대로 유지
-            pos['result_status'] = pos.get('result_status', 'NO_DATA')
-            new_closed.append(pos)
+            # 데이터 없는 건: 이미 청산된 기록이면 그대로 두고, 진행 중이던 건은 OPEN 으로 남긴다
+            if pos.get('status') == 'CLOSED' or pos.get('result_status'):
+                new_closed.append(pos)
+            else:
+                new_open.append(pos)
             continue
 
         # 2. TP/SL 재계산
@@ -707,10 +807,8 @@ def reverify_all():
             continue
 
         entry_dt = pd.to_datetime(entry_date)
-        # [v4 버그수정] 진입일 자체는 추적에서 제외 (update_open_positions 와 일치).
-        # 진입가는 당일 종가이므로 당일 장중 고/저가를 TP/SL 판정이나 peak 기록에
-        # 사용하면 lookahead bias 가 발생한다 (매수 이전 시점 가격을 후행 판정에 씀).
-        hist_tracking = hist[hist.index > entry_dt]
+        # [v5] 진입일(D+1) 시가 매수 → 진입일 장중 고가·저가부터 판정에 사용
+        hist_tracking = hist[hist.index.normalize() >= entry_dt]
 
         if hist_tracking.empty:
             pos['result_status'] = 'NO_DATA'
@@ -729,7 +827,11 @@ def reverify_all():
 
         # 5. 결과 업데이트
         pos['entry_date'] = entry_date
-        pos['entry_price'] = str(round(entry_price, 2))
+        pos['entry_price'] = str(round(entry_price, 4))
+        pos['method'] = METHOD_V5
+        if signal_close:
+            pos['signal_price'] = str(round(signal_close, 4))
+            pos['overnight_pct'] = str(round(net_of_cost((entry_price / signal_close - 1) * 100), 2))
         pos['tp_price'] = str(tp_price)
         pos['sl_price'] = str(sl_price) if sl_price else ''
         pos['max_price'] = str(round(max_pr, 2)) if max_pr else ''
@@ -742,8 +844,10 @@ def reverify_all():
         if res_status is not None:
             # 청산 확정
             pos['close_date'] = close_date
-            pos['close_price'] = str(round(close_price, 2))
-            pos['result_pct'] = str(round(result_pct, 2))
+            pos['close_price'] = str(round(close_price, 4))
+            pos['gross_pct'] = str(round(result_pct, 2))
+            pos['cost_pct'] = str(COST_PCT)
+            pos['result_pct'] = str(round(net_of_cost(result_pct), 2))
             pos['result_status'] = res_status
             pos['tp_hit_date'] = tp_hit_date or ''
             pos['status'] = 'CLOSED'
@@ -858,6 +962,9 @@ def init_from_history():
 
         if not strategy or not ticker or not date:
             continue
+        strategy = _LEGACY_STRAT_MAP.get(strategy, strategy)
+        if strategy not in ACTIVE_STRATEGIES:
+            continue
 
         already = False
         if not open_pos.empty:
@@ -903,16 +1010,22 @@ def main():
     parser = argparse.ArgumentParser(description='Position Tracker')
     parser.add_argument('--init', action='store_true', help='Initialize from history.csv')
     parser.add_argument('--reverify', action='store_true', help='Re-verify all closed positions')
+    parser.add_argument('--reset', action='store_true', help='(scan.yml 호환) 전체 기록 재계산')
     args = parser.parse_args()
 
     t0 = time.time()
     print("=" * 70)
-    print("  Position Tracker v3 (Fixed) — Update")
+    print("  Position Tracker v5 — Strategy 1 + 3")
     print(f"  Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
-    if args.reverify:
+    print("\n[0] v5 정리")
+    archive_removed_strategies()
+
+    if args.reverify or args.reset:
         reverify_all()
+        with open(V5_MARKER, 'w') as f:
+            f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
         print("\n[+] 요약 업데이트")
         generate_tracker_summary()
         elapsed = time.time() - t0
@@ -922,6 +1035,8 @@ def main():
     if args.init:
         print("\n[0] 초기화: history.csv → open_positions.csv")
         init_from_history()
+
+    migrate_to_v5()
 
     print("\n[1] 신규 신호 등록")
     register_new_signals()

@@ -631,6 +631,7 @@ def _fix_legacy_strategy(df):
     """이전 버전 알파벳 전략 코드(A~J)를 숫자(1~10)로 변환 + 항상 str 보장"""
     if not df.empty and 'strategy' in df.columns:
         df['strategy'] = df['strategy'].astype(str).replace(_LEGACY_STRAT_MAP)
+        df = df[df['strategy'].isin(STRAT_ORDER)].reset_index(drop=True)  # v5: 1·3만 표시
     return df
 
 @st.cache_data(ttl=300)
@@ -650,15 +651,18 @@ def load_closed_positions():
     return pd.DataFrame()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-STRAT_TAB = {'1': '1차_1_+5%5일', '2': '1차_2_+15%10일', '3': '1차_3_+5%5일', '4': '1차_4_+20%30일', '5': '1차_5_+10%30일', '6': '2차_1_+50%20일', '7': '2차_2_+40%20일', '8': '2차_3_+40%20일', '9': '2차_4_+10%5일', '10': '2차_5_+10%5일'}
-STRAT_NAMES = {'1': '1차_1_+5%5일 · 급락반등', '2': '1차_2_+15%10일 · 고수익', '3': '1차_3_+5%5일 · 과매도', '4': '1차_4_+20%30일 · 초저가', '5': '1차_5_+10%30일 · 속반등', '6': '2차_1_+50%20일 · 바닥급등', '7': '2차_2_+40%20일 · MACD전환', '8': '2차_3_+40%20일 · ATR확대', '9': '2차_4_+10%5일 · 과매도단타', '10': '2차_5_+10%5일 · MACD단타'}
-STRAT_KR = {'1': '급락반등', '2': '고수익', '3': '과매도', '4': '초저가', '5': '속반등', '6': '바닥급등', '7': 'MACD전환', '8': 'ATR확대', '9': '과매도단타', '10': 'MACD단타'}
-STRAT_TP = {'1': '+5%', '2': '+15%', '3': '+5%', '4': '+20%', '5': '+10%', '6': '+50%', '7': '+40%', '8': '+40%', '9': '+10%', '10': '+10%'}
-STRAT_TP_NUM = {'1': 5, '2': 15, '3': 5, '4': 20, '5': 10, '6': 50, '7': 40, '8': 40, '9': 10, '10': 10}
-STRAT_BT_WR = {'1': '90.1%', '2': '90.3%', '3': '86.9%', '4': '97.7%', '5': '91.0%', '6': '87.5%', '7': '90.0%', '8': '90.0%', '9': '100.0%', '10': '90.0%'}
-STRAT_MAX_HOLD = {'1': 5, '2': 10, '3': 5, '4': 30, '5': 30, '6': 20, '7': 20, '8': 20, '9': 5, '10': 5}
-# 탭 표시 순서: TP% 오름차순, 동일 TP%일 때 보유일 오름차순
-STRAT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+STRAT_TAB = {'1': '1차_1_+5%5일', '3': '1차_3_+5%5일'}
+STRAT_NAMES = {'1': '1차_1_+5%5일 · 급락반등', '3': '1차_3_+5%5일 · 과매도'}
+STRAT_KR = {'1': '급락반등', '3': '과매도'}
+STRAT_TP = {'1': '+5%', '3': '+5%'}
+STRAT_TP_NUM = {'1': 5, '3': 5}
+# v5: 예전 '백테스트 승률 90%'(신호일 종가 진입·비용 0 가정)는 지우고,
+# 2016~2026 일봉(상장폐지 포함) 재시험 결과(2023년 이후, 다음날 시가 진입·갭 손절·비용 1%)로 바꿈.
+# 참고: 같은 날 일중변동 20% 넘은 종목을 무작위로 사도 도달률 70%, 평균 -1.9%.
+STRAT_BT_WR = {'1': '72% · 평균 −1.7%', '3': '73% · 평균 −1.1%'}
+STRAT_MAX_HOLD = {'1': 5, '3': 5}
+
+STRAT_ORDER = ['1', '3']
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -792,7 +796,7 @@ st.markdown('''<div class="rr-header">
 meta_parts = []
 if scan_info:
     meta_parts.append(f'<span class="hl">Last Scan</span> {scan_info.get("scan_time", "N/A")}')
-    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k}_count", 0)}' for k in ['1','2','3','4','5','6','7','8','9','10'])
+    counts = ' / '.join(f'{k}:{scan_info.get(f"strategy_{k}_count", 0)}' for k in STRAT_ORDER)
     meta_parts.append(f'<span class="hl">Signals</span> {counts}')
 if tracker_info:
     meta_parts.append(f'<span class="hl">Active</span> {tracker_info.get("open_count", 0)} <span class="hl">Win</span> {tracker_info.get("win_count", 0)} <span class="hl">Loss</span> {tracker_info.get("loss_count", 0)}')
@@ -810,17 +814,32 @@ history = load_history()
 _today_n = len(today_signals) if not today_signals.empty else 0
 _today_label = f"Today ({_today_n})" if _today_n > 0 else "Today"
 
-tab_today, tab_1, tab_3, tab_9, tab_10, tab_5, tab_2, tab_7, tab_8, tab_6, tab_4, tab_history = st.tabs([
-    _today_label, "1차_1 +5%5일", "1차_3 +5%5일", "2차_4 +10%5일", "2차_5 +10%5일", "1차_5 +10%30일", "1차_2 +15%10일", "2차_2 +40%20일", "2차_3 +40%20일", "2차_1 +50%20일", "1차_4 +20%30일", "Performance"
+tab_today, tab_1, tab_3, tab_history = st.tabs([
+    _today_label, "1차_1 +5%5일", "1차_3 +5%5일", "Performance"
 ])
+
+# v5 안내: 추적 규칙과 실제 성적
+_ls = (tracker_info or {}).get('live_stats', {}) if isinstance(tracker_info, dict) else {}
+def _fmt_live(k):
+    d = _ls.get(k) or {}
+    if not d.get('n'):
+        return '집계 중'
+    on = d.get('overnight_mean_pct')
+    on_txt = f" · 하룻밤 실험 {on:+.2f}%" if on is not None else ''
+    return f"{d['n']}건 · 도달 {d['win_rate']:.0f}% · 평균 {d['mean_pct']:+.2f}% · 중위 {d['median_pct']:+.2f}%{on_txt}"
+st.markdown(f'''<div class="rr-meta" style="line-height:1.7">
+<span class="hl">v5 추적 규칙</span> 신호일 다음 거래일 <b>시가</b> 진입 · +5% 익절 · −20% 손절(갭이면 시가 체결) · 5거래일 · 왕복 비용 1% 차감 · ETF 제외<br>
+<span class="hl">실제 추적(v5)</span> 1차_1: {_fmt_live('1')} <span>|</span> 1차_3: {_fmt_live('3')}<br>
+<span style="color:var(--text-muted)">과거 재시험(2016~2026, 상장폐지 포함): 두 전략 모두 같은 날 변동 큰 종목을 무작위로 산 경우(도달 70%·평균 −1.9%)와 큰 차이가 없었습니다. 종목 추천이 아닌 기록·검증용 화면입니다.</span>
+</div>''', unsafe_allow_html=True)
 
 # ─── Strategy Tab Builder ─────────────────────────────────────────────────────
 STRAT_INFO = {
     '1': {
         'title': '1차_1 +5%5일 — 급락반등',
         'desc': ['RSI(7) < 20 — 극단적 과매도', '일중 변동 > 20% — 패닉셀링', '3일 수익률 < -15%', '연속 하락 > 5일', '5일 저점 대비 5% 이내'],
-        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '트레일링: -3%', '최대 보유: 5일'],
-        'bt': '90.1% (236/262)',
+        'rules': ['매수: 신호 다음 거래일 시가', '익절: +5%', '손절: -20% (갭하락이면 시가 체결)', '최대 보유: 5거래일', '비용: 왕복 1% 차감'],
+        'bt': '72% (2023~ 재시험 306건 · 평균 −1.7% · 무작위 70%)',
         'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret3d','consec_down','dist_low5','tp_price','sl_price'],
         'col_config': {
             "ticker": st.column_config.TextColumn("Ticker", width="small"),
@@ -836,32 +855,11 @@ STRAT_INFO = {
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
     },
-    '2': {
-        'title': '1차_2 +15%10일 — 고수익',
-        'desc': ['RSI(7) < 20 + RSI(14) < 35', 'ATR 비율 > 3 — 변동성 폭발', '일중 변동 > 15%', '20일 이평 대비 -25% 이하', '매출 성장률 > 0 — 펀더멘탈 필터'],
-        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +15%', '손절: -20%', '최대 보유: 10일'],
-        'bt': '90.3% (28/31)',
-        'cols': ['ticker','date','scan_time','price','rsi7','rsi14','atr_ratio','intra_pct','ma20_pos','rev_growth','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
-            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
-            "atr_ratio": st.column_config.NumberColumn("ATR", format="%.2f"),
-            "intra_pct": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
-            "ma20_pos": st.column_config.NumberColumn("MA20%", format="%.1f%%"),
-            "rev_growth": st.column_config.NumberColumn("Rev Gr", format="%.1f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
     '3': {
         'title': '1차_3 +5%5일 — 과매도',
         'desc': ['RSI(7) < 30 — 과매도', '일중 변동 > 20%', '당일 수익률 < -8%', '전일도 하락 (2일 연속)', '연속 하락 > 3일', '5일 저점 대비 3% 이내'],
-        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +5%', '손절: -20%', '최대 보유: 5일'],
-        'bt': '86.9% (542/624)',
+        'rules': ['매수: 신호 다음 거래일 시가', '익절: +5%', '손절: -20% (갭하락이면 시가 체결)', '최대 보유: 5거래일', '비용: 왕복 1% 차감'],
+        'bt': '73% (2023~ 재시험 747건 · 평균 −1.1% · 무작위 70%)',
         'cols': ['ticker','date','scan_time','price','rsi7','intraday','ret1d','consec_down','dist_low5','tp_price','sl_price'],
         'col_config': {
             "ticker": st.column_config.TextColumn("Ticker", width="small"),
@@ -873,143 +871,6 @@ STRAT_INFO = {
             "ret1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
             "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
             "dist_low5": st.column_config.NumberColumn("Dist L5", format="%.2f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
-    '4': {
-        'title': '1차_4 +20%30일 — 초저가',
-        'desc': ['종가 ≤ $3 — 초저가주', '5일 수익률 ≤ -40%', '일중 변동 ≥ 30%', 'RSI(14) ≤ 25'],
-        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +20% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
-        'bt': '97.7% (127/130)',
-        'cols': ['ticker','date','scan_time','price','rsi14','intraday','ret5d','tp_price','hold_days'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
-            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
-            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
-        },
-    },
-    '5': {
-        'title': '1차_5 +10%30일 — 속반등',
-        'desc': ['종가 $3~$10', '5일 수익률 ≤ -25%', '일중 변동 ≥ 20%', '연속 하락 ≥ 5일', '평균 거래량 ≥ 200K'],
-        'rules': ['매수: 신호 당일 종가 (애프터마켓)', '익절: +10% (중간값 2일 도달)', '손절: 없음', '최대 보유: 30일'],
-        'bt': '91.0% (273/300)',
-        'cols': ['ticker','date','scan_time','price','ret5d','intraday','consec_down','vol_avg','tp_price','hold_days'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "ret5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
-            "intraday": st.column_config.NumberColumn("Intra%", format="%.1f%%"),
-            "consec_down": st.column_config.NumberColumn("Consec", format="%d"),
-            "vol_avg": st.column_config.NumberColumn("Avg Vol", format="%d"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "hold_days": st.column_config.NumberColumn("Hold", format="%d"),
-        },
-    },
-    '6': {
-        'title': '2차_1 +50%20일 — 바닥급등',
-        'desc': ['20일 변동성 > 10%', '52주 고점 대비 -85% 이하', '볼린저 %B < 0', '전일 수익률 < -5%', '갭업 > 5%'],
-        'rules': ['매수: 신호 당일 종가', '익절: +50%', '손절: -20%', '최대 보유: 20일'],
-        'bt': '87.5% (7/8)',
-        'cols': ['ticker','date','scan_time','price','vol_20d','dist_52w','bb_pctb','ret_1d','gap_pct','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
-            "dist_52w": st.column_config.NumberColumn("52W Dist", format="%.1f%%"),
-            "bb_pctb": st.column_config.NumberColumn("BB %B", format="%.3f"),
-            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
-            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
-    '7': {
-        'title': '2차_2 +40%20일 — MACD전환',
-        'desc': ['20일 변동성 > 10%', 'RSI(7) < 30', 'MACD 히스토그램 골든크로스', '갭업 > 5%', '종가 < SMA(5)'],
-        'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
-        'bt': '90.0% (9/10)',
-        'cols': ['ticker','date','scan_time','price','rsi7','vol_20d','macd_hist','gap_pct','sma5','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
-            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
-            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
-            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
-            "sma5": st.column_config.NumberColumn("SMA5", format="$%.2f"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
-    '8': {
-        'title': '2차_3 +40%20일 — ATR확대',
-        'desc': ['RSI(7) < 30', '52주 고점 대비 -85% 이하', '전일 수익률 < -5%', '갭업 > 5%', 'ATR 5일 변화 > 25%'],
-        'rules': ['매수: 신호 당일 종가', '익절: +40%', '손절: -20%', '최대 보유: 20일'],
-        'bt': '90.0% (9/10)',
-        'cols': ['ticker','date','scan_time','price','rsi7','dist_52w','ret_1d','gap_pct','atr_change','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "rsi7": st.column_config.NumberColumn("RSI 7", format="%.1f"),
-            "dist_52w": st.column_config.NumberColumn("52W Dist", format="%.1f%%"),
-            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
-            "gap_pct": st.column_config.NumberColumn("Gap", format="%.1f%%"),
-            "atr_change": st.column_config.NumberColumn("ATR Chg", format="%.1f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
-    '9': {
-        'title': '2차_4 +10%5일 — 과매도단타',
-        'desc': ['RSI(14) < 30', '거래량 2배 이상', 'MACD 히스토그램 > 0', '전일 수익률 < -5%', '5일 수익률 > 0'],
-        'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
-        'bt': '100.0% (8/8)',
-        'cols': ['ticker','date','scan_time','price','rsi14','vol_ratio','macd_hist','ret_1d','ret_5d','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
-            "vol_ratio": st.column_config.NumberColumn("Vol Ratio", format="%.2f"),
-            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
-            "ret_1d": st.column_config.NumberColumn("Ret 1D", format="%.1f%%"),
-            "ret_5d": st.column_config.NumberColumn("Ret 5D", format="%.1f%%"),
-            "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
-            "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
-        },
-    },
-    '10': {
-        'title': '2차_5 +10%5일 — MACD단타',
-        'desc': ['20일 변동성 > 10%', 'RSI(14) < 30', '거래량 2배 이상', 'MACD 골든크로스', '스토캐스틱 K < 20'],
-        'rules': ['매수: 신호 당일 종가', '익절: +10%', '손절: -20%', '최대 보유: 5일'],
-        'bt': '90.0% (9/10)',
-        'cols': ['ticker','date','scan_time','price','vol_20d','rsi14','vol_ratio','macd_hist','stoch_k','tp_price','sl_price'],
-        'col_config': {
-            "ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "date": st.column_config.TextColumn("Date"),
-            "scan_time": st.column_config.TextColumn("Scan"),
-            "price": st.column_config.NumberColumn("Close", format="$%.2f"),
-            "vol_20d": st.column_config.NumberColumn("Vol 20D", format="%.1f%%"),
-            "rsi14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
-            "vol_ratio": st.column_config.NumberColumn("Vol Ratio", format="%.2f"),
-            "macd_hist": st.column_config.NumberColumn("MACD H", format="%.4f"),
-            "stoch_k": st.column_config.NumberColumn("Stoch K", format="%.1f"),
             "tp_price": st.column_config.NumberColumn("TP", format="$%.2f"),
             "sl_price": st.column_config.NumberColumn("SL", format="$%.2f"),
         },
@@ -1027,7 +888,7 @@ def render_strategy_tab(key, tab_obj):
             <div class="si-grid">
                 <div class="si-section"><div class="si-label">Entry Conditions</div>{desc_html}</div>
                 <div class="si-section"><div class="si-label">Exit Rules</div>{rules_html}</div>
-                <div class="si-section"><div class="si-label">Backtest</div>
+                <div class="si-section"><div class="si-label">과거 재시험 도달률 (v5 규칙)</div>
                     <div class="si-stat"><span class="big" style="color:var(--gold)">{info["bt"].split("(")[0].strip()}</span></div>
                     <div style="color:var(--text-muted);font-size:0.85em;margin-top:4px">({info["bt"].split("(")[1] if "(" in info["bt"] else ""})</div>
                 </div>
@@ -1191,7 +1052,7 @@ with tab_today:
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
 
-for k, t in [('1', tab_1), ('3', tab_3), ('9', tab_9), ('10', tab_10), ('5', tab_5), ('2', tab_2), ('7', tab_7), ('8', tab_8), ('6', tab_6), ('4', tab_4)]:
+for k, t in [('1', tab_1), ('3', tab_3)]:
     render_strategy_tab(k, t)
 
 # ─── Tab: Performance ─────────────────────────────────────────────────────────
