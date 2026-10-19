@@ -128,8 +128,8 @@ for df in (open_pos, closed):
               'result_pct', 'gross_pct', 'overnight_pct', 'signal_price', 'close_price', 'max_price', 'min_price'):
         if c in df.columns:
             df[c] = _num(df[c])
-has_v5 = 'method' in closed.columns and (closed['method'] == 'v5_next_open').any()
-closed_v5 = closed[closed['method'] == 'v5_next_open'] if has_v5 else closed
+has_v5 = 'method' in closed.columns and (closed['method'] == 'v6_close_entry').any()
+closed_v5 = closed[closed['method'] == 'v6_close_entry'] if has_v5 else closed
 
 
 # ─── 유틸 ────────────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ except Exception:
 st.markdown(f"""
 <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px">
   <div><div class="ss-h1">Surge Scanner</div>
-  <div class="ss-sub">1차_1(급락반등) · 1차_3(과매도) 신호 기록과 실제 체결 기준 성적</div></div>
+  <div class="ss-sub">1차_1(급락반등) · 1차_3(과매도) · 마감 전 탐지 → 마감가 매수 · +5% / −10% / 2일</div></div>
   <div class="muted">마지막 스캔 {scan_time} {stale}</div>
 </div>""", unsafe_allow_html=True)
 
@@ -239,7 +239,7 @@ st.markdown('<div class="grid2">' + ''.join(
     for cls, l, v, dsc, vc in kpis) + '</div>', unsafe_allow_html=True)
 
 if not has_v5:
-    st.markdown(f'<div class="note" style="margin-top:10px">아직 예전 방식(신호일 종가 매수·비용 0)으로 계산된 기록이에요. 다음 스캔 때 전부 새 규칙(다음날 시가 매수·갭 체결·비용 {COST_PCT:.0f}%)으로 다시 계산돼요.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="note" style="margin-top:10px">아직 예전 규칙으로 계산된 기록이에요. 다음 추적 때 전부 새 규칙(마감가 매수 · +5% / −10% / 2일 · 갭 체결 · 비용 {COST_PCT:.0f}%)으로 다시 계산돼요.</div>', unsafe_allow_html=True)
 
 # ─── 오늘 신호 ───────────────────────────────────────────────────────────────
 st.markdown(f'<div class="ss-sec">오늘 신호 <small>{sig_date} 미국장 기준</small></div>', unsafe_allow_html=True)
@@ -257,7 +257,7 @@ else:
     rows.sort(key=lambda r: (-len(r['strats']), r['ticker']))
     both = sum(1 for r in rows if len(r['strats']) > 1)
     st.markdown(f'<div class="muted" style="margin-bottom:8px">{len(rows)}종목 · 두 전략 모두 해당 {both}종목 · '
-                f'추적상 매수 시점: <b style="color:{C["text"]}">{kst_of_us(sig_date)} 한국시간 시가</b> · 목표 +5% · 손절 −20% · 최대 5거래일</div>', unsafe_allow_html=True)
+                f'매수: <b style="color:{C["text"]}">신호일 마감가(종가 주문)</b> · 목표 +5% · 손절 −10% · 최대 2거래일</div>', unsafe_allow_html=True)
     cards = ''
     for r in rows:
         p = r['price']
@@ -272,7 +272,8 @@ else:
     if len(cards_list) > 6:
         with st.expander(f"나머지 {len(cards_list) - 6}종목 보기"):
             st.markdown('<div class="grid">' + '</div></div>'.join(cards_list[6:]) + '</div></div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="muted" style="margin-top:6px">지금 추적 규칙은 다음 거래일 시가에 산 것으로 계산해요. 신호일 종가에 사서 다음 날 오전에 파는 방식은 별도 실험 지표(하룻밤)로만 기록돼요.</div>', unsafe_allow_html=True)
+    pre = today[today.get('scan_type', pd.Series(dtype=str)) == 'preclose'] if 'scan_type' in today.columns else pd.DataFrame()
+    st.markdown(f'<div class="muted" style="margin-top:6px">마감 전(15:30 ET) 스캔에서 잡힌 신호 {len(pre)}건 · 마감 뒤 전 종목 스캔에서만 잡힌 신호는 참고용(그 가격에 살 수 없었음).</div>', unsafe_allow_html=True)
 
 # ─── 진행 중 ────────────────────────────────────────────────────────────────
 st.markdown('<div class="ss-sec">진행 중 <small>산 뒤 아직 안 판 것</small></div>', unsafe_allow_html=True)
@@ -399,9 +400,10 @@ with st.expander("최근 30일 신호 전체", expanded=False):
 # ─── 규칙 ────────────────────────────────────────────────────────────────────
 with st.expander("이 화면의 숫자는 어떻게 계산되나 (규칙)", expanded=False):
     st.markdown(f"""
-- **신호**: 매일 미국장 마감 뒤 전 종목을 훑어서 1차_1(급락반등)·1차_3(과매도) 조건에 맞는 종목을 기록해요. ETF·레버리지 상품은 빼요.
-- **매수**: 신호 다음 거래일 **시가**에 산 것으로 계산해요. (스캔이 장 마감 뒤라 신호일 종가에는 살 수 없음)
-- **매도**: +5% 익절, −20% 손절, 최대 5거래일. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요. 같은 날 둘 다 닿으면 손절로 쳐요.
+- **감시목록**: 전날 데이터로 "내일 신호가 날 수 있는 종목"(RSI7<45, 연속하락 3일 이상)을 미리 추려요. 하루 400~500종목.
+- **신호**: 미국장 마감 30분 전(15:30 ET, 한국 새벽 4:30)에 감시목록만 1~3분에 확인해서 1차_1·1차_3 조건에 맞는 종목을 올려요. ETF·레버리지 상품은 빼요. 마감 뒤 전 종목 스캔도 돌지만 그건 기록·대조용이에요.
+- **매수**: 신호일 **마감가**(종가 주문)에 산 것으로 계산해요.
+- **매도**: +5% 익절, −10% 손절, 최대 2거래일. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요. 같은 날 둘 다 닿으면 손절로 쳐요.
 - **비용**: 거래마다 왕복 {COST_PCT:.0f}%를 빼요.
 - **100만 원 시뮬레이션**: 한 종목에 그때 잔고의 10%, 동시에 최대 10종목. 자리가 없으면 그 신호는 건너뛰어요.
 - **하룻밤 실험**: 신호일 종가에 사서 다음날 시가에 팔았다면의 값. 일봉 기준이라 호가 차이 착시가 섞일 수 있어 기록만 해요.

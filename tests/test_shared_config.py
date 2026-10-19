@@ -37,8 +37,8 @@ class TestStrategyConfig:
     def test_values(self):
         for s in ('1', '3'):
             assert STRATEGY_CONFIG[s]['tp_pct'] == 0.05
-            assert STRATEGY_CONFIG[s]['sl_pct'] == -0.20
-            assert STRATEGY_CONFIG[s]['max_hold'] == 5
+            assert STRATEGY_CONFIG[s]['sl_pct'] == -0.10
+            assert STRATEGY_CONFIG[s]['max_hold'] == 2
 
     def test_leveraged_etf_exclusion(self):
         """주요 레버리지 ETF가 제외 목록에 있는지"""
@@ -191,10 +191,10 @@ class TestTPSLLogic:
             assert self._check_tp(s, 10.0, 10.50) is True
             assert self._check_tp(s, 10.0, 10.49) is False
 
-    def test_sl_20pct(self):
+    def test_sl_10pct(self):
         for s in ('1', '3'):
-            assert self._check_sl(s, 10.0, 8.00) is True
-            assert self._check_sl(s, 10.0, 8.01) is False
+            assert self._check_sl(s, 10.0, 9.00) is True
+            assert self._check_sl(s, 10.0, 9.01) is False
 
 
 if __name__ == '__main__':

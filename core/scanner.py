@@ -35,7 +35,7 @@ import warnings
 import os
 import json
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from shared_config import (
     KST,
@@ -332,8 +332,18 @@ def save_results(signals_1, signals_3):
 
     daily_path = f"data/signal_{date_str}.csv"
     if all_signals:
-        pd.DataFrame(all_signals).to_csv(daily_path, index=False)
-        print(f"\n  저장: {daily_path} ({len(all_signals)}건)")
+        new = pd.DataFrame(all_signals)
+        if os.path.exists(daily_path):
+            try:
+                old = pd.read_csv(daily_path, dtype={'strategy': str})
+                if len(old) and 'ticker' in old.columns:
+                    new = pd.concat([old, new], ignore_index=True)
+                    new['strategy'] = new['strategy'].astype(str)
+                    new = new.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='first')   # 먼저 저장된(마감 전) 신호 유지
+            except Exception:
+                pass
+        new.to_csv(daily_path, index=False)
+        print(f"\n  저장: {daily_path} ({len(new)}건)")
     else:
         pd.DataFrame(columns=['strategy', 'ticker', 'date', 'price']).to_csv(daily_path, index=False)
         print(f"\n  저장: {daily_path} (신호 없음)")
@@ -375,18 +385,126 @@ def save_results(signals_1, signals_3):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+# ─── v6: 두 단계 스캔 ─────────────────────────────────────────────────────────
+#  (a) build-watchlist : 장 마감 뒤(또는 아무 때나) 전 종목을 훑어 '내일 신호가 날 수 있는' 종목만 저장 (느려도 됨)
+#  (b) preclose        : 15:30 ET에 감시목록만 빠르게 받아(1~3분) 그 시점 가격으로 조건 판정 → 마감가 매수용 신호
+#  (c) 기본(인자 없음) : 예전처럼 마감 뒤 전 종목 스캔 (기록·대조용). 같은 날 preclose 신호가 있으면 덮어쓰지 않고 뒤에 합침.
+WATCHLIST_PATH = 'data/watchlist.csv'
+
+
+def build_watchlist(all_tickers):
+    """전날 데이터로 감시목록: RSI7 < WATCHLIST_RSI7, 연속하락 ≥ WATCHLIST_CONSEC, 가격·거래량 기준."""
+    from shared_config import WATCHLIST_RSI7, WATCHLIST_CONSEC
+    print(f"\n[감시목록] 전 종목 {len(all_tickers)}개 → RSI7<{WATCHLIST_RSI7} & 연속하락≥{WATCHLIST_CONSEC}")
+    rows = []
+    total_batches = (len(all_tickers) + BATCH_SIZE - 1) // BATCH_SIZE
+    for b_idx in range(0, len(all_tickers), BATCH_SIZE):
+        batch = all_tickers[b_idx:b_idx + BATCH_SIZE]
+        bn = b_idx // BATCH_SIZE + 1
+        if bn % 20 == 1 or bn == total_batches:
+            print(f"    Batch {bn}/{total_batches} ({len(rows)} 후보)")
+        data = download_batch(batch, period='60d')
+        if data is None or data.empty:
+            time.sleep(BATCH_DELAY); continue
+        for tk in batch:
+            try:
+                df = extract_ticker_df(data, tk, len(batch))
+                if df is None or len(df) < 12:
+                    continue
+                close = df['Close'].dropna()
+                last = float(close.iloc[-1]); avg_vol = float(df['Volume'].dropna().tail(20).mean())
+                if last < MIN_PRICE * 0.9 or avg_vol < MIN_VOLUME:
+                    continue
+                rsi = calc_rsi_wilder(close, 7)
+                if pd.isna(rsi.iloc[-1]) or float(rsi.iloc[-1]) >= WATCHLIST_RSI7:
+                    continue
+                if calc_consec_down(close) < WATCHLIST_CONSEC:
+                    continue
+                rows.append({'ticker': tk, 'asof': df.index[-1].strftime('%Y-%m-%d'), 'close': round(last, 4), 'rsi7': round(float(rsi.iloc[-1]), 1),
+                             'consec_down': calc_consec_down(close), 'avg_vol20': int(avg_vol)})
+            except Exception as e:
+                print(f"  Warning: {tk}: {e}")
+        time.sleep(BATCH_DELAY)
+    wl = pd.DataFrame(rows)
+    os.makedirs('data', exist_ok=True); wl.to_csv(WATCHLIST_PATH, index=False)
+    print(f"  감시목록 저장: {WATCHLIST_PATH} ({len(wl)}종목, 기준일 {wl['asof'].max() if len(wl) else '-'})")
+    return wl
+
+
+def _today_partial_bar(tk, intraday):
+    """오늘 장중 1분봉 → 임시 일봉(시가·고가·저가·현재가·거래량). 없으면 None."""
+    if intraday is None or intraday.empty:
+        return None
+    return dict(Open=float(intraday['Open'].iloc[0]), High=float(intraday['High'].max()), Low=float(intraday['Low'].min()),
+                Close=float(intraday['Close'].iloc[-1]), Volume=float(intraday['Volume'].sum()))
+
+
+def preclose_scan(strat_str):
+    """15:30 ET: 감시목록만 빠르게 확인. 일봉(60d)에 오늘 장중 임시봉을 붙여 check_signals 로 판정."""
+    if not os.path.exists(WATCHLIST_PATH):
+        print("  감시목록이 없음 → 먼저 --build-watchlist"); return [], []
+    wl = pd.read_csv(WATCHLIST_PATH, dtype={'ticker': str})
+    tickers = sorted(wl['ticker'].dropna().unique().tolist())
+    now_et = datetime.now(timezone(timedelta(hours=-4 if is_us_dst(datetime.now(timezone.utc).date()) else -5)))
+    today = now_et.strftime('%Y-%m-%d')
+    print(f"\n[마감 전 스캔] 감시목록 {len(tickers)}종목 · ET {now_et.strftime('%H:%M')} · 기준일 {today}")
+    if wl['asof'].max() >= today:
+        print("  ⚠ 감시목록 기준일이 오늘 이후 — 전날 목록이 아님. 그대로 진행하되 기록에 남김")
+    scan_time_kst = datetime.now(KST).strftime('%H:%M KST')
+    signals = {'1': [], '3': []}
+    run_1, run_3 = '1' in strat_str, '3' in strat_str
+    for b_idx in range(0, len(tickers), 40):
+        batch = tickers[b_idx:b_idx + 40]
+        daily = download_batch(batch, period='60d')
+        try:
+            intra = yf.download(' '.join(batch), period='1d', interval='1m', group_by='ticker', progress=False, threads=True, prepost=False, timeout=30)
+        except Exception as e:
+            print(f"    1분봉 실패: {e}"); intra = None
+        for tk in batch:
+            try:
+                df = extract_ticker_df(daily, tk, len(batch))
+                if df is None or len(df) < 25:
+                    continue
+                df = df[df.index.strftime('%Y-%m-%d') < today]            # 전날까지 확정 일봉만
+                itd = extract_ticker_df(intra, tk, len(batch)) if intra is not None else None
+                bar = _today_partial_bar(tk, itd)
+                if bar is None:
+                    continue
+                df2 = pd.concat([df, pd.DataFrame([bar], index=[pd.Timestamp(today)])])
+                for strat, fields in check_signals(df2, run_1, run_3):
+                    rec = {'strategy': strat, 'ticker': tk, 'date': today, 'scan_time': scan_time_kst, 'scan_type': 'preclose',
+                           'price_1530': bar['Close']}
+                    rec.update(fields); signals[strat].append(rec)
+                    print(f"    ★ [{strat}] {tk} @ ${bar['Close']:.2f}(15:30) | RSI7={fields['rsi7']:.1f} Intra={fields['intraday']:.0f}% Down={fields['consec_down']}d")
+            except Exception as e:
+                print(f"  Warning: {tk} preclose failed: {e}")
+        time.sleep(0.5)
+    return signals['1'], signals['3']
+
+
 def main():
     parser = argparse.ArgumentParser(description='US Stock Surge Scanner (Strategy 1 + 3)')
     parser.add_argument('--strategy', default=''.join(ACTIVE_STRATEGIES), help="'1', '3' or '13' (default)")
+    parser.add_argument('--build-watchlist', action='store_true', help='전날 데이터로 감시목록만 만들고 종료')
+    parser.add_argument('--preclose', action='store_true', help='15:30 ET 감시목록 빠른 확인 (마감가 매수용 신호)')
     args = parser.parse_args()
     strat_str = args.strategy
 
     t0 = time.time()
     print("=" * 80)
-    print("  US Stock Surge Scanner — Strategy 1 + 3 (v5)")
-    print(f"  Strategy: {strat_str}")
+    print("  US Stock Surge Scanner — Strategy 1 + 3 (v6)")
+    print(f"  Mode: {'watchlist' if args.build_watchlist else 'preclose' if args.preclose else 'after-close full scan'} · Strategy: {strat_str}")
     print(f"  Scan Time: {datetime.now(KST).strftime('%Y-%m-%d %H:%M')}")
     print("=" * 80)
+
+    if args.build_watchlist:
+        build_watchlist(get_all_tickers())
+        print(f"\n  완료: {time.time() - t0:.0f}초"); return
+
+    if args.preclose:
+        s1, s3 = preclose_scan(strat_str)
+        print_results(s1, s3); save_results(s1, s3)
+        print(f"\n  마감 전 스캔 완료: {time.time() - t0:.0f}초 | 1: {len(s1)}건 | 3: {len(s3)}건"); return
 
     confirmed_date = wait_for_market_data(max_retries=3, retry_interval=120)
     if confirmed_date:
@@ -398,10 +516,17 @@ def main():
     candidates = phase1_rsi_filter(all_tickers)
     print("\n[3] Phase 2: 전략 1·3 판정...")
     signals_1, signals_3 = phase2_check_all(candidates, strat_str)
+    for s_ in signals_1 + signals_3:
+        s_['scan_type'] = 'afterclose'
 
     print_results(signals_1, signals_3)
     save_results(signals_1, signals_3)
     print(f"\n  스캔 완료: {time.time() - t0:.0f}초 | Strategy 1: {len(signals_1)}건 | 3: {len(signals_3)}건")
+    # 마감 뒤 스캔이 끝났으면 내일을 위한 감시목록도 갱신
+    try:
+        build_watchlist(all_tickers)
+    except Exception as e:
+        print(f"  감시목록 갱신 실패: {e}")
 
 
 if __name__ == '__main__':

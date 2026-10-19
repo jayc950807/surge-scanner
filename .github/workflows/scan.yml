@@ -35,7 +35,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run unit tests
         run: python -m pytest tests/ -v --tb=short 2>&1 || echo "⚠️ Some tests failed"
-      - name: Run scanner
+      - name: Run scanner (마감 뒤 전 종목 — 기록·대조용 + 내일 감시목록 갱신)
         id: scanner
         run: |
           python core/scanner.py 2>&1 | tee scanner_output.log

@@ -1,0 +1,49 @@
+name: Pre-close Scan (15:30 ET)
+on:
+  schedule:
+    # GitHub 예약은 10~30분 늦게 시작할 수 있어 15:05 ET 에 걸고, 스크립트 안에서 15:30 ET 까지 기다린다.
+    # 서머타임(3월 둘째 일~11월 첫째 일) 19:05 UTC / 겨울 20:05 UTC — 둘 다 걸고 스크립트가 ET 로 판단
+    - cron: '5 19 * * 1-5'
+    - cron: '5 20 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: scanner-push
+  cancel-in-progress: false
+jobs:
+  preclose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Wait until 15:30 ET, then scan watchlist
+        run: |
+          python - <<'PY'
+          import time, datetime as dt
+          from zoneinfo import ZoneInfo
+          ny = ZoneInfo("America/New_York")
+          now = dt.datetime.now(ny)
+          target = now.replace(hour=15, minute=30, second=0, microsecond=0)
+          if now.hour >= 16:
+              print("장 마감 뒤 — 이 실행은 다른 시간대(서머타임) 몫. 종료"); raise SystemExit(0)
+          if now < target:
+              wait = (target - now).total_seconds(); print(f"{wait/60:.0f}분 대기 → 15:30 ET"); time.sleep(wait)
+          open("/tmp/go","w").write("1")
+          PY
+          if [ -f /tmp/go ]; then python core/scanner.py --preclose 2>&1 | tee preclose_output.log; fi
+      - name: Register signals (PENDING → 종가 진입은 아침 tracker 가 처리)
+        run: python core/tracker.py --register-only || true
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet && exit 0
+          git commit -m "preclose: $(date +%Y-%m-%d) 15:30 ET signals"
+          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin main && exit 0; sleep $((RANDOM % 10 + 5)); done
+          exit 1
