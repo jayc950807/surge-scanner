@@ -158,7 +158,7 @@ def calc_consec_down(close_series):
 
 
 def _ref_prices(price):
-    """참고용 목표가/손절가 (신호일 종가 기준). 실제 추적은 다음날 시가 기준으로 다시 계산된다."""
+    """참고용 목표가/손절가 (15:30 가격 또는 종가 기준). 실제 추적은 확정 종가 기준으로 다시 계산된다."""
     return round(price * (1 + STRATEGY_CONFIG['1']['tp_pct']), 2), round(price * (1 + STRATEGY_CONFIG['1']['sl_pct']), 2)
 
 
@@ -312,7 +312,7 @@ def print_results(signals_1, signals_3):
         print(f"\n{'='*90}")
         print(f"  ★ {STRATEGY_NAMES[key]} — {date_str}")
         print(f"  조건: {cond}")
-        print(f"  매매: 다음날 시가 진입 | +{cfg['tp_pct']*100:.0f}% 익절 | {cfg['sl_pct']*100:.0f}% 손절 | {cfg['max_hold']}일")
+        print(f"  매매: 신호일 마감가 진입 | +{cfg['tp_pct']*100:.0f}% 익절 | {cfg['sl_pct']*100:.0f}% 손절 | {cfg['max_hold']}일")
         print(f"{'='*90}")
         if not sigs:
             print("  신호 없음")
@@ -325,10 +325,11 @@ def print_results(signals_1, signals_3):
         print(f"  Total: {len(sigs)} signals")
 
 
-def save_results(signals_1, signals_3):
+def save_results(signals_1, signals_3, date_str=None):
     os.makedirs('data', exist_ok=True)
     all_signals = signals_1 + signals_3
-    date_str = all_signals[0]['date'] if all_signals else datetime.now(KST).strftime('%Y-%m-%d')
+    if date_str is None:
+        date_str = all_signals[0]['date'] if all_signals else get_expected_trading_date().strftime('%Y-%m-%d')
 
     daily_path = f"data/signal_{date_str}.csv"
     if all_signals:
@@ -355,7 +356,7 @@ def save_results(signals_1, signals_3):
             df_hist = pd.read_csv(hist_path)
             df_hist = pd.concat([df_hist, df_new], ignore_index=True)
             df_hist['strategy'] = df_hist['strategy'].astype(str)
-            df_hist.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='last', inplace=True)
+            df_hist.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='first', inplace=True)   # 먼저 기록된(마감 전) 신호 유지
         else:
             df_hist = df_new
         df_hist.to_csv(hist_path, index=False)
@@ -376,7 +377,7 @@ def save_results(signals_1, signals_3):
         'strategy_3_count': len(signals_3),
         'total_count': len(all_signals),
         'dq_warnings': len(dq),
-        'version': 'v5',
+        'version': 'v6',
     }
     with open('data/latest_scan.json', 'w') as f:
         json.dump(summary, f, indent=2)
@@ -425,7 +426,7 @@ def build_watchlist(all_tickers):
             except Exception as e:
                 print(f"  Warning: {tk}: {e}")
         time.sleep(BATCH_DELAY)
-    wl = pd.DataFrame(rows)
+    wl = pd.DataFrame(rows, columns=['ticker', 'asof', 'close', 'rsi7', 'consec_down', 'avg_vol20'])
     os.makedirs('data', exist_ok=True); wl.to_csv(WATCHLIST_PATH, index=False)
     print(f"  감시목록 저장: {WATCHLIST_PATH} ({len(wl)}종목, 기준일 {wl['asof'].max() if len(wl) else '-'})")
     return wl
@@ -439,16 +440,30 @@ def _today_partial_bar(tk, intraday):
                 Close=float(intraday['Close'].iloc[-1]), Volume=float(intraday['Volume'].sum()))
 
 
+def _now_et():
+    return datetime.now(timezone(timedelta(hours=-4 if is_us_dst(datetime.now(timezone.utc).date()) else -5)))
+
+
+def _today_et():
+    return _now_et().strftime('%Y-%m-%d')
+
+
 def preclose_scan(strat_str):
     """15:30 ET: 감시목록만 빠르게 확인. 일봉(60d)에 오늘 장중 임시봉을 붙여 check_signals 로 판정."""
     if not os.path.exists(WATCHLIST_PATH):
         print("  감시목록이 없음 → 먼저 --build-watchlist"); return [], []
-    wl = pd.read_csv(WATCHLIST_PATH, dtype={'ticker': str})
+    try:
+        wl = pd.read_csv(WATCHLIST_PATH, dtype={'ticker': str})
+    except Exception:
+        wl = pd.DataFrame(columns=['ticker', 'asof'])
+    if wl.empty:
+        print("  감시목록이 비어 있음"); return [], []
+    now_et = _now_et(); today = now_et.strftime('%Y-%m-%d')
+    if not is_us_trading_day(now_et.date()):
+        print("  오늘은 미국 휴장일 → 스캔 생략"); return [], []
     tickers = sorted(wl['ticker'].dropna().unique().tolist())
-    now_et = datetime.now(timezone(timedelta(hours=-4 if is_us_dst(datetime.now(timezone.utc).date()) else -5)))
-    today = now_et.strftime('%Y-%m-%d')
     print(f"\n[마감 전 스캔] 감시목록 {len(tickers)}종목 · ET {now_et.strftime('%H:%M')} · 기준일 {today}")
-    if wl['asof'].max() >= today:
+    if str(wl['asof'].dropna().max()) >= today:
         print("  ⚠ 감시목록 기준일이 오늘 이후 — 전날 목록이 아님. 그대로 진행하되 기록에 남김")
     scan_time_kst = datetime.now(KST).strftime('%H:%M KST')
     signals = {'1': [], '3': []}
@@ -503,7 +518,7 @@ def main():
 
     if args.preclose:
         s1, s3 = preclose_scan(strat_str)
-        print_results(s1, s3); save_results(s1, s3)
+        print_results(s1, s3); save_results(s1, s3, date_str=_today_et())
         print(f"\n  마감 전 스캔 완료: {time.time() - t0:.0f}초 | 1: {len(s1)}건 | 3: {len(s3)}건"); return
 
     confirmed_date = wait_for_market_data(max_retries=3, retry_interval=120)

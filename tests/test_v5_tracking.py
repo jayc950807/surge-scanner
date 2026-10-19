@@ -121,3 +121,24 @@ class TestIntraday:
         m = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)
         r = tracker.track_position_intraday(10, 10.5, 9.0, 1, m)
         assert r[0] == 'EXPIRED'
+
+    def test_expired_on_early_close_day_with_finished_days(self):
+        # 15:55 봉이 없어도(조기 마감·거래 없음) 그날 확정 일봉이 있으면 만기 처리
+        m1 = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 200)
+        m2 = self._mins('2026-03-04', [[9.9, 10.1, 9.7, 9.9]] * 200)
+        fin = [pd.Timestamp('2026-03-03'), pd.Timestamp('2026-03-04')]
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, pd.concat([m1, m2]), finished_days=fin)
+        assert r[0] == 'EXPIRED' and r[8] == 2
+
+    def test_minute_window_must_start_at_first_tracking_day(self):
+        hist = pd.DataFrame({'Close': [1, 1]}, index=pd.to_datetime(['2026-03-03', '2026-03-04']))
+        late = self._mins('2026-03-10', [[10, 10.2, 9.7, 9.8]] * 5)
+        ok = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 5)
+        assert tracker.minute_data_valid(late, hist) is False
+        assert tracker.minute_data_valid(ok, hist) is True
+
+    def test_daily_fallback_gap_on_first_day_for_v6(self):
+        # 종가 진입 뒤 다음날 시가가 손절가 아래로 갭 → 그 시가로 체결
+        h = bars([[8.0, 8.5, 7.9, 8.2]], start='2026-03-03')
+        r = tracker.track_position_daywise(10, 10.5, 9.0, 2, h, gap_from_first_bar=True)
+        assert r[0] == 'LOSS' and r[1] == 8.0

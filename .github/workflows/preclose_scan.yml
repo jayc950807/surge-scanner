@@ -30,15 +30,22 @@ jobs:
           ny = ZoneInfo("America/New_York")
           now = dt.datetime.now(ny)
           target = now.replace(hour=15, minute=30, second=0, microsecond=0)
-          if now.hour >= 16:
-              print("장 마감 뒤 — 이 실행은 다른 시간대(서머타임) 몫. 종료"); raise SystemExit(0)
+          if now.hour >= 16 or now.hour < 15:
+              print(f"ET {now:%H:%M} — 이 실행은 다른 시간대(서머타임) 몫. 종료"); raise SystemExit(0)
           if now < target:
               wait = (target - now).total_seconds(); print(f"{wait/60:.0f}분 대기 → 15:30 ET"); time.sleep(wait)
           open("/tmp/go","w").write("1")
           PY
-          if [ -f /tmp/go ]; then python core/scanner.py --preclose 2>&1 | tee preclose_output.log; fi
+          if [ -f /tmp/go ]; then set -o pipefail; python core/scanner.py --preclose 2>&1 | tee preclose_output.log; fi
       - name: Register signals (PENDING → 종가 진입은 아침 tracker 가 처리)
-        run: python core/tracker.py --register-only || true
+        run: if [ -f /tmp/go ]; then python core/tracker.py --register-only; fi
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: preclose-${{ github.run_id }}
+          path: preclose_output.log
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"

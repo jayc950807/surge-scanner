@@ -18,7 +18,7 @@ try:
 except Exception:  # 단독 실행 대비
     KST = timezone(timedelta(hours=9))
     ACTIVE_STRATEGIES = ['1', '3']; COST_PCT = 1.0
-    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5} for s in ACTIVE_STRATEGIES}
+    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2} for s in ACTIVE_STRATEGIES}
     STRATEGY_NAMES = {'1': '1차_1 · 급락반등', '3': '1차_3 · 과매도'}
 
 st.set_page_config(page_title="Surge Scanner", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
@@ -70,7 +70,7 @@ h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .exp {{ background:{C['warn']}22; color:{C['warn']}; }}
 .open {{ background:{C['blue']}22; color:{C['blue']}; }}
 .bar {{ position:relative; height:10px; background:{C['line']}; border-radius:5px; margin:8px 0 4px; }}
-.bar .z {{ position:absolute; left:80%; top:-3px; width:2px; height:16px; background:{C['sub']}; }}
+.bar .z {{ position:absolute; left:66.7%; top:-3px; width:2px; height:16px; background:{C['sub']}; }}
 .bar .f {{ position:absolute; top:0; height:10px; border-radius:5px; }}
 .bar .m {{ position:absolute; top:-3px; width:4px; height:16px; border-radius:2px; background:{C['text']}; }}
 .note {{ background:{C['surface']}; border-left:4px solid {C['warn']}; padding:10px 14px; border-radius:6px; color:{C['sub']}; font-size:0.9rem; }}
@@ -264,7 +264,7 @@ else:
         down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
         cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f}</span></div>'
                   f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
-                  f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.8:,.2f}</b></span>'
+                  f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b></span>'
                   f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
     cards_list = cards.split('</div></div>')[:-1]
     head = '</div></div>'.join(cards_list[:6]) + ('</div></div>' if cards_list[:6] else '')
@@ -294,11 +294,11 @@ else:
             ch = 0.0; cp = ep if np.isnan(cp) else cp
         dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 5
         if r['status'] == 'PENDING' or np.isnan(ep):
-            body = f'<div class="muted">다음 거래일 시가에 진입 예정 · 신호 {r["signal_date"]}</div>'
+            body = f'<div class="muted">신호일 마감가로 진입 예정(일봉 확정 대기) · 신호 {r["signal_date"]}</div>'
         else:
-            pos = min(max((ch + 20) / 25, 0), 1) * 100 if not np.isnan(ch) else 0
+            pos = min(max((ch + 10) / 15, 0), 1) * 100 if not np.isnan(ch) else 0
             fill = '#5fd35f' if ch >= 0 else C['red']
-            left, width = (80, pos - 80) if pos >= 80 else (pos, 80 - pos)
+            left, width = (66.7, pos - 66.7) if pos >= 66.7 else (pos, 66.7 - pos)
             body = (f'<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">진입 ${ep:,.2f}</span>'
                     f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted">현재 ${cp:,.2f}</span></div>'
                     f'<div class="bar"><div class="f" style="left:{left}%;width:{max(width,0)}%;background:{fill}"></div><div class="z"></div><div class="m" style="left:calc({pos}% - 2px)"></div></div>'
@@ -354,7 +354,7 @@ else:
                   f'<div><div class="muted">중간값</div><div style="font-size:1.3rem;font-weight:700">{fmt_pct(md)}</div></div></div>'
                   f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on)}</b></span></div></div>')
     st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="muted" style="margin-top:6px">도달률이 70%여도 평균이 0 근처인 이유: 이기면 +5%, 지면 −20%라서 한 번 지면 네 번 이긴 걸 다 까먹어요. '
+    st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −10%(갭이면 더)라서 승률 67%가 넘어야 남아요. 판정은 1분봉 기준이고, 분봉이 없으면 일봉(보수적)으로 해요. '
                 f'하룻밤 실험 = 신호일 종가에 사서 다음날 시가에 팔았다면(비용 {COST_PCT:.0f}% 뺀 값, 기록용).</div>', unsafe_allow_html=True)
 
 # ─── 기록 ────────────────────────────────────────────────────────────────────
