@@ -13,8 +13,15 @@ on:
         description: '전체 히스토리 재검증 (YES 입력 시 모든 결과 재확인)'
         required: false
         default: ''
+      rebuild_cache:
+        description: '일봉 캐시를 지우고 Alpaca 에서 처음부터 다시 받기 (YES)'
+        required: false
+        default: ''
 permissions:
   contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
 # 같은 워크플로우가 겹쳐서 돌지 않도록 직렬화 (이전 실행이 끝날 때까지 대기)
 concurrency:
   group: scanner-push
@@ -35,10 +42,14 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run unit tests
         run: python -m pytest tests/ -v --tb=short 2>&1 || echo "⚠️ Some tests failed"
-      - name: Run scanner (마감 뒤 전 종목 — 기록·대조용 + 내일 감시목록 갱신)
+      - name: Run scanner (캐시 갱신 + 마감 뒤 전 종목 — 기록·대조용 + 내일 감시목록 갱신)
         id: scanner
         run: |
-          python core/scanner.py 2>&1 | tee scanner_output.log
+          if [ "${{ github.event.inputs.rebuild_cache }}" = "YES" ]; then
+            python core/scanner.py --rebuild-cache 2>&1 | tee scanner_output.log
+          else
+            python core/scanner.py 2>&1 | tee scanner_output.log
+          fi
           echo "scanner_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
       - name: Run position tracker
         if: steps.scanner.outcome == 'success'

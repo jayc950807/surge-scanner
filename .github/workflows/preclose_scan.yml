@@ -1,7 +1,8 @@
-name: Pre-close Scan (15:30 ET)
+name: Pre-close Scan (15:46 ET)
 on:
   schedule:
-    # GitHub 예약은 10~30분 늦게 시작할 수 있어 15:05 ET 에 걸고, 스크립트 안에서 15:30 ET 까지 기다린다.
+    # GitHub 예약은 10~30분 늦게 시작할 수 있어 15:05 ET 에 걸고, 스크립트 안에서 15:46 ET 까지 기다린다.
+    # (무료 Alpaca 는 15분 지연 → 15:46 실행 = 15:30 까지의 가격으로 판정. 종가 주문 마감은 15:50)
     # 서머타임(3월 둘째 일~11월 첫째 일) 19:05 UTC / 겨울 20:05 UTC — 둘 다 걸고 스크립트가 ET 로 판단
     - cron: '5 19 * * 1-5'
     - cron: '25 19 * * 1-5'   # 첫 실행이 지연됐을 때 보조 (이미 실행됐으면 스크립트가 건너뜀)
@@ -13,6 +14,9 @@ permissions:
 concurrency:
   group: scanner-push
   cancel-in-progress: false
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
 jobs:
   preclose:
     runs-on: ubuntu-latest
@@ -24,18 +28,18 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - run: pip install -r requirements.txt
-      - name: Wait until 15:30 ET, then scan watchlist
+      - name: Wait until 15:46 ET, then scan watchlist
         run: |
           python - <<'PY'
           import time, datetime as dt
           from zoneinfo import ZoneInfo
           ny = ZoneInfo("America/New_York")
           now = dt.datetime.now(ny)
-          target = now.replace(hour=15, minute=30, second=0, microsecond=0)
+          target = now.replace(hour=15, minute=46, second=0, microsecond=0)
           if now.hour != 15 or now.minute > 48:
               print(f"ET {now:%H:%M} — 15:00~15:48 ET 밖(다른 시간대 몫이거나 너무 늦음). 종료"); raise SystemExit(0)
           if now < target:
-              wait = (target - now).total_seconds(); print(f"{wait/60:.0f}분 대기 → 15:30 ET"); time.sleep(wait)
+              wait = (target - now).total_seconds(); print(f"{wait/60:.0f}분 대기 → 15:46 ET"); time.sleep(wait)
           open("/tmp/go","w").write("1")
           PY
           if [ -f /tmp/go ]; then set -o pipefail; python core/scanner.py --preclose 2>&1 | tee preclose_output.log; fi

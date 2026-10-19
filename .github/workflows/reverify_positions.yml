@@ -5,6 +5,9 @@ on:
 
 permissions:
   contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
 # scan / preclose 와 같은 줄에 세워 data/ 커밋이 서로 엉키지 않게 한다
 concurrency:
   group: scanner-push
