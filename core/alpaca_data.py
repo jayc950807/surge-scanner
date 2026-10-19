@@ -27,7 +27,8 @@ import requests
 
 NY = ZoneInfo('America/New_York')
 DATA_URL = 'https://data.alpaca.markets'
-TRADE_URL = 'https://paper-api.alpaca.markets'
+TRADE_URL = 'https://paper-api.alpaca.markets'       # 종이거래(paper) 키 기준. 실거래 키면 api.alpaca.markets 로 자동 전환
+TRADE_URL_ALT = 'https://api.alpaca.markets'
 SIP_DELAY_MIN = 16          # 무료 플랜: 최근 15분 SIP 조회 불가 → 여유 1분
 REQ_SLEEP = 0.34            # 200회/분 한도
 BAR_COLS = ['symbol', 't', 'o', 'h', 'l', 'c', 'v', 'n', 'vw']
@@ -55,7 +56,9 @@ def _headers():
 
 
 def get(url, params=None, retries=8, allow_400=False):
-    """GET + 재시도. 429/5xx 는 기다렸다 다시, 400 은 allow_400 이면 None(잘못된 심볼 등). 키는 헤더로만."""
+    """GET + 재시도. 429/5xx 는 기다렸다 다시, 400 은 allow_400 이면 None(잘못된 심볼 등). 키는 헤더로만.
+    거래 API(paper-api) 가 401/403 이면 실거래 호스트(api)로 한 번 바꿔 본다 (키 종류에 따라 호스트가 다름)."""
+    global TRADE_URL
     last = ''
     for a in range(retries):
         try:
@@ -64,6 +67,13 @@ def get(url, params=None, retries=8, allow_400=False):
             last = str(e)[:120]; time.sleep(5 * (a + 1)); continue
         if r.status_code in (429, 500, 502, 503, 504):
             last = f'{r.status_code}'; time.sleep(10 * (a + 1)); continue
+        if r.status_code in (401, 403) and url.startswith(TRADE_URL) and TRADE_URL != TRADE_URL_ALT:
+            alt = url.replace(TRADE_URL, TRADE_URL_ALT, 1)
+            r2 = requests.get(alt, headers=_headers(), params=params, timeout=60)
+            if r2.status_code < 400:
+                TRADE_URL = TRADE_URL_ALT
+                time.sleep(REQ_SLEEP)
+                return r2.json()
         if r.status_code == 400 and allow_400:
             return None
         if r.status_code >= 400:
