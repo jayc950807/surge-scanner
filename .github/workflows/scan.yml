@@ -80,6 +80,7 @@ jobs:
           for i in 1 2 3 4 5; do
             echo "Push attempt $i/5..."
             git pull --rebase origin main && git push origin main && exit 0
+            git rebase --abort 2>/dev/null || true
             sleep $((RANDOM % 10 + 5))
           done
           echo "❌ Push failed after 5 attempts"

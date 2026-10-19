@@ -229,8 +229,10 @@ avg = uniq['result_pct'].mean() if n else np.nan
 n_open = int((open_pos['status'] == 'OPEN').sum()) if not open_pos.empty and 'status' in open_pos else 0
 ret = (final / 1_000_000 - 1) * 100 if n else np.nan
 
+nj_k = cl['judge'].value_counts().to_dict() if 'judge' in cl.columns else {}
+judge_txt = f" · 판정 1분봉 {nj_k.get('minute', 0)}건/일봉 {nj_k.get('daily', 0)}건" if (n and has_v5) else ''
 kpis = [
-    ('hero', '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목 · 비용 {COST_PCT:.0f}% 포함", color_pct(ret)),
+    ('hero', '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목 · 비용 {COST_PCT:.0f}% 포함{judge_txt}", color_pct(ret)),
     ('', '중간에 가장 많이 줄었을 때', fmt_pct(mdd * 100) if n else '—', '최고점 대비', C['red'] if n else C['muted']),
     ('', '+5% 도달률', fmt_pct(wr, False) if n else '—', f"{n}건", C['text']),
     ('', '한 번 살 때 평균', fmt_pct(avg) if n else '—', '비용 뺀 값', color_pct(avg)),
@@ -295,7 +297,7 @@ else:
         ep, cp, ch = r.get('entry_price'), r.get('current_price'), r.get('change_pct')
         if np.isnan(ch) and not np.isnan(ep):
             ch = 0.0; cp = ep if np.isnan(cp) else cp
-        dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 5
+        dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 2
         if r['status'] == 'PENDING' or np.isnan(ep):
             body = f'<div class="muted">신호일 마감가로 진입 예정(일봉 확정 대기) · 신호 {r["signal_date"]}</div>'
         else:

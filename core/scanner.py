@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Scanner — Strategy 1 + 3 (v5)
+  US Stock Surge Scanner — Strategy 1 + 3 (v6)
 
   Strategy 1 (급락반등):
     신호: Intra>20% + Ret3d<-15% + ConsecDown>5 + DistLow5<5% + RSI7<20
   Strategy 3 (과매도):
     신호: RSI7<30 + Intra>20% + Ret1d<-8% + 전일하락 + ConsecDown>3 + DistLow5<3%
 
-  공통 매매 규칙 (v5, 실제로 체결 가능한 방식):
-    진입: 신호일 다음 거래일 시가 (스캔이 장 마감 뒤에 돌기 때문)
-    청산: +5% 익절 | -20% 손절 (갭으로 뚫리면 시가 체결) | 5거래일 타임아웃
+  공통 매매 규칙 (v6, research/STRATEGY_V6.md):
+    탐지: 15:30 ET 마감 전 스캔 — 감시목록(전날 RSI7<45 & 연속하락≥3)만 1분봉으로 확인
+    진입: 신호일 마감가 (종가 주문, MOC)
+    청산: +5% 익절 | -10% 손절 (갭으로 뚫리면 시가 체결) | 2거래일 타임아웃 (마지막 날 종가)
     비용: 왕복 COST_PCT (shared_config) 를 결과에서 차감
     제외: ETF·ETN·레버리지 상품, 테스트 종목, 실제 주가 $1 미만, 20일 평균 거래량 1만주 미만
 
-  ※ 과거 '백테스트 승률 90%' 표기는 신호일 종가 진입 + 비용 0 가정이었고,
-    무작위 고변동 종목과 차이가 없었다(research/STRATEGY_REVIEW_v5.md). 화면에는
-    실제 추적 성적만 표시한다.
+  ※ 마감 뒤 전 종목 스캔(기본 모드)은 기록·대조용 + 내일 감시목록 갱신용이다.
+    거기서만 잡힌 신호는 그 가격에 살 수 없었으므로 추적하지 않는다(scan_type='afterclose').
 
   Usage:
-    python scanner.py                 # 1 + 3
-    python scanner.py --strategy 1    # 1 only
-    python scanner.py --strategy 3    # 3 only
+    python scanner.py                   # 마감 뒤 전 종목 스캔 (장중에는 돌지 않음, --force 로 강제)
+    python scanner.py --preclose        # 15:00~15:48 ET 감시목록 빠른 확인 → 마감가 매수용 신호
+    python scanner.py --build-watchlist # 감시목록만 다시 생성
+    python scanner.py --strategy 1      # 전략 1만
 
-  Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append) + data/latest_scan.json
+  Output: data/signal_YYYY-MM-DD.csv + data/history.csv (append) + data/latest_scan.json + data/watchlist.csv
 ================================================================================
 """
 
@@ -341,6 +342,20 @@ def print_results(signals_1, signals_3):
         print(f"  Total: {len(sigs)} signals")
 
 
+def dedupe_prefer_preclose(df):
+    """같은 (전략, 종목, 날짜) 신호가 두 번 있으면 마감 전(preclose) 신호를 남긴다.
+    파일에 어떤 순서로 들어 있든(마감 뒤 신호가 먼저 저장된 경우 포함) 결과가 같도록 안정 정렬 뒤 중복 제거."""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df['strategy'] = df['strategy'].astype(str)
+    pre = (df['scan_type'].astype(str) == 'preclose') if 'scan_type' in df.columns else pd.Series(False, index=df.index)
+    df['_pre'] = pre.astype(int)
+    df = df.sort_values('_pre', ascending=False, kind='stable')
+    df = df.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='first')
+    return df.drop(columns=['_pre']).sort_index().reset_index(drop=True)
+
+
 def save_results(signals_1, signals_3, date_str=None):
     os.makedirs('data', exist_ok=True)
     all_signals = signals_1 + signals_3
@@ -354,9 +369,7 @@ def save_results(signals_1, signals_3, date_str=None):
             try:
                 old = pd.read_csv(daily_path, dtype={'strategy': str})
                 if len(old) and 'ticker' in old.columns:
-                    new = pd.concat([old, new], ignore_index=True)
-                    new['strategy'] = new['strategy'].astype(str)
-                    new = new.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='first')   # 먼저 저장된(마감 전) 신호 유지
+                    new = dedupe_prefer_preclose(pd.concat([old, new], ignore_index=True))   # 마감 전 신호 우선 유지
             except Exception:
                 pass
         new.to_csv(daily_path, index=False)
@@ -372,10 +385,8 @@ def save_results(signals_1, signals_3, date_str=None):
     if all_signals:
         df_new = pd.DataFrame(all_signals)
         if os.path.exists(hist_path):
-            df_hist = pd.read_csv(hist_path)
-            df_hist = pd.concat([df_hist, df_new], ignore_index=True)
-            df_hist['strategy'] = df_hist['strategy'].astype(str)
-            df_hist.drop_duplicates(subset=['strategy', 'ticker', 'date'], keep='first', inplace=True)   # 먼저 기록된(마감 전) 신호 유지
+            df_hist = pd.read_csv(hist_path, dtype={'strategy': str})
+            df_hist = dedupe_prefer_preclose(pd.concat([df_hist, df_new], ignore_index=True))   # 마감 전 신호 우선 유지
         else:
             df_hist = df_new
         df_hist.to_csv(hist_path, index=False)
@@ -492,6 +503,28 @@ def _last_session_et():
     return get_last_trading_date(d).strftime('%Y-%m-%d')
 
 
+PRECLOSE_WINDOW_ET = (15 * 60 + 0, 15 * 60 + 48)     # 마감 전 스캔 허용 시각 (분): 15:00 ~ 15:48 ET (MOC 주문 마감 15:50 전)
+STALE_MARKET_MIN = 20                                # 기준 종목(SPY)의 마지막 1분봉이 이보다 오래됐으면 장이 이미 끝난 것(조기 마감)
+
+
+def market_still_open(now_et, ref='SPY'):
+    """기준 종목의 마지막 1분봉 시각으로 '지금 장이 열려 있는지' 확인 (추수감사절 다음 날 같은 13:00 조기 마감 대비).
+    확인 자체가 실패하면 None(판단 불가 → 진행)."""
+    try:
+        ref_df = yf.download(ref, period='1d', interval='1m', progress=False, prepost=False, timeout=30)
+        if ref_df is None or ref_df.empty:
+            return None
+        idx = ref_df.index
+        last = idx[-1].tz_convert('America/New_York') if idx.tz is not None else idx[-1].tz_localize('America/New_York')
+        if last.strftime('%Y-%m-%d') != now_et.strftime('%Y-%m-%d'):
+            return False
+        age_min = (now_et - last.to_pydatetime()).total_seconds() / 60
+        return age_min <= STALE_MARKET_MIN
+    except Exception as e:
+        print(f"  ⚠ 장 운영 확인 실패({ref}): {e}")
+        return None
+
+
 def preclose_scan(strat_str):
     """15:30 ET: 감시목록만 빠르게 확인. 일봉(60d)에 오늘 장중 임시봉을 붙여 check_signals 로 판정."""
     if not os.path.exists(WATCHLIST_PATH):
@@ -505,7 +538,10 @@ def preclose_scan(strat_str):
     now_et = _now_et(); today = now_et.strftime('%Y-%m-%d')
     if not is_us_trading_day(now_et.date()):
         print("  오늘은 미국 휴장일 → 스캔 생략"); return [], []
-    if now_et.hour * 60 + now_et.minute > 15 * 60 + 48:
+    hm_now = now_et.hour * 60 + now_et.minute
+    if hm_now < PRECLOSE_WINDOW_ET[0]:
+        print(f"  ET {now_et.strftime('%H:%M')} — 15:00 ET 전이라 마감 전 가격이 아님. 스캔 생략 (15:30 ET 에 실행)"); return [], []
+    if hm_now > PRECLOSE_WINDOW_ET[1]:
         print("  15:48 ET 를 넘김 — 종가 주문(MOC) 마감 뒤라 오늘 마감 전 스캔은 생략"); return [], []
     prev_path = f"data/signal_{today}.csv"
     if os.path.exists(prev_path):
@@ -515,6 +551,8 @@ def preclose_scan(strat_str):
                 print("  오늘 마감 전 스캔은 이미 실행됨 → 생략"); return [], []
         except Exception:
             pass
+    if market_still_open(now_et) is False:
+        print("  오늘은 장이 이미 끝남(조기 마감일 등) → 마감 전 스캔 생략"); return [], []
     tickers = sorted(wl['ticker'].dropna().unique().tolist())
     print(f"\n[마감 전 스캔] 감시목록 {len(tickers)}종목 · ET {now_et.strftime('%H:%M')} · 기준일 {today}")
     if str(wl['asof'].dropna().max()) >= today:
@@ -522,6 +560,7 @@ def preclose_scan(strat_str):
     scan_time_kst = datetime.now(KST).strftime('%H:%M KST')
     signals = {'1': [], '3': []}
     run_1, run_3 = '1' in strat_str, '3' in strat_str
+    n_checked = n_no_bar = n_short = 0
     for b_idx in range(0, len(tickers), 40):
         batch = tickers[b_idx:b_idx + 40]
         daily = download_batch(batch, period='60d')
@@ -533,12 +572,13 @@ def preclose_scan(strat_str):
             try:
                 df = extract_ticker_df(daily, tk, len(batch))
                 if df is None or len(df) < 25:
-                    continue
+                    n_short += 1; continue
                 df = df[df.index.strftime('%Y-%m-%d') < today]            # 전날까지 확정 일봉만
                 itd = extract_ticker_df(intra, tk, len(batch)) if intra is not None else None
                 bar = _today_partial_bar(tk, itd, today=today)
                 if bar is None:
-                    continue
+                    n_no_bar += 1; continue
+                n_checked += 1
                 df2 = pd.concat([df, pd.DataFrame([bar], index=[pd.Timestamp(today)])])
                 for strat, fields in check_signals(df2, run_1, run_3):
                     rec = {'strategy': strat, 'ticker': tk, 'date': today, 'scan_time': scan_time_kst, 'scan_type': 'preclose',
@@ -548,6 +588,9 @@ def preclose_scan(strat_str):
             except Exception as e:
                 print(f"  Warning: {tk} preclose failed: {e}")
         time.sleep(0.5)
+    print(f"  판정 {n_checked}종목 · 오늘 1분봉 없음 {n_no_bar}종목 · 일봉 부족 {n_short}종목")
+    if tickers and n_checked == 0:
+        print("  ⚠ 오늘 1분봉을 하나도 받지 못함 — 데이터 지연이거나 장이 열리지 않은 날")
     return signals['1'], signals['3']
 
 
@@ -556,6 +599,7 @@ def main():
     parser.add_argument('--strategy', default=''.join(ACTIVE_STRATEGIES), help="'1', '3' or '13' (default)")
     parser.add_argument('--build-watchlist', action='store_true', help='전날 데이터로 감시목록만 만들고 종료')
     parser.add_argument('--preclose', action='store_true', help='15:30 ET 감시목록 빠른 확인 (마감가 매수용 신호)')
+    parser.add_argument('--force', action='store_true', help='장중이어도 마감 뒤 전 종목 스캔을 강제 실행 (점검용)')
     args = parser.parse_args()
     strat_str = args.strategy
 
@@ -571,9 +615,19 @@ def main():
         print(f"\n  완료: {time.time() - t0:.0f}초"); return
 
     if args.preclose:
+        now_et = _now_et()
+        if not is_us_trading_day(now_et.date()):
+            print("  오늘은 미국 휴장일 → 마감 전 스캔 생략 (파일도 만들지 않음)"); return
         s1, s3 = preclose_scan(strat_str)
-        print_results(s1, s3); save_results(s1, s3, date_str=_today_et())
+        print_results(s1, s3); save_results(s1, s3, date_str=now_et.strftime('%Y-%m-%d'))
         print(f"\n  마감 전 스캔 완료: {time.time() - t0:.0f}초 | 1: {len(s1)}건 | 3: {len(s3)}건"); return
+
+    # 마감 뒤 전 종목 스캔은 '확정 종가'가 있어야 의미가 있다. 장중(프리마켓 04:00 ~ 마감 16:00 ET)에 돌면
+    # 그 시점 가격이 종가처럼 기록되고, 감시목록도 오늘 장중 값으로 덮어써지므로 막는다.
+    now_et = _now_et()
+    if is_us_trading_day(now_et.date()) and 4 <= now_et.hour < 16 and not args.force:
+        print(f"  ET {now_et.strftime('%H:%M')} — 미국 장 마감(16:00 ET = 한국 {'05:00' if is_us_dst(now_et.date()) else '06:00'}) 전이라 "
+              f"전 종목 스캔을 돌리지 않음. 마감 뒤에 다시 실행하거나 점검용이면 --force"); return
 
     confirmed_date = wait_for_market_data(max_retries=3, retry_interval=120)
     if confirmed_date:

@@ -54,5 +54,9 @@ jobs:
           git add data/
           git diff --staged --quiet && exit 0
           git commit -m "preclose: $(date +%Y-%m-%d) 15:30 ET signals"
-          for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin main && exit 0; sleep $((RANDOM % 10 + 5)); done
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep $((RANDOM % 10 + 5))
+          done
           exit 1

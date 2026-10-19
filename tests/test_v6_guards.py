@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""v6 운영 안전장치 테스트 — 장중 실행 차단, 마감 전 신호 우선, 조기 마감, 16:00 봉, 재계산 표시"""
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
+from datetime import datetime, timedelta, timezone
+import pandas as pd
+import pytest
+
+import scanner
+import tracker
+
+ET_SUMMER = timezone(timedelta(hours=-4))
+
+
+def et(y, m, d, hh, mm):
+    return datetime(y, m, d, hh, mm, tzinfo=ET_SUMMER)
+
+
+class Boom(Exception):
+    pass
+
+
+def boom(*a, **k):
+    raise Boom('should not be called')
+
+
+# ─── 같은 날 신호 중복: 마감 전(preclose) 신호가 이긴다 ───────────────────────
+class TestDedupePreferPreclose:
+    def _rows(self, first, second):
+        return pd.DataFrame([
+            {'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-19', 'price': 12.58, 'scan_type': first},
+            {'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-19', 'price': 12.57, 'scan_type': second},
+            {'strategy': '3', 'ticker': 'BBB', 'date': '2026-10-19', 'price': 5.0, 'scan_type': second},
+        ])
+
+    def test_afterclose_saved_first_still_loses(self):
+        out = scanner.dedupe_prefer_preclose(self._rows('afterclose', 'preclose'))
+        a = out[(out.ticker == 'AAA')]
+        assert len(a) == 1 and a['scan_type'].iloc[0] == 'preclose' and a['price'].iloc[0] == 12.57
+        assert len(out) == 2
+
+    def test_preclose_saved_first_wins(self):
+        out = scanner.dedupe_prefer_preclose(self._rows('preclose', 'afterclose'))
+        a = out[(out.ticker == 'AAA')]
+        assert len(a) == 1 and a['scan_type'].iloc[0] == 'preclose' and a['price'].iloc[0] == 12.58
+
+    def test_order_of_other_rows_is_kept(self):
+        out = scanner.dedupe_prefer_preclose(self._rows('afterclose', 'preclose'))
+        assert out['ticker'].tolist() == ['AAA', 'BBB']
+
+    def test_without_scan_type_column(self):
+        df = pd.DataFrame([{'strategy': 1, 'ticker': 'AAA', 'date': 'd', 'price': 1.0}, {'strategy': '1', 'ticker': 'AAA', 'date': 'd', 'price': 2.0}])
+        out = scanner.dedupe_prefer_preclose(df)
+        assert len(out) == 1 and out['price'].iloc[0] == 1.0
+
+
+# ─── 마감 뒤 전 종목 스캔: 장중에는 돌지 않는다 ─────────────────────────────
+class TestAfterCloseGuard:
+    def _run(self, monkeypatch, now, argv):
+        monkeypatch.setattr(scanner, '_now_et', lambda: now)
+        monkeypatch.setattr(scanner, 'wait_for_market_data', boom)   # 여기까지 오면 '스캔 시작'으로 간주
+        monkeypatch.setattr(sys, 'argv', argv)
+
+    def test_blocked_during_session(self, monkeypatch, capsys):
+        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py'])     # 월요일 10:00 ET
+        scanner.main()
+        assert '마감(16:00 ET' in capsys.readouterr().out
+
+    def test_blocked_in_premarket(self, monkeypatch):
+        self._run(monkeypatch, et(2026, 10, 19, 7, 0), ['scanner.py'])      # 07:00 ET = 20:00 KST
+        scanner.main()   # Boom 이 나지 않아야 함
+
+    def test_runs_after_close(self, monkeypatch):
+        self._run(monkeypatch, et(2026, 10, 19, 17, 40), ['scanner.py'])
+        with pytest.raises(Boom):
+            scanner.main()
+
+    def test_runs_on_weekend(self, monkeypatch):
+        self._run(monkeypatch, et(2026, 10, 18, 10, 0), ['scanner.py'])     # 일요일
+        with pytest.raises(Boom):
+            scanner.main()
+
+    def test_force_overrides(self, monkeypatch):
+        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py', '--force'])
+        with pytest.raises(Boom):
+            scanner.main()
+
+
+# ─── 마감 전 스캔 안전장치 ────────────────────────────────────────────────────
+class TestPrecloseGuards:
+    @pytest.fixture
+    def wl(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        os.makedirs('data')
+        pd.DataFrame([{'ticker': 'AAA', 'asof': '2026-10-16'}]).to_csv('data/watchlist.csv', index=False)
+        monkeypatch.setattr(scanner, 'download_batch', boom)             # 여기까지 오면 '다운로드 시작'
+        monkeypatch.setattr(scanner, 'market_still_open', lambda now: True)
+        return tmp_path
+
+    def test_too_early(self, wl, monkeypatch, capsys):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 14, 59))
+        assert scanner.preclose_scan('13') == ([], [])
+        assert '15:00 ET 전' in capsys.readouterr().out
+
+    def test_too_late(self, wl, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 49))
+        assert scanner.preclose_scan('13') == ([], [])
+
+    def test_in_window_starts_download(self, wl, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 30))
+        with pytest.raises(Boom):
+            scanner.preclose_scan('13')
+
+    def test_early_close_day_skips(self, wl, monkeypatch, capsys):
+        # 추수감사절 다음 날(13:00 조기 마감): 15:30 에 SPY 마지막 봉이 오래됐으면 생략
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 27, 15, 30))
+        monkeypatch.setattr(scanner, 'market_still_open', lambda now: False)
+        assert scanner.preclose_scan('13') == ([], [])
+        assert '이미 끝남' in capsys.readouterr().out
+
+    def test_holiday_skips(self, wl, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 26, 15, 30))   # Thanksgiving
+        assert scanner.preclose_scan('13') == ([], [])
+
+    def test_already_ran_today_skips(self, wl, monkeypatch):
+        pd.DataFrame([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-19', 'scan_type': 'preclose'}]).to_csv('data/signal_2026-10-19.csv', index=False)
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 36))
+        assert scanner.preclose_scan('13') == ([], [])
+
+    def test_main_preclose_on_holiday_writes_no_file(self, wl, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 26, 15, 30))
+        monkeypatch.setattr(sys, 'argv', ['scanner.py', '--preclose'])
+        scanner.main()
+        assert not os.path.exists('data/signal_2026-11-26.csv')
+
+
+class TestMarketStillOpen:
+    def _frame(self, ts):
+        idx = pd.DatetimeIndex([pd.Timestamp(t, tz='America/New_York') for t in ts])
+        return pd.DataFrame({'Close': [1.0] * len(ts)}, index=idx)
+
+    def test_fresh_bar_means_open(self, monkeypatch):
+        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-10-19 15:29']))
+        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is True
+
+    def test_stale_bar_means_closed(self, monkeypatch):
+        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-11-27 12:59']))
+        assert scanner.market_still_open(et(2026, 11, 27, 15, 30)) is False
+
+    def test_yesterday_bar_means_closed(self, monkeypatch):
+        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-10-16 15:59']))
+        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is False
+
+    def test_failure_is_unknown(self, monkeypatch):
+        monkeypatch.setattr(scanner.yf, 'download', boom)
+        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is None
+
+
+# ─── 1분봉: 진입일에 고정한 7일 창, 16:00 종가 봉 포함 ───────────────────────
+class TestMinuteFetch:
+    def test_window_and_closing_bar(self, monkeypatch):
+        calls = {}
+
+        class FakeTicker:
+            def __init__(self, t):
+                pass
+
+            def history(self, **kw):
+                calls.update(kw)
+                idx = pd.DatetimeIndex([pd.Timestamp(t, tz='America/New_York') for t in
+                                        ['2026-10-19 15:59', '2026-10-20 09:29', '2026-10-20 09:30', '2026-10-20 15:59', '2026-10-20 16:00', '2026-10-20 16:01']])
+                return pd.DataFrame({'Open': 1.0, 'High': 1.0, 'Low': 1.0, 'Close': [1, 2, 3, 4, 5, 6]}, index=idx)
+
+        monkeypatch.setattr(tracker.yf, 'Ticker', FakeTicker)
+        m = tracker.fetch_minute_data('X', '2026-10-19')
+        assert calls['start'] == '2026-10-20' and calls['end'] == '2026-10-27' and calls['interval'] == '1m'
+        assert m['Close'].tolist() == [3, 4, 5]          # 진입일 봉·09:29·16:01 제외, 16:00 종가 봉 포함
+        assert m.index.tz is None
+
+    def test_expired_uses_closing_print(self):
+        idx = pd.date_range('2026-10-20 09:30', '2026-10-20 16:00', freq='1min')
+        m = pd.DataFrame({'Open': 10.0, 'High': 10.1, 'Low': 9.9, 'Close': 10.0}, index=idx)
+        m.iloc[-1, m.columns.get_loc('Close')] = 10.3       # 16:00 종가 체결
+        r = tracker.track_position_intraday(10.0, 10.5, 9.0, 1, m)
+        assert r[0] == 'EXPIRED' and r[1] == 10.3
+
+
+# ─── 최초 재계산 표시는 실패가 많아도 남긴다 (매일 반복 방지) ─────────────────
+class TestMigrationMarker:
+    def test_marker_written_even_with_many_failures(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(tracker, 'reverify_all', lambda: {'attempted': 100, 'failed': 40})
+        tracker.migrate_to_v6()
+        assert os.path.exists(tracker.V6_MARKER)
+        assert 'failed=40' in open(tracker.V6_MARKER).read()
+        monkeypatch.setattr(tracker, 'reverify_all', boom)
+        tracker.migrate_to_v6()        # 두 번째는 재계산을 돌리지 않음
+
+
+# ─── 청산된 행은 status='CLOSED' ─────────────────────────────────────────────
+class TestClosedStatus:
+    def test_closed_row_status(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        os.makedirs('data')
+        row = {c: '' for c in tracker.OPEN_COLS}
+        row.update({'strategy': '1', 'ticker': 'AAA', 'signal_date': '2026-10-19', 'signal_price': '10', 'entry_date': '2026-10-19',
+                    'entry_price': '10', 'tp_price': '10.5', 'sl_price': '9.0', 'tp_pct': '0.05', 'max_hold': '2', 'status': 'OPEN',
+                    'days_held': '0', 'method': tracker.METHOD_V6})
+        pd.DataFrame([row]).to_csv('data/open_positions.csv', index=False)
+        h = pd.DataFrame([[10, 10.2, 9.8, 10.0], [11, 11.2, 10.8, 11.0]], columns=['Open', 'High', 'Low', 'Close'],
+                         index=pd.to_datetime(['2026-10-19', '2026-10-20']))
+        monkeypatch.setattr(tracker, 'fetch_price_data', lambda t, s, e=None: h)
+        monkeypatch.setattr(tracker, 'fetch_minute_data', lambda t, s: None)
+        monkeypatch.setattr(tracker, 'drop_unfinished_bar', lambda x: x)
+        tracker.update_open_positions()
+        c = pd.read_csv('data/closed_positions.csv', dtype=str, keep_default_na=False)
+        assert len(c) == 1 and c['status'].iloc[0] == 'CLOSED' and c['result_status'].iloc[0] == 'WIN' and c['judge'].iloc[0] == 'daily'
+        assert float(c['close_price'].iloc[0]) == 11.0      # 다음 날 시가 갭 → 시가 체결
+        o = pd.read_csv('data/open_positions.csv', dtype=str, keep_default_na=False)
+        assert len(o) == 0
