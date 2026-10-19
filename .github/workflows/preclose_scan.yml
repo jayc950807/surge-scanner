@@ -4,7 +4,9 @@ on:
     # GitHub 예약은 10~30분 늦게 시작할 수 있어 15:05 ET 에 걸고, 스크립트 안에서 15:30 ET 까지 기다린다.
     # 서머타임(3월 둘째 일~11월 첫째 일) 19:05 UTC / 겨울 20:05 UTC — 둘 다 걸고 스크립트가 ET 로 판단
     - cron: '5 19 * * 1-5'
+    - cron: '25 19 * * 1-5'   # 첫 실행이 지연됐을 때 보조 (이미 실행됐으면 스크립트가 건너뜀)
     - cron: '5 20 * * 1-5'
+    - cron: '25 20 * * 1-5'
   workflow_dispatch:
 permissions:
   contents: write
@@ -30,8 +32,8 @@ jobs:
           ny = ZoneInfo("America/New_York")
           now = dt.datetime.now(ny)
           target = now.replace(hour=15, minute=30, second=0, microsecond=0)
-          if now.hour >= 16 or now.hour < 15:
-              print(f"ET {now:%H:%M} — 이 실행은 다른 시간대(서머타임) 몫. 종료"); raise SystemExit(0)
+          if now.hour != 15 or now.minute > 48:
+              print(f"ET {now:%H:%M} — 15:00~15:48 ET 밖(다른 시간대 몫이거나 너무 늦음). 종료"); raise SystemExit(0)
           if now < target:
               wait = (target - now).total_seconds(); print(f"{wait/60:.0f}분 대기 → 15:30 ET"); time.sleep(wait)
           open("/tmp/go","w").write("1")

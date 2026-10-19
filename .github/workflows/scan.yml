@@ -1,8 +1,8 @@
 name: Daily Surge Scan
 on:
   schedule:
-    # UTC 21:00 = KST 06:00 (평일만, 장마감 후 1시간 여유)
-    - cron: '0 21 * * 1-5'
+    # UTC 21:40 = KST 06:40. 겨울(EST)에도 장마감(21:00 UTC) 뒤 40분이라 종가가 확정돼 있음
+    - cron: '40 21 * * 1-5'
   workflow_dispatch:
     inputs:
       reset_tracker:

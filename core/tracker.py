@@ -147,10 +147,13 @@ def get_entry_for_signal(ticker, signal_date):
       - 신호일 일봉이 아직 없으면 (None, None, None) → PENDING 유지
     """
     try:
+        sig_dt = pd.to_datetime(signal_date)
+        # 장이 끝나기 전(수동 실행 등)에는 '종가'가 아직 없으므로 진입하지 않는다
+        if sig_dt.date() > get_expected_trading_date():
+            return None, None, None
         hist = fetch_price_data(ticker, signal_date)
         if hist is None or len(hist) == 0:
             return None, None, None
-        sig_dt = pd.to_datetime(signal_date)
         on_sig = hist[hist.index.normalize() == sig_dt]
         if on_sig.empty:
             return None, None, None
@@ -682,6 +685,12 @@ def update_open_positions():
         if hist_tracking.empty:
             continue
 
+        # 하룻밤 실험 지표: 진입(종가) → 다음 거래일 시가
+        if row.get('method', '') == METHOD_V6 and len(hist_tracking) and not str(row.get('overnight_pct', '')).strip():
+            try:
+                open_pos.at[idx, 'overnight_pct'] = str(round(net_of_cost((float(hist_tracking['Open'].iloc[0]) / entry_price - 1) * 100), 2))
+            except Exception:
+                pass
         # [v6] 분봉이 있으면 분 단위로, 없으면 일봉으로 판정
         is_v6 = row.get('method', '') == METHOD_V6
         mins = fetch_minute_data(ticker, entry_date) if is_v6 else None

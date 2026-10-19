@@ -99,7 +99,7 @@ def _num(s):
     return pd.to_numeric(s, errors='coerce')
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_all():
     d = {}
     d['scan'] = json.load(open('data/latest_scan.json')) if os.path.exists('data/latest_scan.json') else {}
@@ -210,6 +210,8 @@ st.markdown(f"""
   <div class="ss-sub">1차_1(급락반등) · 1차_3(과매도) · 마감 전 탐지 → 마감가 매수 · +5% / −10% / 2일</div></div>
   <div class="muted">마지막 스캔 {scan_time} {stale}</div>
 </div>""", unsafe_allow_html=True)
+if st.button("새로고침", help="60초 캐시를 비우고 다시 읽어요"):
+    st.cache_data.clear(); st.rerun()
 
 # ─── KPI ─────────────────────────────────────────────────────────────────────
 cl = closed_v5.copy()
@@ -250,11 +252,11 @@ else:
     rows = []
     for tk, x in g:
         r0 = x.iloc[0]
-        rows.append(dict(ticker=tk, strats=list(x['strategy']), price=_num(pd.Series([r0.get('price')])).iloc[0],
+        rows.append(dict(ticker=tk, strats=list(x['strategy']), pre=('scan_type' in x.columns and (x['scan_type'] == 'preclose').any()), price=_num(pd.Series([r0.get('price')])).iloc[0],
                          rsi=_num(pd.Series([r0.get('rsi7')])).iloc[0], intra=_num(pd.Series([r0.get('intraday')])).iloc[0],
                          ret1=_num(pd.Series([r0.get('ret1d')])).iloc[0], down=r0.get('consec_down', ''),
                          vol=_num(pd.Series([r0.get('avg_vol20', np.nan)])).iloc[0]))
-    rows.sort(key=lambda r: (-len(r['strats']), r['ticker']))
+    rows.sort(key=lambda r: (not r['pre'], -len(r['strats']), r['ticker']))
     both = sum(1 for r in rows if len(r['strats']) > 1)
     st.markdown(f'<div class="muted" style="margin-bottom:8px">{len(rows)}종목 · 두 전략 모두 해당 {both}종목 · '
                 f'매수: <b style="color:{C["text"]}">신호일 마감가(종가 주문)</b> · 목표 +5% · 손절 −10% · 최대 2거래일</div>', unsafe_allow_html=True)
@@ -262,7 +264,8 @@ else:
     for r in rows:
         p = r['price']
         down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
-        cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f}</span></div>'
+        plabel = '15:30' if r.get('pre') else '종가'
+        cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f} <span class="muted" style="font-size:0.75rem">{plabel}</span></span></div>'
                   f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
                   f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b></span>'
                   f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
@@ -354,7 +357,8 @@ else:
                   f'<div><div class="muted">중간값</div><div style="font-size:1.3rem;font-weight:700">{fmt_pct(md)}</div></div></div>'
                   f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on)}</b></span></div></div>')
     st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −10%(갭이면 더)라서 승률 67%가 넘어야 남아요. 판정은 1분봉 기준이고, 분봉이 없으면 일봉(보수적)으로 해요. '
+    nj = cl['judge'].value_counts().to_dict() if 'judge' in cl.columns else {}
+    st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −10%(갭이면 더)라서 승률 67%가 넘어야 남아요. 판정: 1분봉 {nj.get("minute", 0)}건 · 일봉 {nj.get("daily", 0)}건(일봉은 같은 날 ±둘 다 닿으면 손절로 쳐서 보수적). '
                 f'하룻밤 실험 = 신호일 종가에 사서 다음날 시가에 팔았다면(비용 {COST_PCT:.0f}% 뺀 값, 기록용).</div>', unsafe_allow_html=True)
 
 # ─── 기록 ────────────────────────────────────────────────────────────────────
