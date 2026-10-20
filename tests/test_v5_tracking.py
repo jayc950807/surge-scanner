@@ -51,17 +51,18 @@ class TestTrackDaywise:
 
 
 class TestEntry:
-    def test_next_day_open(self, monkeypatch):
+    def test_signal_day_close(self, monkeypatch):
+        # v6: 신호일 종가(마감가 주문)로 진입
         h = bars([[9, 9.5, 8.5, 9.0], [9.3, 9.9, 9.1, 9.8]], start='2026-03-02')
         monkeypatch.setattr(tracker, 'fetch_price_data', lambda t, s, e=None: h)
         d, p, c = tracker.get_entry_for_signal('X', '2026-03-02')
-        assert d == '2026-03-03' and p == 9.3 and c == 9.0
+        assert d == '2026-03-02' and p == 9.0 and c == 9.0
 
-    def test_no_next_day_yet(self, monkeypatch):
-        h = bars([[9, 9.5, 8.5, 9.0]], start='2026-03-02')
+    def test_no_signal_day_bar_yet(self, monkeypatch):
+        h = bars([[9, 9.5, 8.5, 9.0]], start='2026-02-27')   # 신호일(03-02) 봉이 아직 없음
         monkeypatch.setattr(tracker, 'fetch_price_data', lambda t, s, e=None: h)
         d, p, c = tracker.get_entry_for_signal('X', '2026-03-02')
-        assert d is None and p is None and c == 9.0
+        assert d is None and p is None
 
     def test_cost(self):
         assert tracker.net_of_cost(5.0) == 5.0 - COST_PCT
@@ -92,3 +93,52 @@ class TestSignals:
         closes = [2.0] * 30 + [1.9, 1.8, 1.7, 1.6, 1.4, 1.2, 0.9]
         df = self._df(closes, (1.2, 0.85))
         assert scanner.check_signals(df) == []
+
+
+class TestIntraday:
+    def _mins(self, day, rows):
+        idx = pd.date_range(f'{day} 09:30', periods=len(rows), freq='1min')
+        return pd.DataFrame(rows, columns=['Open', 'High', 'Low', 'Close'], index=idx)
+
+    def test_same_day_tp_first_is_win(self):
+        # 일봉으로는 ±둘 다 닿아 LOSS 지만, 분봉으로는 +5%가 먼저 → WIN
+        m = self._mins('2026-03-03', [[10, 10.6, 9.9, 10.5]] + [[10.5, 10.5, 8.8, 8.9]] * 3)
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, m)
+        assert r[0] == 'WIN' and r[1] == 10.5
+
+    def test_gap_down_second_day(self):
+        m1 = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)
+        m2 = self._mins('2026-03-04', [[8.5, 8.6, 8.4, 8.5]] * 5)
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, pd.concat([m1, m2]))
+        assert r[0] == 'LOSS' and r[1] == 8.5 and r[8] == 2
+
+    def test_still_open_when_day_unfinished(self):
+        m = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 60)
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 1, m)
+        assert r[0] is None
+
+    def test_expired_at_last_close(self):
+        m = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 1, m)
+        assert r[0] == 'EXPIRED'
+
+    def test_expired_on_early_close_day_with_finished_days(self):
+        # 15:55 봉이 없어도(조기 마감·거래 없음) 그날 확정 일봉이 있으면 만기 처리
+        m1 = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 200)
+        m2 = self._mins('2026-03-04', [[9.9, 10.1, 9.7, 9.9]] * 200)
+        fin = [pd.Timestamp('2026-03-03'), pd.Timestamp('2026-03-04')]
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, pd.concat([m1, m2]), finished_days=fin)
+        assert r[0] == 'EXPIRED' and r[8] == 2
+
+    def test_minute_window_must_start_at_first_tracking_day(self):
+        hist = pd.DataFrame({'Close': [1, 1]}, index=pd.to_datetime(['2026-03-03', '2026-03-04']))
+        late = self._mins('2026-03-10', [[10, 10.2, 9.7, 9.8]] * 5)
+        ok = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 5)
+        assert tracker.minute_data_valid(late, hist) is False
+        assert tracker.minute_data_valid(ok, hist) is True
+
+    def test_daily_fallback_gap_on_first_day_for_v6(self):
+        # 종가 진입 뒤 다음날 시가가 손절가 아래로 갭 → 그 시가로 체결
+        h = bars([[8.0, 8.5, 7.9, 8.2]], start='2026-03-03')
+        r = tracker.track_position_daywise(10, 10.5, 9.0, 2, h, gap_from_first_bar=True)
+        assert r[0] == 'LOSS' and r[1] == 8.0

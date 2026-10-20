@@ -3,29 +3,55 @@ name: Reverify Positions
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+# scan / preclose 와 같은 줄에 세워 data/ 커밋이 서로 엉키지 않게 한다
+concurrency:
+  group: scanner-push
+  cancel-in-progress: false
+
 jobs:
   reverify:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run tracker --reverify
+      - name: Run tracker --reverify (전체 기록을 v6 규칙으로 재계산 + 그날 신호 등록·추적)
         # 저장소 루트에서 실행해야 data/ 폴더를 제대로 갱신한다 (core/ 에서 돌면 core/data 에 써짐)
-        run: python core/tracker.py --reverify
+        run: python core/tracker.py --reverify 2>&1 | tee reverify_output.log
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: reverify-${{ github.run_id }}
+          path: reverify_output.log
+          retention-days: 14
+          if-no-files-found: ignore
 
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
-          git diff --cached --quiet || git commit -m "reverify: position re-check"
-          git push
+          git diff --staged --quiet && exit 0
+          git commit -m "reverify: position re-check (v6)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep $((RANDOM % 10 + 5))
+          done
+          exit 1

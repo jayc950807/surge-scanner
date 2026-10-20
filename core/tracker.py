@@ -1,32 +1,31 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-  US Stock Surge Scanner — Position Tracker (v5)
+  US Stock Surge Scanner — Position Tracker (v6)
 
-  [v5 판정 규칙 — 실제로 체결 가능한 방식]
-    진입: 신호일(signal_date) 다음 거래일 시가 (entry_date = D+1, entry_price = D+1 Open).
-          스캔은 장 마감 뒤에 돌기 때문에 신호일 종가에는 살 수 없다.
-          D+1 시가가 아직 없으면 PENDING 으로 남겨 두고 다음 실행 때 진입한다.
-    추적: 진입일(D+1)부터 max_hold 거래일. 진입일은 시가에 샀으므로 그날 고가·저가도 판정에 쓴다.
-      1. WIN     : TP(High >= tp_price) 먼저 도달 → tp_price 체결
-                   (둘째 날부터 시가가 이미 TP 이상이면 시가 체결)
-      2. LOSS    : SL(Low <= sl_price) 먼저 도달 → sl_price 체결
-                   (둘째 날부터 시가가 이미 SL 이하로 갭하락하면 시가 체결 — 손실이 더 큼)
-                   같은 날 TP·SL 동시 도달은 선후를 알 수 없으므로 보수적으로 LOSS
+  [v6 판정 규칙 — research/STRATEGY_V6.md]
+    진입: 신호일(signal_date) 마감가 (entry_date = signal_date, entry_price = 그날 종가).
+          마감 전(15:30 ET) 스캔에서 잡힌 신호만 추적한다(scan_type='preclose').
+          신호일 일봉이 아직 확정되지 않았으면 PENDING 으로 남겨 두고 다음 실행 때 진입한다.
+    추적: 진입 다음 거래일부터 max_hold(2) 거래일. 1분봉이 있으면 분 단위로(judge='minute'),
+          없으면 일봉으로(judge='daily') 판정한다.
+      1. WIN     : TP(+5%) 먼저 도달 → tp_price 체결 (시가가 이미 TP 이상이면 시가 체결)
+      2. LOSS    : SL(-10%) 먼저 도달 → sl_price 체결 (시가가 이미 SL 이하로 갭하락하면 시가 체결 — 손실이 더 큼)
+                   일봉 판정에서 같은 날 TP·SL 동시 도달은 선후를 알 수 없으므로 보수적으로 LOSS
       3. EXPIRED : max_hold 경과 → 마지막 날 종가 청산
     비용: result_pct = 가격 손익 − COST_PCT(왕복). gross_pct 에 비용 전 값을 따로 남긴다.
-    실험 지표: overnight_pct = (D+1 시가 / 신호일 종가 − 1) − COST_PCT
-              ("신호일 종가에 사서 다음날 시가에 판다면" — 일봉 기준이라 호가 차이 착시가 섞일 수 있음)
-    method 열: v5_next_open (새 규칙) / v4_signal_close (예전 규칙으로 계산된 기록)
+    실험 지표: overnight_pct = (다음 거래일 시가 / 진입가 − 1) − COST_PCT (기록용)
+    method 열: v6_close_entry (현재 규칙) / v5_next_open, v4_signal_close (예전 규칙으로 계산돼 다시 계산 못 한 기록 —
+              화면 통계에서 제외)
 
   Usage:
-    python tracker.py                # 전체 업데이트
+    python tracker.py                # 전체 업데이트 (최초 1회 전체 기록을 v6 규칙으로 재계산)
+    python tracker.py --register-only# 오늘 마감 전 신호를 PENDING 으로 등록만
     python tracker.py --init         # 기존 history.csv에서 포지션 초기 생성
     python tracker.py --reverify     # 모든 청산 내역 재검증 (가격 재조회)
 ================================================================================
 """
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import os
@@ -44,8 +43,8 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 from shared_config import (
     STRATEGY_CONFIG, STRATEGY_NAMES, ACTIVE_STRATEGIES, COST_PCT, DATA_DIR, KST,
     get_expected_trading_date,
-    download_batch, extract_ticker_df
 )
+import alpaca_data
 
 # ─── Column definitions ──────────────────────────────────────────────────────
 OPEN_COLS = [
@@ -57,7 +56,7 @@ OPEN_COLS = [
     'min_price', 'min_price_date',
     'change_pct', 'achievement_pct',
     'days_held', 'last_updated',
-    'overnight_pct', 'method',
+    'overnight_pct', 'method', 'judge',
 ]
 
 CLOSED_COLS = OPEN_COLS + [
@@ -67,8 +66,10 @@ CLOSED_COLS = OPEN_COLS + [
     'max_achievement_pct',
     'gross_pct', 'cost_pct',
 ]
+METHOD_V6 = 'v6_close_entry'     # 신호일 종가 진입 · 진입 다음 거래일부터 판정 · -10%/2일
 METHOD_V5 = 'v5_next_open'
 METHOD_V4 = 'v4_signal_close'
+V6_MARKER = os.path.join('data', '.v6_reverified')
 
 OPEN_PATH = os.path.join(DATA_DIR, 'open_positions.csv')
 CLOSED_PATH = os.path.join(DATA_DIR, 'closed_positions.csv')
@@ -116,23 +117,10 @@ def get_trading_days_between(start_date, end_date):
 
 
 def fetch_price_data(ticker, start_date, end_date=None):
-    """
-    yfinance로 특정 기간 가격 데이터 조회 (timezone 자동 처리).
-    Fix #1: Proper exception handling with logging.
-    """
+    """Alpaca 일봉(분할 보정, 인덱스 = 날짜 naive). 없으면 None. (예전 야후 history() 와 같은 모양)"""
     try:
-        tk = yf.Ticker(ticker)
-        if end_date:
-            end_dt = pd.to_datetime(end_date) + timedelta(days=1)
-            df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'), auto_adjust=False)
-        else:
-            df = tk.history(start=start_date, auto_adjust=False)
-        if df is not None and len(df) > 0:
-            # timezone 제거 (yfinance가 America/New_York 등 반환 → naive로 통일)
-            if df.index.tz is not None:
-                df.index = df.index.tz_localize(None)
-            return df
-        return None
+        df = alpaca_data.history_daily(ticker, start_date, end_date, adjustment='split')
+        return df if df is not None and len(df) > 0 else None
     except Exception as e:
         logging.warning(f"{ticker} price fetch failed: {e}")
         return None
@@ -140,28 +128,79 @@ def fetch_price_data(ticker, start_date, end_date=None):
 
 def get_entry_for_signal(ticker, signal_date):
     """
-    [v5] 신호일 다음 거래일 시가로 진입.
-    반환: (entry_date, entry_price, signal_close)
-      - D+1 데이터가 아직 없으면 (None, None, signal_close) → PENDING 유지
+    [v6] 신호일 '종가'(마감가 주문)로 진입. entry_date = signal_date.
+    반환: (entry_date, entry_price, signal_close)  — 둘 다 종가.
+      - 신호일 일봉이 아직 없으면 (None, None, None) → PENDING 유지
     """
     try:
+        sig_dt = pd.to_datetime(signal_date)
+        # 장이 끝나기 전(수동 실행 등)에는 '종가'가 아직 없으므로 진입하지 않는다
+        if sig_dt.date() > get_expected_trading_date():
+            return None, None, None
         hist = fetch_price_data(ticker, signal_date)
         if hist is None or len(hist) == 0:
             return None, None, None
-        sig_dt = pd.to_datetime(signal_date)
         on_sig = hist[hist.index.normalize() == sig_dt]
-        signal_close = float(on_sig['Close'].iloc[0]) if len(on_sig) else None
-        after = hist[hist.index.normalize() > sig_dt]
-        if after.empty:
-            return None, None, signal_close
-        first = after.iloc[0]
-        entry_price = float(first['Open'])
-        if not entry_price or entry_price <= 0 or np.isnan(entry_price):
-            return None, None, signal_close
-        return after.index[0].strftime('%Y-%m-%d'), entry_price, signal_close
+        if on_sig.empty:
+            return None, None, None
+        close = float(on_sig['Close'].iloc[0])
+        if not close or close <= 0 or np.isnan(close):
+            return None, None, None
+        return sig_dt.strftime('%Y-%m-%d'), close, close
     except Exception as e:
         logging.warning(f"get_entry_for_signal({ticker}, {signal_date}) failed: {e}")
     return None, None, None
+
+
+def fetch_minute_data(ticker, start_date):
+    """start_date 다음 날부터 7일 창의 1분봉(정규장 09:30~16:00, 16:00 봉 = 종가 체결 포함, 분할 보정).
+    Alpaca 는 과거 1분봉도 다 있어 오래된 기록도 분 단위로 판정할 수 있다 → 실패하면 None (일봉으로 대체)."""
+    try:
+        d0 = pd.to_datetime(start_date)
+        df = alpaca_data.history_minute(ticker, (d0 + timedelta(days=1)).date(), (d0 + timedelta(days=8)).date(), adjustment='split')
+        if df is None or df.empty:
+            return None
+        df = df[df.index.normalize() > d0]
+        return df if len(df) else None
+    except Exception as e:
+        logging.warning(f"{ticker} minute fetch failed: {e}")
+        return None
+
+
+def minute_data_valid(mins, hist_tracking):
+    """분봉의 첫 거래일이 진입 다음 거래일(일봉 첫 행)과 같을 때만 분봉 판정을 쓴다 (8일 창 밖이면 일봉으로)."""
+    if mins is None or hist_tracking is None or hist_tracking.empty:
+        return False
+    return mins.index[0].normalize() == hist_tracking.index[0].normalize()
+
+
+def track_position_intraday(entry_price, tp_price, sl_price, max_hold, mins, finished_days=None):
+    """[v6] 1분봉으로 순서대로 판정 — 같은 날 ±가 둘 다 닿아도 어느 쪽이 먼저였는지 안다.
+    둘째 날부터 시가 갭은 그 시가로 체결. 반환 형식은 track_position_daywise 와 같다."""
+    days = sorted(set(mins.index.normalize()))[:max_hold]
+    max_price, max_date, min_price, min_date = entry_price, '', entry_price, ''
+    tp_pct_val = (tp_price - entry_price) / entry_price if entry_price > 0 else 0
+    def done(status, px, d, dn):
+        rp = (px - entry_price) / entry_price * 100
+        ma = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
+        return (status, px, d, d if status == 'WIN' else '', max_price, max_date, min_price, min_date, dn, rp, min(ma, 999) if status != 'WIN' else 100.0)
+    for dn, day in enumerate(days, start=1):
+        g = mins[mins.index.normalize() == day]; ds = day.strftime('%Y-%m-%d')
+        for i, (o, h, l, c) in enumerate(zip(g['Open'], g['High'], g['Low'], g['Close'])):
+            if h > max_price: max_price, max_date = h, ds
+            if l < min_price: min_price, min_date = l, ds
+            if sl_price > 0 and o <= sl_price: return done('LOSS', o, ds, dn)
+            if tp_price > 0 and o >= tp_price: return done('WIN', o, ds, dn)
+            if sl_price > 0 and l <= sl_price: return done('LOSS', sl_price, ds, dn)
+            if tp_price > 0 and h >= tp_price: return done('WIN', tp_price, ds, dn)
+    # 마지막 보유일이 끝났는지: 그날 확정 일봉이 있거나(조기 마감·거래 없는 종목 대비) 15:55 이후 봉이 있으면 만기
+    last = mins[mins.index.normalize() == days[-1]] if days else mins.iloc[0:0]
+    day_done = (finished_days is not None and len(days) and days[-1].normalize() in set(finished_days)) or \
+               (len(last) and (last.index[-1].hour * 60 + last.index[-1].minute) >= 955)
+    if len(days) >= max_hold and len(last) and day_done:
+        return done('EXPIRED', float(last['Close'].iloc[-1]), days[-1].strftime('%Y-%m-%d'), len(days))
+    ma = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
+    return (None, float(mins['Close'].iloc[-1]), None, None, max_price, max_date, min_price, min_date, len(days), None, min(ma, 999))
 
 
 def drop_unfinished_bar(hist):
@@ -192,10 +231,12 @@ def net_of_cost(gross_pct):
     return gross_pct - COST_PCT
 
 
-def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after_entry):
+def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after_entry, gap_from_first_bar=False):
     """
-    [v5] hist_after_entry 의 첫 행 = 진입일(D+1, 시가 매수). 하루씩 TP/SL 도달 여부 검사.
-    둘째 날부터는 시가 갭을 먼저 확인한다(갭하락 → 시가 손절, 갭상승 → 시가 익절).
+    일봉으로 하루씩 TP/SL 도달 여부 검사.
+    v6(gap_from_first_bar=True): 첫 행 = 진입(종가) 다음 거래일 → 첫 행부터 시가 갭을 확인한다.
+    v5(gap_from_first_bar=False): 첫 행 = 진입일(시가 매수) → 둘째 날부터 시가 갭을 확인한다.
+    (갭하락 → 시가 손절, 갭상승 → 시가 익절)
     result_pct 는 비용 전 가격 손익(%)이다 — 비용 차감은 호출한 쪽에서 한다.
 
     판정 규칙 (반드시 코드와 1:1 일치):
@@ -248,7 +289,7 @@ def track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_after
             min_price_date = date_str
 
         # ── [v5] 둘째 날부터: 시가가 이미 손절가/익절가를 넘어 시작한 경우 시가 체결 ──
-        if day_i > 0:
+        if day_i > 0 or gap_from_first_bar:
             try:
                 o = float(row['Open'])
             except Exception:
@@ -337,7 +378,6 @@ def get_most_recent_signal_file_date():
 # ─── Step 0: v5 정리 — 운영하지 않는 전략 기록 보관 + 1회 재계산 ─────────────
 
 ARCHIVE_DIR = os.path.join(DATA_DIR, 'archive_removed_strategies')
-V5_MARKER = os.path.join(DATA_DIR, '.v5_reverified')
 
 
 def archive_removed_strategies():
@@ -366,18 +406,24 @@ def archive_removed_strategies():
         print(f"  운영하지 않는 전략 기록 {moved}행 → {ARCHIVE_DIR}/ 로 이동")
 
 
-def migrate_to_v5():
-    """처음 v5로 돌 때 한 번: 모든 기록을 v5 규칙(다음날 시가 진입·갭 체결·비용)으로 다시 계산."""
-    if os.path.exists(V5_MARKER):
+def write_v6_marker(res):
+    """재계산이 한 번 끝났다는 표시. 다시 계산하지 못한 건(상장폐지 등)은 예전 method 로 남고 화면 통계에서 빠지므로
+    실패가 있어도 표시를 남긴다 — 매일 전체 재계산을 반복하지 않기 위해. 다시 하려면 --reverify."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(V6_MARKER, 'w') as f:
+        f.write(f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} attempted={res.get('attempted', 0)} failed={res.get('failed', 0)}\n")
+    if res.get('failed'):
+        print(f"  [v6] 다시 계산 못 한 {res['failed']}/{res['attempted']}건은 예전 규칙 기록으로 남김(통계 제외). "
+              f"다시 시도하려면 Actions 에서 reverify 실행")
+
+
+def migrate_to_v6():
+    """처음 v6로 돌 때 한 번: 모든 기록을 v6 규칙(종가 진입·갭 체결·-10%/2일·비용)으로 다시 계산."""
+    if os.path.exists(V6_MARKER):
         return
-    print("  [v5] 최초 1회 — 전체 기록을 새 규칙으로 재계산합니다")
+    print("  [v6] 최초 1회 — 전체 기록을 새 규칙으로 재계산합니다")
     res = reverify_all() or {'attempted': 0, 'failed': 0}
-    # 데이터 조회 실패가 많으면(5% 초과) 완료 표시를 남기지 않고 다음 실행 때 다시 시도
-    if res['attempted'] and res['failed'] > max(3, 0.05 * res['attempted']):
-        print(f"  [v5] 재계산 실패 {res['failed']}/{res['attempted']}건 → 다음 실행 때 다시 시도")
-        return
-    with open(V5_MARKER, 'w') as f:
-        f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
+    write_v6_marker(res)
 
 
 # ─── Step 1: Register new signals as PENDING ─────────────────────────────────
@@ -423,6 +469,9 @@ def register_new_signals():
         strategy = _LEGACY_STRAT_MAP.get(strategy, strategy)
         if strategy not in ACTIVE_STRATEGIES:
             continue  # v5: 운영하지 않는 전략 신호는 등록하지 않음
+        # v6: 마감 뒤 전 종목 스캔에서만 잡힌 신호는 그 가격에 살 수 없었으므로 추적하지 않음 (기록·대조용)
+        if 'scan_type' in signals.columns and str(sig.get('scan_type', '')) not in ('preclose', '', 'nan'):
+            continue
 
         # 이미 등록된 건 스킵
         already_open = not open_pos.empty and (
@@ -459,7 +508,7 @@ def register_new_signals():
             'tp_price': str(tp_price),
             'sl_price': str(sl_price_val),
             'tp_pct': str(tp_pct),
-            'max_hold': str(config.get('max_hold', 5)),
+            'max_hold': str(config.get('max_hold', 2)),
             'status': 'PENDING',
             'current_price': '',
             'max_price': '',
@@ -484,11 +533,11 @@ def register_new_signals():
     print(f"  신규 등록: {new_count}건")
 
 
-# ─── Step 2: PENDING → OPEN (D+1 시가로 진입) ────────────────────────────────
+# ─── Step 2: PENDING → OPEN (신호일 종가로 진입) ─────────────────────────────
 
 def activate_pending_positions():
     """
-    PENDING 상태인 포지션의 D+1 시가를 조회하여 OPEN으로 전환.
+    PENDING 상태인 포지션의 신호일 종가를 조회하여 OPEN으로 전환.
     [수정] 동일 티커/날짜의 entry를 캐시하여 복수 전략 시 동일한 entry_price 보장.
     """
     open_pos = load_csv(OPEN_PATH, OPEN_COLS)
@@ -517,7 +566,7 @@ def activate_pending_positions():
         entry_date, entry_price, signal_close = entry_cache[cache_key]
 
         if entry_date is None or entry_price is None or entry_price <= 0:
-            print(f"    대기: {ticker} D+1 시가 아직 없음 (signal: {signal_date}) → 다음 실행 때 진입")
+            print(f"    대기: {ticker} 신호일 종가 아직 확정 안 됨 (signal: {signal_date}) → 다음 실행 때 진입")
             continue
 
         config = STRATEGY_CONFIG.get(row['strategy'], {})
@@ -532,8 +581,7 @@ def activate_pending_positions():
         open_pos.at[idx, 'entry_price'] = str(round(entry_price, 4))
         if signal_close:
             open_pos.at[idx, 'signal_price'] = str(round(signal_close, 4))
-            open_pos.at[idx, 'overnight_pct'] = str(round(net_of_cost((entry_price / signal_close - 1) * 100), 2))
-        open_pos.at[idx, 'method'] = METHOD_V5
+        open_pos.at[idx, 'method'] = METHOD_V6
         open_pos.at[idx, 'tp_price'] = str(tp_price)
         open_pos.at[idx, 'sl_price'] = str(sl_price)
         open_pos.at[idx, 'status'] = 'OPEN'
@@ -590,7 +638,7 @@ def update_open_positions():
         entry_date = row['entry_date']
         tp_price = float(row['tp_price']) if row['tp_price'] else 0
         sl_price_val = float(row['sl_price']) if row['sl_price'] else 0
-        max_hold = safe_int(row.get('max_hold'), config.get('max_hold', 5))
+        max_hold = safe_int(row.get('max_hold'), config.get('max_hold', 2))
 
         # 히스토리 가져오기 (캐시)
         cache_key = (ticker, entry_date)
@@ -605,14 +653,15 @@ def update_open_positions():
 
         # [v5] 보유 중 역분할이 있으면 새로 받은 가격은 분할 보정돼 있으므로,
         # 진입가·목표가·손절가를 같은 기준(새 데이터의 진입일 시가)으로 맞춘다.
-        if row.get('method', '') == METHOD_V5:
+        if row.get('method', '') in (METHOD_V5, METHOD_V6):
             on_entry = hist[hist.index.normalize() == pd.to_datetime(entry_date)]
             if len(on_entry):
-                o_new = float(on_entry['Open'].iloc[0])
+                o_new = float(on_entry['Open' if row.get('method', '') == METHOD_V5 else 'Close'].iloc[0])
                 if o_new > 0 and abs(o_new / entry_price - 1) > 0.02:
+                    print(f"    분할 보정: [{strategy}] {ticker} 진입가 {entry_price:.4f} → {o_new:.4f} (목표·손절가도 같은 비율로)")
                     entry_price = o_new
                     tp_price = round(o_new * (1 + config.get('tp_pct', 0.05)), 4)
-                    sl_price_val = round(o_new * (1 + config.get('sl_pct', -0.2)), 4)
+                    sl_price_val = round(o_new * (1 + config.get('sl_pct', -0.10)), 4)
                     open_pos.at[idx, 'entry_price'] = str(round(o_new, 4))
                     open_pos.at[idx, 'tp_price'] = str(tp_price)
                     open_pos.at[idx, 'sl_price'] = str(sl_price_val)
@@ -622,17 +671,27 @@ def update_open_positions():
         entry_dt = pd.to_datetime(entry_date)
         if row.get('method', '') == METHOD_V5:
             hist_tracking = hist[hist.index.normalize() >= entry_dt]
-        else:
+        else:   # v6(종가 진입)·v4: 다음 거래일부터
             hist_tracking = hist[hist.index.normalize() > entry_dt]
 
         if hist_tracking.empty:
             continue
 
-        # [v4] 날짜순 TP/SL 선도달 체크 (trailing 제거)
-        result = track_position_daywise(
-            entry_price, tp_price, sl_price_val,
-            max_hold, hist_tracking
-        )
+        # 하룻밤 실험 지표: 진입(종가) → 다음 거래일 시가
+        if row.get('method', '') == METHOD_V6 and len(hist_tracking) and not str(row.get('overnight_pct', '')).strip():
+            try:
+                open_pos.at[idx, 'overnight_pct'] = str(round(net_of_cost((float(hist_tracking['Open'].iloc[0]) / entry_price - 1) * 100), 2))
+            except Exception:
+                pass
+        # [v6] 분봉이 있으면 분 단위로, 없으면 일봉으로 판정
+        is_v6 = row.get('method', '') == METHOD_V6
+        mins = fetch_minute_data(ticker, entry_date) if is_v6 else None
+        if is_v6 and minute_data_valid(mins, hist_tracking):
+            result = track_position_intraday(entry_price, tp_price, sl_price_val, max_hold, mins, finished_days=list(hist_tracking.index.normalize()))
+            open_pos.at[idx, 'judge'] = 'minute'
+        else:
+            result = track_position_daywise(entry_price, tp_price, sl_price_val, max_hold, hist_tracking, gap_from_first_bar=is_v6)
+            open_pos.at[idx, 'judge'] = 'daily'
 
         (res_status, close_price, close_date, tp_hit_date,
          max_pr, max_pr_date, min_pr, min_pr_date,
@@ -676,9 +735,10 @@ def update_open_positions():
 
         row = open_pos.loc[idx].copy()
         closed_row = row.to_dict()
+        closed_row['status'] = 'CLOSED'
         closed_row['close_date'] = close_date
         closed_row['close_price'] = str(round(close_price, 2))
-        is_v5 = closed_row.get('method', '') == METHOD_V5
+        is_v5 = closed_row.get('method', '') in (METHOD_V5, METHOD_V6)
         closed_row['gross_pct'] = str(round(result_pct, 2))
         closed_row['cost_pct'] = str(COST_PCT if is_v5 else 0)
         closed_row['result_pct'] = str(round(net_of_cost(result_pct) if is_v5 else result_pct, 2))
@@ -724,7 +784,7 @@ def generate_tracker_summary():
         per = {}
         cp = closed_pos.copy()
         if 'method' in cp.columns:
-            cp = cp[cp['method'] == METHOD_V5]
+            cp = cp[cp['method'] == METHOD_V6]
         for strat in ACTIVE_STRATEGIES:
             sd = cp[cp['strategy'] == strat]
             r = pd.to_numeric(sd.get('result_pct', pd.Series(dtype=float)), errors='coerce').dropna()
@@ -755,9 +815,9 @@ def generate_tracker_summary():
 
 def reverify_all():
     """
-    [신규] 모든 청산 내역을 재검증.
-    가격 데이터를 다시 조회하고, D+1 시가 기준으로 entry_price를 재설정한 뒤
-    날짜순 TP/SL 동시 체크로 결과를 다시 판정.
+    [v6] 모든 청산·진행중 내역을 재검증.
+    가격 데이터를 다시 조회하고, 신호일 종가 기준으로 entry_price를 재설정한 뒤
+    다음 거래일부터 분봉(없으면 일봉)으로 결과를 다시 판정. 다시 계산 못 한 건은 원래 파일에 그대로 둔다.
     Fix #1: Proper exception handling with logging.
     Fix #9: Collect rows in lists, concat once at the end.
     """
@@ -814,16 +874,15 @@ def reverify_all():
         if not config:
             continue
 
-        # 1. Entry price 재조회 (D+1 시가)
+        # 1. 진입가 재조회 (신호일 종가)
         cache_key = (ticker, signal_date)
         if cache_key not in entry_cache:
             entry_cache[cache_key] = get_entry_for_signal(ticker, signal_date)
-            time.sleep(0.5)  # rate limiting
 
         entry_date, entry_price, signal_close = entry_cache[cache_key]
 
         if entry_date is None or entry_price is None:
-            print(f"    SKIP: [{strategy}] {ticker} {signal_date} — D+1 데이터 없음")
+            print(f"    SKIP: [{strategy}] {ticker} {signal_date} — 신호일 종가 데이터 없음(상장폐지·티커 변경 등)")
             failed += 1
             keep_as_is(pos)
             continue
@@ -833,7 +892,7 @@ def reverify_all():
         sl_pct = config.get('sl_pct', None)
         tp_price = round(entry_price * (1 + tp_pct), 2)
         sl_price = round(entry_price * (1 + sl_pct), 2) if sl_pct else 0
-        max_hold = config.get('max_hold', 5)
+        max_hold = config.get('max_hold', 2)
 
         # 3. 히스토리 재조회
         hist_key = (ticker, entry_date)
@@ -842,7 +901,6 @@ def reverify_all():
             end_dt = pd.to_datetime(entry_date) + timedelta(days=max_hold + 10)
             hist = fetch_price_data(ticker, entry_date, end_dt.strftime('%Y-%m-%d'))
             hist_cache[hist_key] = hist
-            time.sleep(0.5)
 
         hist = drop_unfinished_bar(hist_cache[hist_key])
 
@@ -853,19 +911,27 @@ def reverify_all():
             continue
 
         entry_dt = pd.to_datetime(entry_date)
-        # [v5] 진입일(D+1) 시가 매수 → 진입일 장중 고가·저가부터 판정에 사용
-        hist_tracking = hist[hist.index.normalize() >= entry_dt]
+        # [v6] 신호일 종가 매수 → 다음 거래일부터 판정 (하룻밤 갭은 시가 체결 규칙으로 반영됨)
+        hist_tracking = hist[hist.index.normalize() > entry_dt]
 
         if hist_tracking.empty:
             failed += 1
             keep_as_is(pos)
             continue
 
-        # 4. [v4] 날짜순 TP/SL 선도달 체크로 재판정 (trailing 제거)
-        result = track_position_daywise(
-            entry_price, tp_price, sl_price,
-            max_hold, hist_tracking
-        )
+        if len(hist_tracking):
+            try:
+                pos['overnight_pct'] = str(round(net_of_cost((float(hist_tracking['Open'].iloc[0]) / entry_price - 1) * 100), 2))
+            except Exception:
+                pass
+        # 4. [v6] 분봉으로 재판정 (Alpaca 는 과거 분봉도 제공), 못 받으면 일봉으로
+        mins = fetch_minute_data(ticker, entry_date)
+        if minute_data_valid(mins, hist_tracking):
+            result = track_position_intraday(entry_price, tp_price, sl_price, max_hold, mins, finished_days=list(hist_tracking.index.normalize()))
+            pos['judge'] = 'minute'
+        else:
+            result = track_position_daywise(entry_price, tp_price, sl_price, max_hold, hist_tracking, gap_from_first_bar=True)
+            pos['judge'] = 'daily'
 
         (res_status, close_price, close_date, tp_hit_date,
          max_pr, max_pr_date, min_pr, min_pr_date,
@@ -874,10 +940,10 @@ def reverify_all():
         # 5. 결과 업데이트
         pos['entry_date'] = entry_date
         pos['entry_price'] = str(round(entry_price, 4))
-        pos['method'] = METHOD_V5
+        pos['max_hold'] = str(max_hold); pos['tp_pct'] = str(tp_pct)
+        pos['method'] = METHOD_V6
         if signal_close:
             pos['signal_price'] = str(round(signal_close, 4))
-            pos['overnight_pct'] = str(round(net_of_cost((entry_price / signal_close - 1) * 100), 2))
         pos['tp_price'] = str(tp_price)
         pos['sl_price'] = str(sl_price) if sl_price else ''
         pos['max_price'] = str(round(max_pr, 2)) if max_pr else ''
@@ -933,7 +999,6 @@ def reverify_all():
 
         if (i + 1) % 10 == 0:
             print(f"  Progress: {i+1}/{len(all_positions)} 완료")
-            time.sleep(1)  # rate limiting
 
     # 기존 PENDING은 유지
     pending_positions = []
@@ -1041,7 +1106,7 @@ def init_from_history():
         new_row['signal_date'] = date
         new_row['signal_price'] = str(round(signal_price, 2))
         new_row['tp_pct'] = str(config.get('tp_pct', 0))
-        new_row['max_hold'] = str(config.get('max_hold', 5))
+        new_row['max_hold'] = str(config.get('max_hold', 2))
         new_row['status'] = 'PENDING'
         new_row['days_held'] = '0'
         new_row['last_updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -1064,29 +1129,33 @@ def main():
     parser.add_argument('--init', action='store_true', help='Initialize from history.csv')
     parser.add_argument('--reverify', action='store_true', help='Re-verify all closed positions')
     parser.add_argument('--reset', action='store_true', help='(scan.yml 호환) 전체 기록 재계산')
+    parser.add_argument('--register-only', action='store_true', help='오늘 신호를 PENDING 으로 등록만 (마감 전 스캔 직후)')
     args = parser.parse_args()
 
     t0 = time.time()
     print("=" * 70)
-    print("  Position Tracker v5 — Strategy 1 + 3")
+    print("  Position Tracker v6 — 종가 진입 · +5% / -10% / 2일")
     print(f"  Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
-    print("\n[0] v5 정리")
+    print("\n[0] 정리 (운영하지 않는 전략 기록 보관)")
     archive_removed_strategies()
+
+    if args.register_only:
+        print("\n[1] 신규 신호 등록 (마감 전)")
+        register_new_signals()
+        return
 
     if args.reverify or args.reset:
         res = reverify_all() or {'attempted': 0, 'failed': 0}
-        if not (res['attempted'] and res['failed'] > max(3, 0.05 * res['attempted'])):
-            with open(V5_MARKER, 'w') as f:
-                f.write(datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '\n')
+        write_v6_marker(res)
         # 재검증한 날에도 그날 신호 등록·추적은 이어서 한다
 
     if args.init:
         print("\n[0] 초기화: history.csv → open_positions.csv")
         init_from_history()
 
-    migrate_to_v5()
+    migrate_to_v6()
 
     print("\n[1] 신규 신호 등록")
     register_new_signals()

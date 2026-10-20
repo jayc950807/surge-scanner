@@ -18,7 +18,7 @@ try:
 except Exception:  # 단독 실행 대비
     KST = timezone(timedelta(hours=9))
     ACTIVE_STRATEGIES = ['1', '3']; COST_PCT = 1.0
-    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5} for s in ACTIVE_STRATEGIES}
+    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2} for s in ACTIVE_STRATEGIES}
     STRATEGY_NAMES = {'1': '1차_1 · 급락반등', '3': '1차_3 · 과매도'}
 
 st.set_page_config(page_title="Surge Scanner", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
@@ -70,7 +70,7 @@ h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .exp {{ background:{C['warn']}22; color:{C['warn']}; }}
 .open {{ background:{C['blue']}22; color:{C['blue']}; }}
 .bar {{ position:relative; height:10px; background:{C['line']}; border-radius:5px; margin:8px 0 4px; }}
-.bar .z {{ position:absolute; left:80%; top:-3px; width:2px; height:16px; background:{C['sub']}; }}
+.bar .z {{ position:absolute; left:66.7%; top:-3px; width:2px; height:16px; background:{C['sub']}; }}
 .bar .f {{ position:absolute; top:0; height:10px; border-radius:5px; }}
 .bar .m {{ position:absolute; top:-3px; width:4px; height:16px; border-radius:2px; background:{C['text']}; }}
 .note {{ background:{C['surface']}; border-left:4px solid {C['warn']}; padding:10px 14px; border-radius:6px; color:{C['sub']}; font-size:0.9rem; }}
@@ -99,7 +99,7 @@ def _num(s):
     return pd.to_numeric(s, errors='coerce')
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_all():
     d = {}
     d['scan'] = json.load(open('data/latest_scan.json')) if os.path.exists('data/latest_scan.json') else {}
@@ -128,8 +128,8 @@ for df in (open_pos, closed):
               'result_pct', 'gross_pct', 'overnight_pct', 'signal_price', 'close_price', 'max_price', 'min_price'):
         if c in df.columns:
             df[c] = _num(df[c])
-has_v5 = 'method' in closed.columns and (closed['method'] == 'v5_next_open').any()
-closed_v5 = closed[closed['method'] == 'v5_next_open'] if has_v5 else closed
+has_v5 = 'method' in closed.columns and (closed['method'] == 'v6_close_entry').any()
+closed_v5 = closed[closed['method'] == 'v6_close_entry'] if has_v5 else closed
 
 
 # ─── 유틸 ────────────────────────────────────────────────────────────────────
@@ -207,9 +207,11 @@ except Exception:
 st.markdown(f"""
 <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px">
   <div><div class="ss-h1">Surge Scanner</div>
-  <div class="ss-sub">1차_1(급락반등) · 1차_3(과매도) 신호 기록과 실제 체결 기준 성적</div></div>
+  <div class="ss-sub">1차_1(급락반등) · 1차_3(과매도) · 마감 전 탐지 → 마감가 매수 · +5% / −10% / 2일</div></div>
   <div class="muted">마지막 스캔 {scan_time} {stale}</div>
 </div>""", unsafe_allow_html=True)
+if st.button("새로고침", help="60초 캐시를 비우고 다시 읽어요"):
+    st.cache_data.clear(); st.rerun()
 
 # ─── KPI ─────────────────────────────────────────────────────────────────────
 cl = closed_v5.copy()
@@ -227,8 +229,10 @@ avg = uniq['result_pct'].mean() if n else np.nan
 n_open = int((open_pos['status'] == 'OPEN').sum()) if not open_pos.empty and 'status' in open_pos else 0
 ret = (final / 1_000_000 - 1) * 100 if n else np.nan
 
+nj_k = cl['judge'].value_counts().to_dict() if 'judge' in cl.columns else {}
+judge_txt = f" · 판정 1분봉 {nj_k.get('minute', 0)}건/일봉 {nj_k.get('daily', 0)}건" if (n and has_v5) else ''
 kpis = [
-    ('hero', '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목 · 비용 {COST_PCT:.0f}% 포함", color_pct(ret)),
+    ('hero', '100만 원으로 따라 샀다면', f"{final:,.0f}원" if n else '—', f"{fmt_pct(ret)} · 한 종목 10% · 최대 10종목 · 비용 {COST_PCT:.0f}% 포함{judge_txt}", color_pct(ret)),
     ('', '중간에 가장 많이 줄었을 때', fmt_pct(mdd * 100) if n else '—', '최고점 대비', C['red'] if n else C['muted']),
     ('', '+5% 도달률', fmt_pct(wr, False) if n else '—', f"{n}건", C['text']),
     ('', '한 번 살 때 평균', fmt_pct(avg) if n else '—', '비용 뺀 값', color_pct(avg)),
@@ -239,7 +243,7 @@ st.markdown('<div class="grid2">' + ''.join(
     for cls, l, v, dsc, vc in kpis) + '</div>', unsafe_allow_html=True)
 
 if not has_v5:
-    st.markdown(f'<div class="note" style="margin-top:10px">아직 예전 방식(신호일 종가 매수·비용 0)으로 계산된 기록이에요. 다음 스캔 때 전부 새 규칙(다음날 시가 매수·갭 체결·비용 {COST_PCT:.0f}%)으로 다시 계산돼요.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="note" style="margin-top:10px">아직 예전 규칙으로 계산된 기록이에요. 다음 추적 때 전부 새 규칙(마감가 매수 · +5% / −10% / 2일 · 갭 체결 · 비용 {COST_PCT:.0f}%)으로 다시 계산돼요.</div>', unsafe_allow_html=True)
 
 # ─── 오늘 신호 ───────────────────────────────────────────────────────────────
 st.markdown(f'<div class="ss-sec">오늘 신호 <small>{sig_date} 미국장 기준</small></div>', unsafe_allow_html=True)
@@ -250,21 +254,22 @@ else:
     rows = []
     for tk, x in g:
         r0 = x.iloc[0]
-        rows.append(dict(ticker=tk, strats=list(x['strategy']), price=_num(pd.Series([r0.get('price')])).iloc[0],
+        rows.append(dict(ticker=tk, strats=list(x['strategy']), pre=('scan_type' in x.columns and (x['scan_type'] == 'preclose').any()), price=_num(pd.Series([r0.get('price')])).iloc[0],
                          rsi=_num(pd.Series([r0.get('rsi7')])).iloc[0], intra=_num(pd.Series([r0.get('intraday')])).iloc[0],
                          ret1=_num(pd.Series([r0.get('ret1d')])).iloc[0], down=r0.get('consec_down', ''),
                          vol=_num(pd.Series([r0.get('avg_vol20', np.nan)])).iloc[0]))
-    rows.sort(key=lambda r: (-len(r['strats']), r['ticker']))
+    rows.sort(key=lambda r: (not r['pre'], -len(r['strats']), r['ticker']))
     both = sum(1 for r in rows if len(r['strats']) > 1)
     st.markdown(f'<div class="muted" style="margin-bottom:8px">{len(rows)}종목 · 두 전략 모두 해당 {both}종목 · '
-                f'추적상 매수 시점: <b style="color:{C["text"]}">{kst_of_us(sig_date)} 한국시간 시가</b> · 목표 +5% · 손절 −20% · 최대 5거래일</div>', unsafe_allow_html=True)
+                f'매수: <b style="color:{C["text"]}">신호일 마감가(종가 주문)</b> · 목표 +5% · 손절 −10% · 최대 2거래일</div>', unsafe_allow_html=True)
     cards = ''
     for r in rows:
         p = r['price']
         down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
-        cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f}</span></div>'
+        plabel = '15:30' if r.get('pre') else '종가'
+        cards += (f'<div class="card"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f} <span class="muted" style="font-size:0.75rem">{plabel}</span></span></div>'
                   f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
-                  f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.8:,.2f}</b></span>'
+                  f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b></span>'
                   f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
     cards_list = cards.split('</div></div>')[:-1]
     head = '</div></div>'.join(cards_list[:6]) + ('</div></div>' if cards_list[:6] else '')
@@ -272,7 +277,8 @@ else:
     if len(cards_list) > 6:
         with st.expander(f"나머지 {len(cards_list) - 6}종목 보기"):
             st.markdown('<div class="grid">' + '</div></div>'.join(cards_list[6:]) + '</div></div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="muted" style="margin-top:6px">지금 추적 규칙은 다음 거래일 시가에 산 것으로 계산해요. 신호일 종가에 사서 다음 날 오전에 파는 방식은 별도 실험 지표(하룻밤)로만 기록돼요.</div>', unsafe_allow_html=True)
+    pre = today[today.get('scan_type', pd.Series(dtype=str)) == 'preclose'] if 'scan_type' in today.columns else pd.DataFrame()
+    st.markdown(f'<div class="muted" style="margin-top:6px">마감 전(15:30 ET) 스캔에서 잡힌 신호 {len(pre)}건 · 마감 뒤 전 종목 스캔에서만 잡힌 신호는 참고용(그 가격에 살 수 없었음).</div>', unsafe_allow_html=True)
 
 # ─── 진행 중 ────────────────────────────────────────────────────────────────
 st.markdown('<div class="ss-sec">진행 중 <small>산 뒤 아직 안 판 것</small></div>', unsafe_allow_html=True)
@@ -291,13 +297,13 @@ else:
         ep, cp, ch = r.get('entry_price'), r.get('current_price'), r.get('change_pct')
         if np.isnan(ch) and not np.isnan(ep):
             ch = 0.0; cp = ep if np.isnan(cp) else cp
-        dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 5
+        dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 2
         if r['status'] == 'PENDING' or np.isnan(ep):
-            body = f'<div class="muted">다음 거래일 시가에 진입 예정 · 신호 {r["signal_date"]}</div>'
+            body = f'<div class="muted">신호일 마감가로 진입 예정(일봉 확정 대기) · 신호 {r["signal_date"]}</div>'
         else:
-            pos = min(max((ch + 20) / 25, 0), 1) * 100 if not np.isnan(ch) else 0
+            pos = min(max((ch + 10) / 15, 0), 1) * 100 if not np.isnan(ch) else 0
             fill = '#5fd35f' if ch >= 0 else C['red']
-            left, width = (80, pos - 80) if pos >= 80 else (pos, 80 - pos)
+            left, width = (66.7, pos - 66.7) if pos >= 66.7 else (pos, 66.7 - pos)
             body = (f'<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">진입 ${ep:,.2f}</span>'
                     f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted">현재 ${cp:,.2f}</span></div>'
                     f'<div class="bar"><div class="f" style="left:{left}%;width:{max(width,0)}%;background:{fill}"></div><div class="z"></div><div class="m" style="left:calc({pos}% - 2px)"></div></div>'
@@ -353,7 +359,8 @@ else:
                   f'<div><div class="muted">중간값</div><div style="font-size:1.3rem;font-weight:700">{fmt_pct(md)}</div></div></div>'
                   f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on)}</b></span></div></div>')
     st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="muted" style="margin-top:6px">도달률이 70%여도 평균이 0 근처인 이유: 이기면 +5%, 지면 −20%라서 한 번 지면 네 번 이긴 걸 다 까먹어요. '
+    nj = cl['judge'].value_counts().to_dict() if 'judge' in cl.columns else {}
+    st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −10%(갭이면 더)라서 승률 67%가 넘어야 남아요. 판정: 1분봉 {nj.get("minute", 0)}건 · 일봉 {nj.get("daily", 0)}건(일봉은 같은 날 ±둘 다 닿으면 손절로 쳐서 보수적). '
                 f'하룻밤 실험 = 신호일 종가에 사서 다음날 시가에 팔았다면(비용 {COST_PCT:.0f}% 뺀 값, 기록용).</div>', unsafe_allow_html=True)
 
 # ─── 기록 ────────────────────────────────────────────────────────────────────
@@ -399,9 +406,10 @@ with st.expander("최근 30일 신호 전체", expanded=False):
 # ─── 규칙 ────────────────────────────────────────────────────────────────────
 with st.expander("이 화면의 숫자는 어떻게 계산되나 (규칙)", expanded=False):
     st.markdown(f"""
-- **신호**: 매일 미국장 마감 뒤 전 종목을 훑어서 1차_1(급락반등)·1차_3(과매도) 조건에 맞는 종목을 기록해요. ETF·레버리지 상품은 빼요.
-- **매수**: 신호 다음 거래일 **시가**에 산 것으로 계산해요. (스캔이 장 마감 뒤라 신호일 종가에는 살 수 없음)
-- **매도**: +5% 익절, −20% 손절, 최대 5거래일. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요. 같은 날 둘 다 닿으면 손절로 쳐요.
+- **감시목록**: 전날 데이터로 "내일 신호가 날 수 있는 종목"(RSI7<45, 연속하락 3일 이상)을 미리 추려요. 하루 400~500종목.
+- **신호**: 미국장 마감 30분 전(15:30 ET, 한국 새벽 4:30)에 감시목록만 1~3분에 확인해서 1차_1·1차_3 조건에 맞는 종목을 올려요. ETF·레버리지 상품은 빼요. 마감 뒤 전 종목 스캔도 돌지만 그건 기록·대조용이에요.
+- **매수**: 신호일 **마감가**(종가 주문)에 산 것으로 계산해요.
+- **매도**: +5% 익절, −10% 손절, 최대 2거래일. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요. 같은 날 둘 다 닿으면 손절로 쳐요.
 - **비용**: 거래마다 왕복 {COST_PCT:.0f}%를 빼요.
 - **100만 원 시뮬레이션**: 한 종목에 그때 잔고의 10%, 동시에 최대 10종목. 자리가 없으면 그 신호는 건너뛰어요.
 - **하룻밤 실험**: 신호일 종가에 사서 다음날 시가에 팔았다면의 값. 일봉 기준이라 호가 차이 착시가 섞일 수 있어 기록만 해요.

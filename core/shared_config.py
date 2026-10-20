@@ -27,19 +27,25 @@ LEVERAGED_ETF = {
 # v5: 전략 1·3만 운영. 2·4~10 은 제거(기록은 data/archive_removed_strategies/ 에 보관).
 ACTIVE_STRATEGIES = ['1', '3']
 
+# v6: 손절 -10%, 최대 2거래일 (최근 217건 1분봉 재계산: -20%/5일보다 건당 평균↑, -15% 넘는 손실 39건→5건)
 STRATEGY_CONFIG = {
-    '1': {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5},
-    '3': {'tp_pct': 0.05, 'sl_pct': -0.2, 'max_hold': 5},
+    '1': {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2},
+    '3': {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2},
 }
 
 STRATEGY_NAMES = {
-    '1': '1차_1_+5%5일 · 급락반등',
-    '3': '1차_3_+5%5일 · 과매도',
+    '1': '1차_1 · 급락반등',
+    '3': '1차_3 · 과매도',
 }
 
-# ─── Execution Model (v5) ────────────────────────────────────────────────────
-# 스캔은 장 마감 뒤에 돌기 때문에 신호일 종가에는 살 수 없다 → 다음 거래일 시가 진입.
-ENTRY_MODE = 'next_open'
+# ─── Execution Model (v6) ────────────────────────────────────────────────────
+# 장 마감 30분 전(15:30 ET)에 감시목록을 빠르게 확인해 신호를 내고, 그날 '마감가'(종가 주문)에 진입.
+# 아침에 신호를 보고 사면(애프터·프리·다음날 시가) 이미 평균 2~4% 올라 있어 성적이 나빠진다(217건 1분봉 분석).
+ENTRY_MODE = 'signal_close'
+PRECLOSE_SCAN_ET = (15, 46)          # 마감 전 스캔 실행 시각 (ET). 무료 플랜 15분 지연 → 15:30 까지의 가격으로 판정
+PRECLOSE_DATA_ET = (15, 30)          # 판정에 쓰는 가격 기준 시각
+WATCHLIST_RSI7 = 45                  # 전날 RSI7 < 45
+WATCHLIST_CONSEC = 3                 # 전날 연속하락 ≥ 3  → 하루 평균 ~450종목, 실제 신호의 95% 포함
 # 왕복 거래비용(수수료+호가차이+슬리피지). 결과(result_pct)에서 차감된다.
 COST_PCT = 1.0
 # 실험 지표: 신호일 종가에 사서 다음날 시가에 판다면? (일봉 기준, 호가 차이 착시 가능 → 참고용)
@@ -194,19 +200,23 @@ def calc_rsi_wilder(close_series, period=7):
     import pandas as pd
     import numpy as np
 
-    delta = close_series.diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = (-delta).where(delta < 0, 0.0)
-
-    avg_gain = gain.rolling(window=period, min_periods=period).mean()
-    avg_loss = loss.rolling(window=period, min_periods=period).mean()
-
-    for i in range(period, len(close_series)):
-        avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (period - 1) + gain.iloc[i]) / period
-        avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (period - 1) + loss.iloc[i]) / period
-
-    rs = avg_gain / avg_loss.replace(0, 1e-10)
-    return 100 - (100 / (1 + rs))
+    # numpy 로 같은 계산 (예전 pandas .iloc 루프와 값이 같고 수십 배 빠름 — 전 종목 스캔용)
+    c = np.asarray(close_series, dtype=float)
+    n = len(c)
+    avg_gain = np.full(n, np.nan); avg_loss = np.full(n, np.nan)
+    if n >= period:
+        gain = np.zeros(n); loss = np.zeros(n)                          # 첫 칸(diff 없음)은 0 — 예전 구현과 동일
+        d = np.diff(c)
+        gain[1:] = np.where(d > 0, d, 0.0); loss[1:] = np.where(d < 0, -d, 0.0)
+        ag = gain[:period].mean(); al = loss[:period].mean()          # 예전 rolling(min_periods=period) 의 첫 값 (index period-1)
+        avg_gain[period - 1] = ag; avg_loss[period - 1] = al
+        for i in range(period, n):
+            ag = (ag * (period - 1) + gain[i]) / period
+            al = (al * (period - 1) + loss[i]) / period
+            avg_gain[i] = ag; avg_loss[i] = al
+    al_safe = np.where(avg_loss == 0, 1e-10, avg_loss)
+    rsi = 100 - (100 / (1 + avg_gain / al_safe))
+    return pd.Series(rsi, index=close_series.index)
 
 
 # ─── Shared Ticker Fetcher ───────────────────────────────────────────────────
@@ -271,7 +281,7 @@ def get_all_tickers():
     return sorted(tickers)
 
 
-# ─── Shared yfinance Batch Download ─────────────────────────────────────────
+# ─── Shared yfinance Batch Download (strategy_search/·research/ 옛 스크립트용 — core 는 Alpaca 를 쓴다) ──
 
 def download_batch(tickers, period='60d'):
     """yfinance 배치 다운로드 (재시도 포함)"""
