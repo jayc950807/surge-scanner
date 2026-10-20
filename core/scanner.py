@@ -23,7 +23,7 @@
     - 마감 전 스캔은 감시목록 종목의 오늘 1분봉(09:30~지금-16분)을 받아 임시 일봉으로 합쳐 판정.
 
   Usage:
-    python scanner.py                   # 마감 뒤: 캐시 갱신 + 전 종목 스캔 (장중에는 돌지 않음, --force 로 강제)
+    python scanner.py                   # 마감 뒤: 캐시 갱신(마지막 확정 거래일까지) + 전 종목 스캔. 언제 돌려도 안전, 하루 한 번만 실제 실행
     python scanner.py --preclose        # 15:40~15:48 ET 감시목록 빠른 확인 → 마감가 매수용 신호
     python scanner.py --build-watchlist # 캐시로 감시목록만 다시 생성 (네트워크 없음)
     python scanner.py --rebuild-cache   # 캐시를 지우고 Alpaca 에서 처음부터 다시 받음
@@ -504,7 +504,7 @@ def main():
     parser.add_argument('--build-watchlist', action='store_true', help='캐시로 감시목록만 만들고 종료 (네트워크 없음)')
     parser.add_argument('--preclose', action='store_true', help='15:46 ET 감시목록 빠른 확인 (마감가 매수용 신호)')
     parser.add_argument('--rebuild-cache', action='store_true', help='일봉 캐시를 지우고 Alpaca 에서 처음부터 다시 받음')
-    parser.add_argument('--force', action='store_true', help='장중이어도 마감 뒤 전 종목 스캔을 강제 실행 (점검용)')
+    parser.add_argument('--force', action='store_true', help="오늘 이미 스캔했어도 다시 실행 (점검용)")
     args = parser.parse_args()
     strat_str = args.strategy
 
@@ -532,13 +532,8 @@ def main():
         print_results(s1, s3); save_results(s1, s3, date_str=now_et.strftime('%Y-%m-%d'), mode='preclose')
         print(f"\n  마감 전 스캔 완료: {time.time() - t0:.0f}초 | 1: {len(s1)}건 | 3: {len(s3)}건"); return
 
-    # 마감 뒤 전 종목 스캔은 '확정 종가'가 있어야 의미가 있다. 장중(프리마켓 04:00 ~ 마감 16:00 ET)에 돌면
-    # 그 시점 가격이 종가처럼 기록되고, 감시목록도 오늘 장중 값으로 덮어써지므로 막는다.
-    now_et = _now_et()
-    if is_us_trading_day(now_et.date()) and 4 <= now_et.hour < 16 and not args.force:
-        print(f"  ET {now_et.strftime('%H:%M')} — 미국 장 마감(16:00 ET = 한국 {'05:00' if is_us_dst(now_et.date()) else '06:00'}) 전이라 "
-              f"전 종목 스캔을 돌리지 않음. 마감 뒤에 다시 실행하거나 점검용이면 --force"); return
-
+    # 언제 돌려도 안전하다: '마지막으로 확정된 거래일'(16:20 ET 전이면 어제)까지만 받아서 판정하므로
+    # 장중에 돌려도 오늘의 미완성 가격이 종가처럼 기록되지 않는다. 같은 날을 두 번 스캔하지는 않는다.
     through = _last_session_et()
     if already_scanned(through) and not args.rebuild_cache and not args.force:
         print(f"  {through} 마감 뒤 스캔은 이미 끝남 (예약이 여러 번 걸려 있어 두 번째 실행) → 종료"); return

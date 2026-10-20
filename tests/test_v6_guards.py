@@ -54,13 +54,35 @@ class TestDedupePreferPreclose:
         assert len(out) == 1 and out['price'].iloc[0] == 1.0
 
 
-# ─── 마감 뒤 전 종목 스캔: 장중에는 돌지 않는다 ─────────────────────────────
-class TestAfterCloseGuard:
+# ─── 마감 뒤 전 종목 스캔: 언제 돌려도 '마지막 확정 거래일'까지만 다룬다 ───────
+class TestAfterCloseAnytime:
     def _run(self, monkeypatch, now, argv):
+        seen = {}
         monkeypatch.setattr(scanner, '_now_et', lambda: now)
-        monkeypatch.setattr(scanner, 'update_cache', boom)   # 여기까지 오면 '스캔 시작'으로 간주
         monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: True)
+        monkeypatch.setattr(scanner, 'already_scanned', lambda through: False)
+        def fake_update(through, retries=3, wait_sec=120):
+            seen['through'] = through; raise Boom()
+        monkeypatch.setattr(scanner, 'update_cache', fake_update)
         monkeypatch.setattr(sys, 'argv', argv)
+        with pytest.raises(Boom):
+            scanner.main()
+        return seen['through']
+
+    def test_during_session_uses_yesterday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 20, 9, 42), ['scanner.py']) == '2026-10-19'     # 화요일 장중 → 월요일까지
+
+    def test_premarket_uses_yesterday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 7, 0), ['scanner.py']) == '2026-10-16'      # 월요일 아침 → 금요일
+
+    def test_right_after_close_waits_for_settle(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 16, 7), ['scanner.py']) == '2026-10-16'     # 16:07 → 아직 어제
+
+    def test_after_settle_uses_today(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 16, 25), ['scanner.py']) == '2026-10-19'
+
+    def test_weekend_uses_friday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 18, 10, 0), ['scanner.py']) == '2026-10-16'
 
     def test_no_keys_exits_before_network(self, monkeypatch, capsys):
         monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 17, 40))
@@ -70,30 +92,6 @@ class TestAfterCloseGuard:
         with pytest.raises(SystemExit):
             scanner.main()
         assert 'ALPACA_KEY' in capsys.readouterr().out
-
-    def test_blocked_during_session(self, monkeypatch, capsys):
-        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py'])     # 월요일 10:00 ET
-        scanner.main()
-        assert '마감(16:00 ET' in capsys.readouterr().out
-
-    def test_blocked_in_premarket(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 7, 0), ['scanner.py'])      # 07:00 ET = 20:00 KST
-        scanner.main()   # Boom 이 나지 않아야 함
-
-    def test_runs_after_close(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 17, 40), ['scanner.py'])
-        with pytest.raises(Boom):
-            scanner.main()
-
-    def test_runs_on_weekend(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 18, 10, 0), ['scanner.py'])     # 일요일
-        with pytest.raises(Boom):
-            scanner.main()
-
-    def test_force_overrides(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py', '--force'])
-        with pytest.raises(Boom):
-            scanner.main()
 
 
 # ─── 마감 전 스캔 안전장치 ────────────────────────────────────────────────────
