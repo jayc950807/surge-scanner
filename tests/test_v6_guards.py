@@ -217,3 +217,33 @@ class TestClosedStatus:
         assert float(c['close_price'].iloc[0]) == 11.0      # 다음 날 시가 갭 → 시가 체결
         o = pd.read_csv('data/open_positions.csv', dtype=str, keep_default_na=False)
         assert len(o) == 0
+
+
+# ─── 예약이 여러 번 걸려 있어도 하루 한 번만 실제로 돈다 ─────────────────────
+class TestIdempotentAfterClose:
+    def test_last_session_waits_for_settle(self, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 7))     # 16:07 — 종가 확정 전
+        assert scanner._last_session_et() == '2026-10-16'
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 25))
+        assert scanner._last_session_et() == '2026-10-19'
+
+    def test_already_scanned(self, tmp_path, monkeypatch):
+        import json
+        monkeypatch.chdir(tmp_path); os.makedirs('data/ohlcv')
+        pd.DataFrame([{'ticker': 'AAA', 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}]).to_parquet('data/ohlcv/2026-10-19.parquet', index=False)
+        assert scanner.already_scanned('2026-10-19') is False                        # latest_scan.json 없음
+        json.dump({'scan_date': '2026-10-19', 'data_source': 'alpaca', 'mode': 'preclose'}, open('data/latest_scan.json', 'w'))
+        assert scanner.already_scanned('2026-10-19') is False                        # 마감 전 스캔 기록은 해당 없음
+        json.dump({'scan_date': '2026-10-19', 'data_source': 'alpaca', 'mode': 'afterclose'}, open('data/latest_scan.json', 'w'))
+        assert scanner.already_scanned('2026-10-19') is True
+        assert scanner.already_scanned('2026-10-20') is False                        # 캐시가 아직 그날까지 없음
+
+    def test_second_firing_exits_before_network(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 45))
+        monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: True)
+        monkeypatch.setattr(scanner, 'already_scanned', lambda through: through == '2026-10-19')
+        monkeypatch.setattr(scanner, 'update_cache', boom)
+        monkeypatch.setattr(sys, 'argv', ['scanner.py'])
+        scanner.main()
+        assert '이미 끝남' in capsys.readouterr().out and not os.path.exists('/tmp/scanned_marker_never')

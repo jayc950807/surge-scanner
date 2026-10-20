@@ -115,13 +115,30 @@ def _today_et():
     return _now_et().strftime('%Y-%m-%d')
 
 
+CLOSE_SETTLED_ET = (16, 20)     # 이 시각(ET) 이후라야 오늘 일봉을 '확정'으로 본다 (종가 체결 + 무료 플랜 15분 지연 여유)
+
+
 def _last_session_et():
-    """마지막으로 끝난 미국 정규장 날짜(ET). 16:00 ET 이후면 오늘, 아니면 직전 거래일."""
+    """마지막으로 '확정된' 미국 정규장 날짜(ET). 16:20 ET 이후면 오늘, 아니면 직전 거래일.
+    (16:00~16:20 사이는 종가가 아직 안 들어왔을 수 있어 어제로 본다)"""
     now_et = _now_et()
     d = now_et.date()
-    if now_et.hour >= 16 and is_us_trading_day(d):
+    if (now_et.hour, now_et.minute) >= CLOSE_SETTLED_ET and is_us_trading_day(d):
         return d.strftime('%Y-%m-%d')
     return get_last_trading_date(d).strftime('%Y-%m-%d')
+
+
+def already_scanned(through):
+    """오늘(through) 마감 뒤 스캔을 이미 끝냈는지 — 캐시가 그날까지 있고 latest_scan.json 이 그날 Alpaca 스캔이면 참.
+    GitHub 예약이 늦어질 때를 대비해 여러 번 걸어 두므로, 두 번째부터는 여기서 바로 끝난다."""
+    try:
+        if not cache.last_cached_day() or cache.last_cached_day() < through:
+            return False
+        with open('data/latest_scan.json') as f:
+            j = json.load(f)
+        return j.get('scan_date') == through and j.get('data_source') == 'alpaca' and j.get('mode') == 'afterclose'
+    except Exception:
+        return False
 
 
 # ─── 신호 판정 ────────────────────────────────────────────────────────────────
@@ -387,7 +404,7 @@ def dedupe_prefer_preclose(df):
     return df.drop(columns=['_pre']).sort_index().reset_index(drop=True)
 
 
-def save_results(signals_1, signals_3, date_str=None):
+def save_results(signals_1, signals_3, date_str=None, mode='afterclose'):
     os.makedirs('data', exist_ok=True)
     all_signals = signals_1 + signals_3
     if date_str is None:
@@ -449,6 +466,7 @@ def save_results(signals_1, signals_3, date_str=None):
         'dq_warnings': len(dq),
         'version': 'v6',
         'data_source': 'alpaca',
+        'mode': mode,
     }
     with open('data/latest_scan.json', 'w') as f:
         json.dump(summary, f, indent=2)
@@ -511,7 +529,7 @@ def main():
         if not is_us_trading_day(now_et.date()):
             print("  오늘은 미국 휴장일 → 마감 전 스캔 생략 (파일도 만들지 않음)"); return
         s1, s3 = preclose_scan(strat_str)
-        print_results(s1, s3); save_results(s1, s3, date_str=now_et.strftime('%Y-%m-%d'))
+        print_results(s1, s3); save_results(s1, s3, date_str=now_et.strftime('%Y-%m-%d'), mode='preclose')
         print(f"\n  마감 전 스캔 완료: {time.time() - t0:.0f}초 | 1: {len(s1)}건 | 3: {len(s3)}건"); return
 
     # 마감 뒤 전 종목 스캔은 '확정 종가'가 있어야 의미가 있다. 장중(프리마켓 04:00 ~ 마감 16:00 ET)에 돌면
@@ -522,6 +540,8 @@ def main():
               f"전 종목 스캔을 돌리지 않음. 마감 뒤에 다시 실행하거나 점검용이면 --force"); return
 
     through = _last_session_et()
+    if already_scanned(through) and not args.rebuild_cache and not args.force:
+        print(f"  {through} 마감 뒤 스캔은 이미 끝남 (예약이 여러 번 걸려 있어 두 번째 실행) → 종료"); return
     print(f"\n[1] 일봉 캐시 갱신 (~{through})")
     if args.rebuild_cache:
         rebuild_cache(through)
@@ -533,6 +553,10 @@ def main():
 
     print_results(signals_1, signals_3)
     save_results(signals_1, signals_3, date_str=asof or through)
+    try:
+        open('/tmp/scanned', 'w').write(through)      # 워크플로: 실제로 스캔했을 때만 추적기를 돌린다
+    except OSError:
+        pass
     print(f"\n  스캔 완료: {time.time() - t0:.0f}초 | Strategy 1: {len(signals_1)}건 | 3: {len(signals_3)}건")
 
 
