@@ -1,8 +1,16 @@
 name: Daily Surge Scan
 on:
   schedule:
-    # UTC 21:40 = KST 06:40. 겨울(EST)에도 장마감(21:00 UTC) 뒤 40분이라 종가가 확정돼 있음
-    - cron: '40 21 * * 1-5'
+    # 장 마감(16:00 ET) 직후 가능한 한 빨리. GitHub 예약은 정각(:00)에 몰려 2~5시간 늦게 시작하는 일이 잦아서
+    # 어중간한 분에 여러 번 걸어 둔다. 스크립트가 '마감 16:20 ET 전이면 종료 / 오늘 이미 끝냈으면 종료'로 거른다 (한 번만 실제로 돈다).
+    #   여름(EDT) 마감 20:00 UTC → 20:23·20:43·21:23 UTC = 한국 05:23·05:43·06:23
+    #   겨울(EST) 마감 21:00 UTC → 21:23·21:43·22:23 UTC = 한국 06:23·06:43·07:23
+    - cron: '23 20 * * 1-5'
+    - cron: '43 20 * * 1-5'
+    - cron: '23 21 * * 1-5'
+    - cron: '43 21 * * 1-5'
+    - cron: '23 22 * * 1-5'
+    - cron: '23 23 * * 1-5'   # 그래도 안 됐으면 한국 08:23 에 한 번 더
   workflow_dispatch:
     inputs:
       reset_tracker:
@@ -13,8 +21,15 @@ on:
         description: '전체 히스토리 재검증 (YES 입력 시 모든 결과 재확인)'
         required: false
         default: ''
+      rebuild_cache:
+        description: '일봉 캐시를 지우고 Alpaca 에서 처음부터 다시 받기 (YES)'
+        required: false
+        default: ''
 permissions:
   contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
 # 같은 워크플로우가 겹쳐서 돌지 않도록 직렬화 (이전 실행이 끝날 때까지 대기)
 concurrency:
   group: scanner-push
@@ -35,14 +50,21 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run unit tests
         run: python -m pytest tests/ -v --tb=short 2>&1 || echo "⚠️ Some tests failed"
-      - name: Run scanner (마감 뒤 전 종목 — 기록·대조용 + 내일 감시목록 갱신)
+      - name: Run scanner (캐시 갱신 + 마감 뒤 전 종목 — 기록·대조용 + 내일 감시목록 갱신)
         id: scanner
         run: |
-          python core/scanner.py 2>&1 | tee scanner_output.log
+          if [ "${{ github.event.inputs.rebuild_cache }}" = "YES" ]; then
+            python core/scanner.py --rebuild-cache 2>&1 | tee scanner_output.log
+          else
+            python core/scanner.py 2>&1 | tee scanner_output.log
+          fi
           echo "scanner_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
-      - name: Run position tracker
+      - name: Run position tracker (스캐너가 실제로 돌았을 때만)
         if: steps.scanner.outcome == 'success'
         run: |
+          if [ ! -f /tmp/scanned ] && [ "${{ github.event.inputs.reverify }}" != "YES" ] && [ "${{ github.event.inputs.reset_tracker }}" != "YES" ]; then
+            echo "스캔이 돌지 않은 실행(장 마감 전이거나 오늘 이미 끝남) → 추적기 생략"; exit 0
+          fi
           if [ "${{ github.event.inputs.reverify }}" = "YES" ]; then
             echo "🔄 전체 히스토리 재검증 모드"
             python core/tracker.py --reverify

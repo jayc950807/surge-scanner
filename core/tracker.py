@@ -26,7 +26,6 @@
 ================================================================================
 """
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import os
@@ -44,8 +43,8 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 from shared_config import (
     STRATEGY_CONFIG, STRATEGY_NAMES, ACTIVE_STRATEGIES, COST_PCT, DATA_DIR, KST,
     get_expected_trading_date,
-    download_batch, extract_ticker_df
 )
+import alpaca_data
 
 # ─── Column definitions ──────────────────────────────────────────────────────
 OPEN_COLS = [
@@ -118,23 +117,10 @@ def get_trading_days_between(start_date, end_date):
 
 
 def fetch_price_data(ticker, start_date, end_date=None):
-    """
-    yfinance로 특정 기간 가격 데이터 조회 (timezone 자동 처리).
-    Fix #1: Proper exception handling with logging.
-    """
+    """Alpaca 일봉(분할 보정, 인덱스 = 날짜 naive). 없으면 None. (예전 야후 history() 와 같은 모양)"""
     try:
-        tk = yf.Ticker(ticker)
-        if end_date:
-            end_dt = pd.to_datetime(end_date) + timedelta(days=1)
-            df = tk.history(start=start_date, end=end_dt.strftime('%Y-%m-%d'), auto_adjust=False)
-        else:
-            df = tk.history(start=start_date, auto_adjust=False)
-        if df is not None and len(df) > 0:
-            # timezone 제거 (yfinance가 America/New_York 등 반환 → naive로 통일)
-            if df.index.tz is not None:
-                df.index = df.index.tz_localize(None)
-            return df
-        return None
+        df = alpaca_data.history_daily(ticker, start_date, end_date, adjustment='split')
+        return df if df is not None and len(df) > 0 else None
     except Exception as e:
         logging.warning(f"{ticker} price fetch failed: {e}")
         return None
@@ -167,19 +153,14 @@ def get_entry_for_signal(ticker, signal_date):
 
 
 def fetch_minute_data(ticker, start_date):
-    """start_date 다음 날부터 7일 창의 1분봉(정규장 09:30~16:00, 16:00 봉 = 종가 체결 포함).
-    yfinance 1분봉은 최근 30일·요청당 7일까지라 창을 진입일에 고정해 요청한다 → 실패하면 None (일봉으로 대체)."""
+    """start_date 다음 날부터 7일 창의 1분봉(정규장 09:30~16:00, 16:00 봉 = 종가 체결 포함, 분할 보정).
+    Alpaca 는 과거 1분봉도 다 있어 오래된 기록도 분 단위로 판정할 수 있다 → 실패하면 None (일봉으로 대체)."""
     try:
         d0 = pd.to_datetime(start_date)
-        df = yf.Ticker(ticker).history(start=(d0 + timedelta(days=1)).strftime('%Y-%m-%d'), end=(d0 + timedelta(days=8)).strftime('%Y-%m-%d'),
-                                       interval='1m', prepost=False, auto_adjust=False)
+        df = alpaca_data.history_minute(ticker, (d0 + timedelta(days=1)).date(), (d0 + timedelta(days=8)).date(), adjustment='split')
         if df is None or df.empty:
             return None
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert('America/New_York').tz_localize(None)
         df = df[df.index.normalize() > d0]
-        hm = df.index.hour * 60 + df.index.minute
-        df = df[(hm >= 570) & (hm <= 960)]
         return df if len(df) else None
     except Exception as e:
         logging.warning(f"{ticker} minute fetch failed: {e}")
@@ -897,7 +878,6 @@ def reverify_all():
         cache_key = (ticker, signal_date)
         if cache_key not in entry_cache:
             entry_cache[cache_key] = get_entry_for_signal(ticker, signal_date)
-            time.sleep(0.5)  # rate limiting
 
         entry_date, entry_price, signal_close = entry_cache[cache_key]
 
@@ -921,7 +901,6 @@ def reverify_all():
             end_dt = pd.to_datetime(entry_date) + timedelta(days=max_hold + 10)
             hist = fetch_price_data(ticker, entry_date, end_dt.strftime('%Y-%m-%d'))
             hist_cache[hist_key] = hist
-            time.sleep(0.5)
 
         hist = drop_unfinished_bar(hist_cache[hist_key])
 
@@ -945,10 +924,8 @@ def reverify_all():
                 pos['overnight_pct'] = str(round(net_of_cost((float(hist_tracking['Open'].iloc[0]) / entry_price - 1) * 100), 2))
             except Exception:
                 pass
-        # 4. [v6] 진입 후 28일 이내(yfinance 1분봉 제공 한도 30일에 여유)면 분봉으로, 아니면 일봉으로 재판정
-        mins = None
-        if (pd.Timestamp.now() - pd.to_datetime(entry_date)).days <= 28:
-            mins = fetch_minute_data(ticker, entry_date); time.sleep(0.3)
+        # 4. [v6] 분봉으로 재판정 (Alpaca 는 과거 분봉도 제공), 못 받으면 일봉으로
+        mins = fetch_minute_data(ticker, entry_date)
         if minute_data_valid(mins, hist_tracking):
             result = track_position_intraday(entry_price, tp_price, sl_price, max_hold, mins, finished_days=list(hist_tracking.index.normalize()))
             pos['judge'] = 'minute'
@@ -1022,7 +999,6 @@ def reverify_all():
 
         if (i + 1) % 10 == 0:
             print(f"  Progress: {i+1}/{len(all_positions)} 완료")
-            time.sleep(1)  # rate limiting
 
     # 기존 PENDING은 유지
     pending_positions = []

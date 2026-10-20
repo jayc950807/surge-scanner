@@ -54,36 +54,44 @@ class TestDedupePreferPreclose:
         assert len(out) == 1 and out['price'].iloc[0] == 1.0
 
 
-# ─── 마감 뒤 전 종목 스캔: 장중에는 돌지 않는다 ─────────────────────────────
-class TestAfterCloseGuard:
+# ─── 마감 뒤 전 종목 스캔: 언제 돌려도 '마지막 확정 거래일'까지만 다룬다 ───────
+class TestAfterCloseAnytime:
     def _run(self, monkeypatch, now, argv):
+        seen = {}
         monkeypatch.setattr(scanner, '_now_et', lambda: now)
-        monkeypatch.setattr(scanner, 'wait_for_market_data', boom)   # 여기까지 오면 '스캔 시작'으로 간주
+        monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: True)
+        monkeypatch.setattr(scanner, 'already_scanned', lambda through: False)
+        def fake_update(through, retries=3, wait_sec=120):
+            seen['through'] = through; raise Boom()
+        monkeypatch.setattr(scanner, 'update_cache', fake_update)
         monkeypatch.setattr(sys, 'argv', argv)
-
-    def test_blocked_during_session(self, monkeypatch, capsys):
-        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py'])     # 월요일 10:00 ET
-        scanner.main()
-        assert '마감(16:00 ET' in capsys.readouterr().out
-
-    def test_blocked_in_premarket(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 7, 0), ['scanner.py'])      # 07:00 ET = 20:00 KST
-        scanner.main()   # Boom 이 나지 않아야 함
-
-    def test_runs_after_close(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 17, 40), ['scanner.py'])
         with pytest.raises(Boom):
             scanner.main()
+        return seen['through']
 
-    def test_runs_on_weekend(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 18, 10, 0), ['scanner.py'])     # 일요일
-        with pytest.raises(Boom):
-            scanner.main()
+    def test_during_session_uses_yesterday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 20, 9, 42), ['scanner.py']) == '2026-10-19'     # 화요일 장중 → 월요일까지
 
-    def test_force_overrides(self, monkeypatch):
-        self._run(monkeypatch, et(2026, 10, 19, 10, 0), ['scanner.py', '--force'])
-        with pytest.raises(Boom):
+    def test_premarket_uses_yesterday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 7, 0), ['scanner.py']) == '2026-10-16'      # 월요일 아침 → 금요일
+
+    def test_right_after_close_waits_for_settle(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 16, 7), ['scanner.py']) == '2026-10-16'     # 16:07 → 아직 어제
+
+    def test_after_settle_uses_today(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 19, 16, 25), ['scanner.py']) == '2026-10-19'
+
+    def test_weekend_uses_friday(self, monkeypatch):
+        assert self._run(monkeypatch, et(2026, 10, 18, 10, 0), ['scanner.py']) == '2026-10-16'
+
+    def test_no_keys_exits_before_network(self, monkeypatch, capsys):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 17, 40))
+        monkeypatch.setattr(scanner, 'update_cache', boom)
+        monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: False)
+        monkeypatch.setattr(sys, 'argv', ['scanner.py'])
+        with pytest.raises(SystemExit):
             scanner.main()
+        assert 'ALPACA_KEY' in capsys.readouterr().out
 
 
 # ─── 마감 전 스캔 안전장치 ────────────────────────────────────────────────────
@@ -93,27 +101,27 @@ class TestPrecloseGuards:
         monkeypatch.chdir(tmp_path)
         os.makedirs('data')
         pd.DataFrame([{'ticker': 'AAA', 'asof': '2026-10-16'}]).to_csv('data/watchlist.csv', index=False)
-        monkeypatch.setattr(scanner, 'download_batch', boom)             # 여기까지 오면 '다운로드 시작'
+        monkeypatch.setattr(scanner, 'minute_bars_today', boom)          # 여기까지 오면 '다운로드 시작'
         monkeypatch.setattr(scanner, 'market_still_open', lambda now: True)
         return tmp_path
 
     def test_too_early(self, wl, monkeypatch, capsys):
-        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 14, 59))
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 39))
         assert scanner.preclose_scan('13') == ([], [])
-        assert '15:00 ET 전' in capsys.readouterr().out
+        assert '15:40 ET 전' in capsys.readouterr().out
 
     def test_too_late(self, wl, monkeypatch):
         monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 49))
         assert scanner.preclose_scan('13') == ([], [])
 
     def test_in_window_starts_download(self, wl, monkeypatch):
-        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 30))
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 15, 46))
         with pytest.raises(Boom):
             scanner.preclose_scan('13')
 
     def test_early_close_day_skips(self, wl, monkeypatch, capsys):
         # 추수감사절 다음 날(13:00 조기 마감): 15:30 에 SPY 마지막 봉이 오래됐으면 생략
-        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 27, 15, 30))
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 27, 15, 46))
         monkeypatch.setattr(scanner, 'market_still_open', lambda now: False)
         assert scanner.preclose_scan('13') == ([], [])
         assert '이미 끝남' in capsys.readouterr().out
@@ -128,6 +136,7 @@ class TestPrecloseGuards:
         assert scanner.preclose_scan('13') == ([], [])
 
     def test_main_preclose_on_holiday_writes_no_file(self, wl, monkeypatch):
+        monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: True)
         monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 11, 26, 15, 30))
         monkeypatch.setattr(sys, 'argv', ['scanner.py', '--preclose'])
         scanner.main()
@@ -135,25 +144,17 @@ class TestPrecloseGuards:
 
 
 class TestMarketStillOpen:
-    def _frame(self, ts):
-        idx = pd.DatetimeIndex([pd.Timestamp(t, tz='America/New_York') for t in ts])
-        return pd.DataFrame({'Close': [1.0] * len(ts)}, index=idx)
+    def test_clock_open(self, monkeypatch):
+        monkeypatch.setattr(scanner.alpaca_data, 'clock', lambda: {'is_open': True, 'next_close': '2026-10-19T16:00:00-04:00'})
+        assert scanner.market_still_open(et(2026, 10, 19, 15, 46)) is True
 
-    def test_fresh_bar_means_open(self, monkeypatch):
-        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-10-19 15:29']))
-        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is True
-
-    def test_stale_bar_means_closed(self, monkeypatch):
-        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-11-27 12:59']))
-        assert scanner.market_still_open(et(2026, 11, 27, 15, 30)) is False
-
-    def test_yesterday_bar_means_closed(self, monkeypatch):
-        monkeypatch.setattr(scanner.yf, 'download', lambda *a, **k: self._frame(['2026-10-16 15:59']))
-        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is False
+    def test_clock_closed_on_early_close_day(self, monkeypatch):
+        monkeypatch.setattr(scanner.alpaca_data, 'clock', lambda: {'is_open': False, 'next_open': '2026-11-30T09:30:00-05:00'})
+        assert scanner.market_still_open(et(2026, 11, 27, 15, 46)) is False
 
     def test_failure_is_unknown(self, monkeypatch):
-        monkeypatch.setattr(scanner.yf, 'download', boom)
-        assert scanner.market_still_open(et(2026, 10, 19, 15, 30)) is None
+        monkeypatch.setattr(scanner.alpaca_data, 'clock', boom)
+        assert scanner.market_still_open(et(2026, 10, 19, 15, 46)) is None
 
 
 # ─── 1분봉: 진입일에 고정한 7일 창, 16:00 종가 봉 포함 ───────────────────────
@@ -161,19 +162,15 @@ class TestMinuteFetch:
     def test_window_and_closing_bar(self, monkeypatch):
         calls = {}
 
-        class FakeTicker:
-            def __init__(self, t):
-                pass
+        def fake_minute_bars(symbols, start_dt, end_dt=None, adjustment='raw', chunk=100):
+            calls.update(dict(symbols=symbols, start=start_dt, end=end_dt, adjustment=adjustment))
+            ts = ['2026-10-19 15:59', '2026-10-20 09:29', '2026-10-20 09:30', '2026-10-20 15:59', '2026-10-20 16:00', '2026-10-20 16:01']
+            t = [pd.Timestamp(x, tz='America/New_York').tz_convert('UTC') for x in ts]
+            return pd.DataFrame({'symbol': 'X', 't': t, 'o': 1.0, 'h': 1.0, 'l': 1.0, 'c': [1, 2, 3, 4, 5, 6], 'v': 10, 'n': 1, 'vw': 1.0})
 
-            def history(self, **kw):
-                calls.update(kw)
-                idx = pd.DatetimeIndex([pd.Timestamp(t, tz='America/New_York') for t in
-                                        ['2026-10-19 15:59', '2026-10-20 09:29', '2026-10-20 09:30', '2026-10-20 15:59', '2026-10-20 16:00', '2026-10-20 16:01']])
-                return pd.DataFrame({'Open': 1.0, 'High': 1.0, 'Low': 1.0, 'Close': [1, 2, 3, 4, 5, 6]}, index=idx)
-
-        monkeypatch.setattr(tracker.yf, 'Ticker', FakeTicker)
+        monkeypatch.setattr(tracker.alpaca_data, 'minute_bars', fake_minute_bars)
         m = tracker.fetch_minute_data('X', '2026-10-19')
-        assert calls['start'] == '2026-10-20' and calls['end'] == '2026-10-27' and calls['interval'] == '1m'
+        assert calls['symbols'] == ['X'] and str(calls['start']) == '2026-10-20' and str(calls['end']) == '2026-10-27' and calls['adjustment'] == 'split'
         assert m['Close'].tolist() == [3, 4, 5]          # 진입일 봉·09:29·16:01 제외, 16:00 종가 봉 포함
         assert m.index.tz is None
 
@@ -218,3 +215,33 @@ class TestClosedStatus:
         assert float(c['close_price'].iloc[0]) == 11.0      # 다음 날 시가 갭 → 시가 체결
         o = pd.read_csv('data/open_positions.csv', dtype=str, keep_default_na=False)
         assert len(o) == 0
+
+
+# ─── 예약이 여러 번 걸려 있어도 하루 한 번만 실제로 돈다 ─────────────────────
+class TestIdempotentAfterClose:
+    def test_last_session_waits_for_settle(self, monkeypatch):
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 7))     # 16:07 — 종가 확정 전
+        assert scanner._last_session_et() == '2026-10-16'
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 25))
+        assert scanner._last_session_et() == '2026-10-19'
+
+    def test_already_scanned(self, tmp_path, monkeypatch):
+        import json
+        monkeypatch.chdir(tmp_path); os.makedirs('data/ohlcv')
+        pd.DataFrame([{'ticker': 'AAA', 'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1}]).to_parquet('data/ohlcv/2026-10-19.parquet', index=False)
+        assert scanner.already_scanned('2026-10-19') is False                        # latest_scan.json 없음
+        json.dump({'scan_date': '2026-10-19', 'data_source': 'alpaca', 'mode': 'preclose'}, open('data/latest_scan.json', 'w'))
+        assert scanner.already_scanned('2026-10-19') is False                        # 마감 전 스캔 기록은 해당 없음
+        json.dump({'scan_date': '2026-10-19', 'data_source': 'alpaca', 'mode': 'afterclose'}, open('data/latest_scan.json', 'w'))
+        assert scanner.already_scanned('2026-10-19') is True
+        assert scanner.already_scanned('2026-10-20') is False                        # 캐시가 아직 그날까지 없음
+
+    def test_second_firing_exits_before_network(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(scanner, '_now_et', lambda: et(2026, 10, 19, 16, 45))
+        monkeypatch.setattr(scanner.alpaca_data, 'have_keys', lambda: True)
+        monkeypatch.setattr(scanner, 'already_scanned', lambda through: through == '2026-10-19')
+        monkeypatch.setattr(scanner, 'update_cache', boom)
+        monkeypatch.setattr(sys, 'argv', ['scanner.py'])
+        scanner.main()
+        assert '이미 끝남' in capsys.readouterr().out and not os.path.exists('/tmp/scanned_marker_never')
