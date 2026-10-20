@@ -1,1 +1,3 @@
-strategy,ticker,date,price
+strategy,ticker,date,scan_time,scan_type,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+3,CABR,2026-10-20,05:23 KST,afterclose,1.06,28.2,40.3,5,0.95,-11.3,-17.3,27302,1.12,0.96
+3,PDC,2026-10-20,05:23 KST,afterclose,2.33,13.4,21.9,4,1.75,-11.4,-26.7,31982,2.45,2.1
