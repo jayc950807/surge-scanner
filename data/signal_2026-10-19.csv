@@ -1,0 +1,6 @@
+strategy,ticker,date,scan_time,scan_type,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+1,SPRC,2026-10-19,22:47 KST,afterclose,1.4,7.7,22.9,6,0.0,-17.6,-61.4,1787698,1.47,1.26
+3,CENN,2026-10-19,22:47 KST,afterclose,2.5,9.3,20.4,4,0.0,-17.5,-25.3,12256,2.62,2.25
+3,DBGI,2026-10-19,22:47 KST,afterclose,2.14,17.3,21.5,4,0.0,-9.9,-38.3,317861,2.25,1.93
+3,SPRC,2026-10-19,22:47 KST,afterclose,1.4,7.7,22.9,6,0.0,-17.6,-61.4,1787698,1.47,1.26
+3,XRTX,2026-10-19,22:47 KST,afterclose,1.01,21.5,25.2,5,2.01,-18.5,-35.3,1607770,1.06,0.91

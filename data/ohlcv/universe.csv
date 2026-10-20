@@ -76,7 +76,6 @@ ACT,"Enact Holdings, Inc. Common Stock",NASDAQ
 ACTG,Acacia Research Corporation (Acacia Tech) Common Stock,NASDAQ
 ACTU,"Actuate Therapeutics, Inc. Common stock",NASDAQ
 ACU,Acme United Corporation,AMEX
-ACVA,ACV Auctions Inc.,NYSE
 ACXP,"Acurx Pharmaceuticals, Inc. Common Stock",NASDAQ
 AD,"Array Digital Infrastructure, Inc.",NYSE
 ADAC,American Drive Acquisition Company Class A Ordinary Shares,NASDAQ
@@ -204,7 +203,6 @@ AIZ,"Assurant, Inc.",NYSE
 AJG,Arthur J. Gallagher & Co.,NYSE
 AKA,a.k.a. Brands Holding Corp.,NYSE
 AKAM,"Akamai Technologies, Inc. Common Stock",NASDAQ
-AKAN,Akanda Corp. Common Shares,NASDAQ
 AKBA,"Akebia Therapeutics, Inc. Common Stock",NASDAQ
 AKR,Acadia Realty Trust,NYSE
 AKTS,"Aktis Oncology, Inc. Common stock",NASDAQ
@@ -293,6 +291,7 @@ AMPY,Amplify Energy Corp.,NYSE
 AMR,"Alpha Metallurgical Resources, Inc.",NYSE
 AMRC,"Ameresco, Inc.",NYSE
 AMRN,Amarin Corporation plc,NASDAQ
+AMRO,Amaero Inc. Common Stock,NASDAQ
 AMRX,"Amneal Pharmaceuticals, Inc. Class A Common Stock",NASDAQ
 AMRZ,Amrize Ltd,NYSE
 AMS,American Shared Hospital Services,AMEX
@@ -302,7 +301,7 @@ AMSS,AMASS Brands Inc. Common Stock,NASDAQ
 AMST,Amesite Inc. Common Stock,NASDAQ
 AMT,American Tower Corporation,NYSE
 AMTB,Amerant Bancorp Inc.,NYSE
-AMTD,"AMTD IDEA Group American Depositary Shares, each representing six (6) Class A Ordinary Shares",NYSE
+AMTD,"AMTD IDEA Group American Depositary Shares, each representing three hundred sixty (360) Class A Ordinary Shares",NYSE
 AMTM,"Amentum Holdings, Inc.",NYSE
 AMTX,"Aemetis, Inc. (DE) Common Stock",NASDAQ
 AMWL,American Well Corporation,NYSE
@@ -458,7 +457,6 @@ ATHR,"Aether Holdings, Inc. Common Stock",NASDAQ
 ATHS,Athene Holding Ltd. 7.250% Fixed-Rate Reset Junior Subordinated Debentures due 2064,NYSE
 ATI,ATI Inc.,NYSE
 ATII,Archimedes Tech SPAC Partners II Co. Ordinary Shares,NASDAQ
-ATKR,Atkore Inc.,NYSE
 ATLC,Atlanticus Holdings Corporation Common Stock,NASDAQ
 ATLO,Ames National Corporation Common Stock,NASDAQ
 ATLQ,JAB Acquisition Corp I Class A Ordinary Shares,NASDAQ
@@ -477,7 +475,6 @@ ATRO,Astronics Corporation Common Stock,NASDAQ
 ATS,ATS Corporation,NYSE
 ATTO,"Attovia Therapeutics, Inc. Common Stock",NASDAQ
 ATTT,Atlas Trinity Tech Limited Ordinary Shares,NASDAQ
-ATXG,Addentax Group Corp. Common Stock,NASDAQ
 ATYR,"aTyr Pharma, Inc. Common Stock",NASDAQ
 AU,AngloGold Ashanti plc,NYSE
 AUB,Atlantic Union Bankshares Corporation,NYSE
@@ -562,7 +559,6 @@ BAM,Brookfield Asset Management Ltd.,NYSE
 BANC,"Banc of California, Inc.",NYSE
 BAND,Bandwidth Inc. Class A Common Stock,NASDAQ
 BANF,BancFirst Corporation Common Stock,NASDAQ
-BANL,CBL International Limited Class B Ordinary Shares,NASDAQ
 BANR,Banner Corporation Common Stock,NASDAQ
 BANX,ArrowMark Financial Corp. Common Stock,NASDAQ
 BAOS,Baosheng Media Group Holdings Limited Ordinary shares,NASDAQ
@@ -748,6 +744,7 @@ BMGL,Basel Medical Group Ltd Ordinary Shares,NASDAQ
 BMHL,Bluemount Holdings Limited Class B Ordinary Shares,NASDAQ
 BMI,"Badger Meter, Inc.",NYSE
 BMM,Blue Moon Metals Inc. Common Shares,NASDAQ
+BMMX,Black Mammoth Metals Corporation Common Shares,NASDAQ
 BMN,BlackRock 2037 Municipal Target Term Trust,NYSE
 BMNR,"BitMine Immersion Technologies, Inc.",NYSE
 BMO,Bank of Montreal,NYSE
@@ -834,6 +831,7 @@ BSIN,Big Sky Industrial Inc. Common Stock,NASDAQ
 BSM,"Black Stone Minerals, L.P.",NYSE
 BSP,Bending Spoons S.p.A. Ordinary Shares,NASDAQ
 BSRR,Sierra Bancorp Common Stock,NASDAQ
+BSRT,BSR Real Estate Investment Trust,NYSE
 BST,BlackRock Science and Technology Trust,NYSE
 BSTZ,BlackRock Science and Technology Term Trust,NYSE
 BSVN,Bank7 Corp. Common stock,NASDAQ
@@ -850,7 +848,7 @@ BTGO,"BitGo Holdings, Inc.",NYSE
 BTI,"British American Tobacco p.l.c. American Depositary Shares, American Depositary Shares, each representing one Ordinary Share",NYSE
 BTLN,"Brightline Interactive, Inc. Common Stock",NASDAQ
 BTMD,Biote Corp. Class A Common Stock,NASDAQ
-BTOC,Armlogi Holding Corp. common stock,NASDAQ
+BTOC,Armlogi Holding Corp. Common Stock,NASDAQ
 BTQ,BTQ Technologies Corp. Common Stock,NASDAQ
 BTSG,"BrightSpring Health Services, Inc. Common Stock",NASDAQ
 BTT,BlackRock Municipal 2030 Target Term Trust,NYSE
@@ -899,7 +897,6 @@ BYSI,BeyondSpring Inc. Ordinary Shares,NASDAQ
 BZ,KANZHUN LIMITED American Depository Shares,NASDAQ
 BZAI,"Blaize Holdings, Inc. Common Stock",NASDAQ
 BZFD,"BuzzFeed, Inc. Class A Common Stock",NASDAQ
-BZH,"Beazer Homes USA, Inc. New",NYSE
 BZUN,Baozun Inc. American Depositary Shares,NASDAQ
 C,Citigroup Inc.,NYSE
 CAAP,Corporacion America Airports S.A.,NYSE
@@ -989,7 +986,6 @@ CCL,Carnival Corporation Ltd.,NYSE
 CCLD,"CareCloud, Inc. Common Stock",NASDAQ
 CCM,Concord Medical Services Holding Limited,NYSE
 CCNE,CNB Financial Corporation Common Stock,NASDAQ
-CCO,"Clear Channel Outdoor Holdings, Inc. Common Stock",NYSE
 CCOI,"Cogent Communications Holdings, Inc.",NASDAQ
 CCS,"CENTURY COMMUNITIES, INC.",NYSE
 CCSI,"Consensus Cloud Solutions, Inc. Common Stock",NASDAQ
@@ -1014,7 +1010,6 @@ CDXS,"Codexis, Inc. Common Stock",NASDAQ
 CDZI,"CADIZ, Inc. Common Stock",NASDAQ
 CDZIP,"Cadiz, Inc. Depositary Shares",NASDAQ
 CE,Celanese Corporation Common Stock,NYSE
-CECO,CECO Environmental Corp. Common Stock,NASDAQ
 CEG,Constellation Energy Corporation Common Stock,NASDAQ
 CELC,Celcuity Inc. Common Stock,NASDAQ
 CELH,"Celsius Holdings, Inc. Common Stock",NASDAQ
@@ -1079,7 +1074,6 @@ CHR,"Cheer Holding, Inc. Class A Ordinary Share",NASDAQ
 CHRD,Chord Energy Corporation Common Stock,NASDAQ
 CHRN,ChronoScale Holdings Corporation Common Stock,NASDAQ
 CHRS,"Coherus Oncology, Inc. Common Stock",NASDAQ
-CHSN,Chanson International Holding Class A Ordinary Shares,NASDAQ
 CHT,"CHUNGHWA TELECOM CO., LTD",NYSE
 CHTR,"Charter Communications, Inc. Class A Common Stock New",NASDAQ
 CHWM,Chilwa Minerals Limited American Depository Shares,NASDAQ
@@ -1323,7 +1317,6 @@ CTKB,"Cytek Biosciences, Inc. Common Stock",NASDAQ
 CTM,"Castellum, Inc.",AMEX
 CTMX,"CytomX Therapeutics, Inc. Common Stock",NASDAQ
 CTNM,"Contineum Therapeutics, Inc. Class A Common Stock",NASDAQ
-CTNT,Cheetah Net Supply Chain Service Inc Class A Common Stock,NASDAQ
 CTO,"CTO Realty Growth, Inc.",NYSE
 CTOR,"Citius Oncology, Inc. Common Stock",NASDAQ
 CTOS,"Custom Truck One Source, Inc.",NYSE
@@ -1336,6 +1329,7 @@ CTSH,Cognizant Technology Solutions Corporation Class A Common Stock,NASDAQ
 CTSO,Cytosorbents Corporation Common Stock,NASDAQ
 CTVA,"Corteva, Inc. Common Stock",NYSE
 CTXR,"Citius Pharmaceuticals, Inc. Common Stock",NASDAQ
+CTY,"City Therapeutics, Inc. Common Stock",NASDAQ
 CUB,Lionheart Holdings Class A Ordinary Shares,NASDAQ
 CUBE,CubeSmart,NYSE
 CUBI,CUSTOMERS BANCORP INC,NYSE
@@ -1421,6 +1415,7 @@ DCBO,Docebo Inc. Common Shares,NASDAQ
 DCGO,DocGo Inc. Common Stock,NASDAQ
 DCH,Dauch Corporation,NYSE
 DCI,"Donaldson Company, Inc.",NYSE
+DCM,"DeFi Capital Markets, Inc.",AMEX
 DCO,Ducommun Incorporated,NYSE
 DCOM,"Dime Commercial Bancshares, Inc.",NYSE
 DCOY,Decoy Therapeutics Inc. Common Stock,NASDAQ
@@ -1432,8 +1427,8 @@ DDD,3D Systems Corporation,NYSE
 DDI,"DoubleDown Interactive Co., Ltd. American Depository Shares",NASDAQ
 DDL,Dingdong (Cayman) Limited American Depositary Shares (each two representing three Ordinary Shares),NYSE
 DDOG,"Datadog, Inc. Class A Common Stock",NASDAQ
-DDS,Dillards Inc.,NYSE
-DDT,Dillard's Capital Trust I 7.50% Capital Securities,NYSE
+DDS,"Dillard's, Inc. Class A Common Stock",NYSE
+DDT,"Dillard's, Inc. 7.50% Capital Securities",NYSE
 DE,Deere & Company,NYSE
 DEA,"Easterly Government Properties, Inc.",NYSE
 DEC,Diversified Energy Company,NYSE
@@ -1456,7 +1451,6 @@ DGAC,Disciplined Growth Acquisition Corporation,NYSE
 DGICA,"Donegal Group, Inc. Class A Common Stock",NASDAQ
 DGICB,"Donegal Group, Inc. Class B Common Stock",NASDAQ
 DGII,Digi International Inc. Common Stock,NASDAQ
-DGLY,"Digital Ally, Inc. Common Stock",NASDAQ
 DGNX,Diginex Limited Ordinary Shares,NASDAQ
 DGX,Quest Diagnostics Inc.,NYSE
 DGXX,Digi Power X Inc. Subordinate Voting Shares,NASDAQ
@@ -1621,7 +1615,7 @@ EFOR,"Everforth, Inc.",NYSE
 EFSC,Enterprise Financial Services Corporation Common Stock,NASDAQ
 EFSI,Eagle Financial Services Inc Common Stock,NASDAQ
 EFT,Eaton Vance Floating-Rate Income Trust,NYSE
-EFTY,"Etoiles Capital Group Co., Ltd. Class A Ordinary Shares",NASDAQ
+EFTY,"Etoiles Capital Group Co., Ltd. Common Stock",NASDAQ
 EFX,"Equifax, Incorporated",NYSE
 EFXT,Enerflex Ltd.,NYSE
 EG,"Everest Group, Ltd.",NYSE
@@ -1642,7 +1636,6 @@ EIC,Eagle Point Income Company,NYSE
 EIG,"Employers Holdings, Inc.",NYSE
 EIKN,"Eikon Therapeutics, Inc. Common Stock",NASDAQ
 EIX,Edison International,NYSE
-EJH,E-Home Household Service Holdings Limited Ordinary Shares,NASDAQ
 EL,The Estee Lauder Companies Inc. Class A,NYSE
 ELA,Envela Corporation,AMEX
 ELAB,PMGC Holdings Inc. Common Stock,NASDAQ
@@ -1918,6 +1911,7 @@ FLO,"Flowers Foods, Inc.",NYSE
 FLOC,Flowco Holdings Inc.,NYSE
 FLR,Fluor Corporation,NYSE
 FLS,Flowserve Corporation,NYSE
+FLSC,Frazier Life Sciences Acquisition Corp. II Class A Ordinary Shares,NASDAQ
 FLUT,Flutter Entertainment plc,NYSE
 FLUX,"Flux Power Holdings, Inc. Common Stock",NASDAQ
 FLWS,"1-800-FLOWERS.COM, Inc. Common Stock",NASDAQ
@@ -2074,7 +2068,6 @@ GCT,GigaCloud Technology Inc Class A Ordinary Shares,NASDAQ
 GCTK,"GlucoTrack, Inc. Common Stock",NASDAQ
 GCTS,"GCT Semiconductor Holding, Inc.",NYSE
 GD,General Dynamics Corporation,NYSE
-GDC,GD Culture Group Limited Common Stock,NASDAQ
 GDDY,GoDaddy Inc,NYSE
 GDEV,GDEV Inc. Ordinary Shares,NASDAQ
 GDHG,Golden Heaven Group Holdings Ltd. Class A Ordinary Shares,NASDAQ
@@ -2348,7 +2341,6 @@ HIT,"Health In Tech, Inc. Class A Common Stock",NASDAQ
 HITI,High Tide Inc. Common Shares,NASDAQ
 HIVE,HIVE Digital Technologies Ltd. Common Shares,NASDAQ
 HKD,AMTD Digital Inc. American Depositary Shares (every five of which represent two Class A Ordinary Shares),NYSE
-HKIT,Hitek Global Inc. Class A Ordinary Share,NASDAQ
 HKPD,"Cellyan Biotechnology Co., Ltd Class A Ordinary Shares",NASDAQ
 HL,Hecla Mining Company,NYSE
 HLF,Herbalife Ltd.,NYSE
@@ -2377,7 +2369,6 @@ HNVR,"Hanover Bancorp, Inc. Common Stock",NASDAQ
 HODO,House of Doge Inc. Common Stock,NASDAQ
 HOFT,Hooker Furnishings Corporation Common Stock,NASDAQ
 HOG,"Harley-Davidson, Inc.",NYSE
-HOLO,MicroCloud Hologram Inc. Ordinary Shares,NASDAQ
 HOMB,"Home BancShares, Inc.",NYSE
 HON,Honeywell International Inc. Common Stock,NASDAQ
 HONA,Honeywell Aerospace Inc. Common Stock,NASDAQ
@@ -2437,7 +2428,6 @@ HUBC,Hub Cyber Security Ltd. Ordinary Shares,NASDAQ
 HUBG,"Hub Group, Inc. Class A Common Stock",NASDAQ
 HUBS,"HUBSPOT, INC.",NYSE
 HUCK,"Huckleberry.ai, Inc. Class B Common Stock",NASDAQ
-HUDI,"Huadi International Group Co., Ltd. Ordinary Shares",NASDAQ
 HUHU,HUHUTECH International Group Inc. Ordinary Shares,NASDAQ
 HUIZ,Huize Holding Limited American Depositary Shares,NASDAQ
 HUM,Humana Inc.,NYSE
@@ -2469,6 +2459,7 @@ IA,"Innovative Solutions and Support, Inc. Common Stock",NASDAQ
 IACO,Idea Acquisition Corp. Class A Ordinary Shares,NASDAQ
 IACQ,Irenic Acquisition Corp. Class A Ordinary Shares,NASDAQ
 IAG,IAMGold Corporation,NYSE
+IAM,"Iambic Therapeutics, Inc. Common Stock",NASDAQ
 IART,Integra LifeSciences Holdings Corporation Common Stock,NASDAQ
 IAUX,i-80 Gold Corp.,AMEX
 IBAC,IB Acquisition Corp. Common Stock,NASDAQ
@@ -2480,7 +2471,6 @@ IBKR,"Interactive Brokers Group, Inc. Class A Common Stock",NASDAQ
 IBM,International Business Machines Corporation,NYSE
 IBN,ICICI Bank Limited,NYSE
 IBO,"Impact BioMedical, Inc.",AMEX
-IBOC,International Bancshares Corporation Common Stock,NASDAQ
 IBP,"INSTALLED BUILDING PRODUCTS, INC.",NYSE
 IBRX,"ImmunityBio, Inc. Common Stock",NASDAQ
 IBTA,"Ibotta, Inc.",NYSE
@@ -2529,7 +2519,6 @@ IIIV,"i3 Verticals, Inc. Class A Common Stock",NASDAQ
 IIM,INVESCO VALUE MUNICIPAL INCOME TRUST,NYSE
 IIPR,"Innovative Industrial Properties, Inc. Common stock",NYSE
 IKT,"Inhibikase Therapeutics, Inc. Common Stock",NASDAQ
-ILAG,Intelligent Living Application Group Inc. Ordinary Shares,NASDAQ
 ILLU,Illumination Acquisition Corp I Class A Ordinary Shares,NASDAQ
 ILMN,"Illumina, Inc. Common Stock",NASDAQ
 ILPT,Industrial Logistics Properties Trust Common Shares of Beneficial Interest,NASDAQ
@@ -2683,7 +2672,6 @@ IVZ,Invesco LTD,NYSE
 IX,ORIX Corporation American Depositary Shares (each representing One (1) Share of Common Stock),NYSE
 IXHL,Incannex Healthcare Inc. Common Stock,NASDAQ
 IZEA,"IZEA Worldwide, Inc. Common Stock",NASDAQ
-IZM,ICZOOM Group Inc. Class A Ordinary Shares,NASDAQ
 J,Jacobs Solutions Inc.,NYSE
 JACK,Jack In The Box Inc. Common Stock,NASDAQ
 JACS,Jackson Acquisition Company II,NYSE
@@ -2694,7 +2682,6 @@ JAN,"Janus Living, Inc.",NYSE
 JANX,"Janux Therapeutics, Inc. Common Stock",NASDAQ
 JATT,JATT II Acquisition Corp Ordinary Shares,NASDAQ
 JAZZ,Jazz Pharmaceuticals plc Common Stock (Ireland),NASDAQ
-JBDI,JBDI Holdings Limited Ordinary Shares,NASDAQ
 JBGS,JBG SMITH Properties Common Shares,NYSE
 JBHT,"J.B. Hunt Transport Services, Inc. Common Stock",NASDAQ
 JBI,"Janus International Group, Inc.",NYSE
@@ -2707,7 +2694,6 @@ JBSS,"John B. Sanfilippo & Son, Inc. Common Stock",NASDAQ
 JBTM,JBT Marel Corporation,NYSE
 JCAP,"Jefferson Capital, Inc. Common Stock",NASDAQ
 JCI,Johnson Controls International plc,NYSE
-JCSE,JE Cleantech Holdings Limited Class A Ordinary Shares,NASDAQ
 JCTC,Jewett-Cameron Trading Company Common Shares,NASDAQ
 JD,"JD.com, Inc. American Depositary Shares",NASDAQ
 JDZG,JIADE LIMITED Class A Ordinary Shares,NASDAQ
@@ -2752,7 +2738,6 @@ JXG,JX Luxventure Group Inc. Common Stock,NASDAQ
 JXN,Jackson Financial Inc.,NYSE
 JYD,Jayud Global Logistics Limited Class A Ordinary Shares,NASDAQ
 JYNT,The Joint Corp. Common Stock,NASDAQ
-JZ,Jianzhi Education Technology Group Company Limited American Depositary Shs,NASDAQ
 JZXN,"Jiuzi Holdings, Inc. Ordinary Shares",NASDAQ
 KAI,Kadant Inc.,NYSE
 KALA,"KALA BIO, Inc. Common Stock",NASDAQ
@@ -2901,7 +2886,7 @@ LATA,Galata Acquisition Corp. II Class A Ordinary Shares,NASDAQ
 LAUR,"Laureate Education, Inc. Common Stock",NASDAQ
 LAWR,"Robot Consulting Co., Ltd. ADS",NASDAQ
 LAZ,"Lazard, Inc.",NYSE
-LB,LandBridge Company LLC,NYSE
+LB,LandBridge Corporation,NYSE
 LBGJ,Li Bang International Corporation Class A Ordinary Shares,NASDAQ
 LBRT,Liberty Energy Inc.,NYSE
 LBRX,LB Pharmaceuticals Inc Common Stock,NASDAQ
@@ -2915,6 +2900,7 @@ LCII,LCI Industries,NYSE
 LCLN,"Lincoln International, Inc.",NYSE
 LCNB,LCNB Corporation Common Stock,NASDAQ
 LCTX,"Lineage Cell Therapeutics, Inc.",AMEX
+LCU,Lion Copper Corp. Common Shares,NASDAQ
 LCUT,"Lifetime Brands, Inc. Common Stock",NASDAQ
 LDI,"loanDepot, Inc.",NYSE
 LDOS,"Leidos Holdings, Inc.",NYSE
@@ -3030,7 +3016,6 @@ LQDA,Liquidia Corporation Common Stock,NASDAQ
 LQDT,"Liquidity Services, Inc. Common Stock",NASDAQ
 LRCX,Lam Research Corporation Common Stock,NASDAQ
 LRE,"Lead Real Estate Co., Ltd American Depositary Shares",NASDAQ
-LRHC,La Rosa Holdings Corp. Common Stock,NASDAQ
 LRMR,"Larimar Therapeutics, Inc. Common Stock",NASDAQ
 LRN,"Stride, Inc.",NYSE
 LSAK,"Lesaka Technologies, Inc. Common Stock",NASDAQ
@@ -3098,7 +3083,6 @@ MAIN,Main Street Capital Corporation,NYSE
 MAIR,Madison Air Solutions Corporation,NYSE
 MAKO,Mako Mining Corp Common Stock,NASDAQ
 MAMA,"Mama's Creations, Inc. Common Stock",NASDAQ
-MAMO,Massimo Group Common Stock,NASDAQ
 MAN,ManpowerGroup,NYSE
 MANE,"Veradermics, Incorporated",NYSE
 MANH,"Manhattan Associates, Inc. Common Stock",NASDAQ
@@ -3147,7 +3131,6 @@ MCRB,"Seres Therapeutics, Inc. Common Stock",NASDAQ
 MCRI,"Monarch Casino & Resort, Inc. Common Stock",NASDAQ
 MCRP,Micropolis AI Robotics,AMEX
 MCS,The Marcus Corporation,NYSE
-MCTA,Charming Medical Limited Class A Ordinary Shares,NASDAQ
 MCY,Mercury General Corp.,NYSE
 MD,"Pediatrix Medical Group, Inc.",NYSE
 MDA,MDA Space Ltd.,NYSE
@@ -3169,7 +3152,6 @@ MEC,"Mayville Engineering Company, Inc.",NYSE
 MED,"Medifast, Inc.",NYSE
 MEDP,"Medpace Holdings, Inc. Common Stock",NASDAQ
 MEDS,"DataMeds AI, Inc. Common Stock",NASDAQ
-MEGL,Magic Empire Global Limited Class A Ordinary Shares,NASDAQ
 MEI,Methode Electronics,NYSE
 MELI,"MercadoLibre, Inc. Common Stock",NASDAQ
 MENS,Jyong Biotech Ltd. Ordinary Shares,NASDAQ
@@ -3239,7 +3221,6 @@ MLAB,"Mesa Laboratories, Inc. Common Stock",NASDAQ
 MLCI,Mount Logan Capital Inc. Common Stock,NASDAQ
 MLCO,Melco Resorts & Entertainment Limited American Depositary Shares,NASDAQ
 MLEC,Moolec Science SA Ordinary Shares,NASDAQ
-MLGO,"MicroAlgo, Inc. Class A Ordinary Shares",NASDAQ
 MLI,"Mueller Industries, Inc.",NYSE
 MLKN,"MillerKnoll, Inc. Common Stock",NASDAQ
 MLM,Martin Marietta Materials,NYSE
@@ -3474,7 +3455,7 @@ NGVT,Ingevity Corporation,NYSE
 NHC,National Healthcare Corp.,AMEX
 NHI,National Health Investors,NYSE
 NHIV,NewHold Investment Corp IV Class A Ordinary Shares,NASDAQ
-NHP,"National Healthcare Properties, Inc. Class A Common Stock",NASDAQ
+NHP,"National Healthcare Properties, Inc. Common Stock",NASDAQ
 NHTC,Natural Health Trends Corp. Common Stock,NASDAQ
 NI,NiSource Inc.,NYSE
 NIC,"Nicolet Bankshares,Inc.",NYSE
@@ -3623,7 +3604,7 @@ NWTG,"Newton Golf Company, Inc. Common Stock",NASDAQ
 NX,Quanex Building Products Corporation,NYSE
 NXAT,Nexus Advanced Technologies Inc. Ordinary Shares,NASDAQ
 NXB,NextBoat Inc.,AMEX
-NXDR,"Nextdoor Holdings, Inc.",NYSE
+NXDR,"Nextdoor Holdings, Inc. Class A Common Stock",NASDAQ
 NXDT,NexPoint Diversified Real Estate Trust,NYSE
 NXE,NexGen Energy Ltd.,NYSE
 NXGL,"NexGel, Inc Common Stock",NASDAQ
@@ -3637,7 +3618,6 @@ NXST,"Nexstar Media Group, Inc. Common Stock",NASDAQ
 NXT,Nextpower Inc. Common Stock,NASDAQ
 NXTC,"NextCure, Inc. Common Stock",NASDAQ
 NXTS,Nexentis Technologies Inc. Common Stock,NASDAQ
-NXTT,Next Technology Holding Inc. Ordinary Shares,NASDAQ
 NXXT,"NextNRG, Inc. Common Stock",NASDAQ
 NYAX,Nayax Ltd. Ordinary Shares,NASDAQ
 NYC,American Strategic Investment Co.,NYSE
@@ -3714,7 +3694,6 @@ OMDA,"Omada Health, Inc. Common Stock",NASDAQ
 OMER,Omeros Corporation Common Stock,NASDAQ
 OMEX,"Odyssey Marine Exploration, Inc. Common Stock",NASDAQ
 OMF,"OneMain Holdings, Inc.",NYSE
-OMH,Ohmyhome Limited Class A Ordinary Shares,NASDAQ
 OMSE,OMS Energy Technologies Inc. Ordinary Shares,NASDAQ
 ON,ON Semiconductor Corporation Common Stock,NASDAQ
 ONB,Old National Bancorp Common Stock,NASDAQ
@@ -3776,7 +3755,6 @@ OSK,Oshkosh Corp.,NYSE
 OSPN,OneSpan Inc. Common Stock,NASDAQ
 OSPR,Osprey Acquisition Corp. III Class A Ordinary Shares,NASDAQ
 OSS,"One Stop Systems, Inc. Common Stock",NASDAQ
-OST,"Ostin Technology Group Co., Ltd. Class A Ordinary Shares",NASDAQ
 OSTX,OS Therapies Incorporated,AMEX
 OSUR,"OraSure Technologies, Inc. Common Stock",NASDAQ
 OTAI,Starlink AI Acquisition Corporation,NYSE
@@ -4094,7 +4072,6 @@ PVH,PVH Corp.,NYSE
 PVL,Permianville Royalty Trust,NYSE
 PVLA,"Palvella Therapeutics, Inc. Common Stock",NASDAQ
 PWCM,"PowerCompute, Inc. Common Stock",NASDAQ
-PWM,Prestige Wealth Inc. Class A Ordinary Shares,NASDAQ
 PWP,Perella Weinberg Partners Class A Common Stock,NASDAQ
 PWR,"Quanta Services, Inc.",NYSE
 PWRL,Powerlaw Corp. Common Stock,NASDAQ
@@ -4113,7 +4090,6 @@ QCLS,"Q/C Technologies, Inc. Common Stock",NASDAQ
 QCOM,QUALCOMM Incorporated Common Stock,NASDAQ
 QCRH,"QCR Holdings, Inc. Common Stock",NASDAQ
 QDEL,QuidelOrtho Corporation Common Stock,NASDAQ
-QETA,Quetta Acquisition Corporation Common Stock,NASDAQ
 QFIN,"Qfin Holdings, Inc. American Depositary Shares",NASDAQ
 QGEN,QIAGEN N.V.,NYSE
 QH,Quhuo Limited Class A Ordinary Shares,NASDAQ
@@ -4235,7 +4211,6 @@ RFAM,RF Acquisition Corp III Ordinary Shares,NASDAQ
 RFIL,"RF Industries, Ltd. Common Stock",NASDAQ
 RFL,"Rafael Holdings, Inc. Class B Common Stock",NYSE
 RGA,"Reinsurance Group of America, Incorporated",NYSE
-RGC,Regencell Bioscience Holdings Limited Ordinary Shares,NASDAQ
 RGCO,RGC Resources Inc. Common Stock,NASDAQ
 RGEN,Repligen Corporation Common Stock,NASDAQ
 RGLD,"Royal Gold, Inc. Common Stock",NASDAQ
@@ -4508,7 +4483,6 @@ SHOE,"Shoe Station Group, Inc. Common Stock",NASDAQ
 SHOO,"Steven Madden, Ltd. Common Stock",NASDAQ
 SHOP,Shopify Inc. Class A subordinate voting shares,NASDAQ
 SHOT,RMG ML Sports Holdings Class A Ordinary Shares,NASDAQ
-SHPH,"Shuttle Pharmaceuticals Holdings, Inc. Common Stock",NASDAQ
 SI,"Shoulder Innovations, Inc.",NYSE
 SIBN,"SI-BONE, Inc. Common Stock",NASDAQ
 SID,Companhia Siderurgica Nacional S.A. (CSN),NYSE
@@ -4624,7 +4598,7 @@ SNWV,"SANUWAVE Health, Inc. Common Stock",NASDAQ
 SNX,TD SYNNEX Corporation,NYSE
 SNY,Sanofi ADS,NASDAQ
 SO,The Southern Company,NYSE
-SOAR,"Volato Group, Inc.",AMEX
+SOAR,"SOAR AI, Inc.",AMEX
 SOBO,South Bow Corporation,NYSE
 SOC,Sable Offshore Corp.,NYSE
 SOCA,Solarius Capital Acquisition Corp. Class A Ordinary Share,NASDAQ
@@ -4690,6 +4664,7 @@ SRL,Scully Royalty Ltd. Common Shares,NYSE
 SRPT,"Sarepta Therapeutics, Inc. Common Stock (DE)",NASDAQ
 SRRK,Scholar Rock Holding Corporation Common Stock,NASDAQ
 SRTA,"Strata Critical Medical, Inc. Class A Common Stock",NASDAQ
+SRTM,Stratum Holdings Corp. Common Stock,NASDAQ
 SRTS,"Sensus Healthcare, Inc. Common Stock",NASDAQ
 SRXH,SRX Global Inc,AMEX
 SRZN,"Surrozen, Inc. Common Stock",NASDAQ
@@ -4756,9 +4731,7 @@ SUI,"Sun Communities, Inc",NYSE
 SUIG,Sui Group Holdings Limited Common Stock,NASDAQ
 SUJA,"Suja Life, Inc. Class A Common Stock",NASDAQ
 SUMA,SUMA Acquisition Corporation Class A Ordinary Shares,NASDAQ
-SUN,SUNOCO L.P.,NYSE
 SUNB,"Sunbelt Rentals Holdings, Inc.",NYSE
-SUNC,SunocoCorp LLC,NYSE
 SUNE,"SUNation Energy, Inc. Common Stock",NASDAQ
 SUNS,"Sunrise Realty Trust, Inc. Common Stock",NASDAQ
 SUPN,"Supernus Pharmaceuticals, Inc. Common Stock",NASDAQ
@@ -4830,7 +4803,7 @@ TBLA,Taboola.com Ltd. Ordinary Shares,NASDAQ
 TBLD,Thornburg Income Builder Opportunities Trust Common Stock,NASDAQ
 TBN,Tamboran Resources Corporation,NYSE
 TC,Token Cat Limited American Depositary Shares,NASDAQ
-TCBI,"Texas Capital Bancshares, Inc. Common Stock",NASDAQ
+TCBI,"Texas Capital Bancshares, Inc. Common Stock, par value $0.01 per share",NASDAQ
 TCBK,TriCo Bancshares Common Stock,NASDAQ
 TCBS,"Texas Community Bancshares, Inc. Common Stock",NASDAQ
 TCBX,"Third Coast Bancshares, Inc. Common Stock",NYSE
@@ -4842,6 +4815,7 @@ TCPC,BlackRock TCP Capital Corp. Common Stock,NASDAQ
 TCRT,"Alaunos Therapeutics, Inc. Common Stock",NASDAQ
 TCRX,"TScan Therapeutics, Inc. Common Stock",NASDAQ
 TCX,Tucows Inc. Class A Common Stock,NASDAQ
+TCXB,TCGX Acquisition Corp. II Class A Ordinary Shares,NASDAQ
 TD,Toronto Dominion Bank,NYSE
 TDAC,Translational Development Acquisition Corp. Ordinary Shares,NASDAQ
 TDAY,"USA TODAY Co., Inc.",NYSE
@@ -4956,7 +4930,6 @@ TOMZ,"TOMI Environmental Solutions, Inc. Common Stock",NASDAQ
 TONT,Graf Global Corp.,AMEX
 TONX,TON Strategy Company Common Stock,NASDAQ
 TOON,"Kartoon Studios, Inc.",AMEX
-TOP,TOP Financial Group Limited Class A Ordinary Shares,NASDAQ
 TOPP,Toppoint Holdings Inc.,AMEX
 TOPS,TOP Ships Inc.,AMEX
 TORO,Toro Corp. Common Shares,NASDAQ
@@ -5089,7 +5062,6 @@ UBCP,"United Bancorp, Inc. Common Stock",NASDAQ
 UBER,"Uber Technologies, Inc.",NYSE
 UBS,UBS Group AG,NYSE
 UBSI,"United Bankshares, Inc. Common Stock",NASDAQ
-UCAR,U Power Limited Class A Ordinary Shares,NASDAQ
 UCB,"United Community Banks, Inc.",NYSE
 UCFI,CN Healthy Food Tech Group Corp. Common Stock,NASDAQ
 UCL,uCloudlink Group Inc. American Depositary Shares,NASDAQ
@@ -5147,7 +5119,6 @@ URG,Ur-Energy Inc.,AMEX
 URGN,UroGen Pharma Ltd. Ordinary Shares,NASDAQ
 URI,"United Rentals, Inc.",NYSE
 UROY,Uranium Royalty Corp. Common Stock,NASDAQ
-USAC,USA COMPRESSION PARTNERS LP,NYSE
 USAR,"USA Rare Earth, Inc. Class A Common Stock",NASDAQ
 USAS,Americas Gold and Silver Corporation,AMEX
 USAU,U.S. Gold Corp. Common Stock,NASDAQ
@@ -5169,7 +5140,6 @@ UTL,Unitil Corporation,NYSE
 UTMD,"Utah Medical Products, Inc. Common Stock",NASDAQ
 UTSI,UTStarcom Holdings Corp. Ordinary Shares,NASDAQ
 UTZ,"Utz Brands, Inc.",NYSE
-UUU,"Universal Safety Products, Inc.",AMEX
 UUUU,Energy Fuels Inc.,AMEX
 UVE,"UNIVERSAL INSURANCE HLDG, INC.",NYSE
 UVSP,Univest Financial Corporation Common Stock,NASDAQ
@@ -5383,7 +5353,6 @@ WHK,WhiteHawk Minerals Corp.,NYSE
 WHLR,"Wheeler Real Estate Investment Trust, Inc. Common Stock",NASDAQ
 WHR,Whirlpool Corp.,NYSE
 WHWK,"Whitehawk Therapeutics, Inc. Common Stock",NASDAQ
-WIMI,WiMi Hologram Cloud Inc. Class B Ordinary Shares,NASDAQ
 WINA,Winmark Corporation Common Stock,NASDAQ
 WING,Wingstop Inc. Common Stock,NASDAQ
 WIT,Wipro Limited,NYSE
@@ -5575,7 +5544,6 @@ ZIM,ZIM Integrated Shipping Services Ltd.,NYSE
 ZION,Zions Bancorporation N.A. Common Stock,NASDAQ
 ZIP,"ZipRecruiter, Inc.",NYSE
 ZJK,"ZJK Industrial Co., Ltd. Class A Ordinary Shares",NASDAQ
-ZJYL,JIN MEDICAL INTERNATIONAL LTD. Class A Ordinary Shares,NASDAQ
 ZKH,"ZKH Group Limited American Depositary Shares, each representing thirty-five (35) Class A Ordinary Shares",NYSE
 ZKIN,"ZK International Group Co., Ltd Ordinary Share",NASDAQ
 ZKP,Lafayette Digital Acquisition Corp. I Class A Ordinary Shares,NASDAQ
