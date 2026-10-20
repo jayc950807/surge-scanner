@@ -115,7 +115,13 @@ class TestIntraday:
     def test_still_open_when_day_unfinished(self):
         m = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 60)
         r = tracker.track_position_intraday(10, 10.5, 9.0, 1, m)
-        assert r[0] is None
+        assert r[0] is None and r[8] == 0                 # 끝나지 않은 날은 보유일수에 안 셈
+
+    def test_days_held_counts_finished_days_only(self):
+        m1 = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)
+        m2 = self._mins('2026-03-04', [[9.9, 10.1, 9.7, 9.9]] * 5)       # 둘째 날 장중
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, pd.concat([m1, m2]), finished_days=[pd.Timestamp('2026-03-03')])
+        assert r[0] is None and r[8] == 1
 
     def test_expired_at_last_close(self):
         m = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)

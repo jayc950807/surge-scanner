@@ -57,6 +57,7 @@ OPEN_COLS = [
     'change_pct', 'achievement_pct',
     'days_held', 'last_updated',
     'overnight_pct', 'method', 'judge',
+    'scan_type',   # preclose(마감 전 신호 — 실제로 살 수 있었던 것) / afterclose / '' (예전 기록)
 ]
 
 CLOSED_COLS = OPEN_COLS + [
@@ -200,7 +201,8 @@ def track_position_intraday(entry_price, tp_price, sl_price, max_hold, mins, fin
     if len(days) >= max_hold and len(last) and day_done:
         return done('EXPIRED', float(last['Close'].iloc[-1]), days[-1].strftime('%Y-%m-%d'), len(days))
     ma = (max_price - entry_price) / entry_price / tp_pct_val * 100 if tp_pct_val > 0 else 0
-    return (None, float(mins['Close'].iloc[-1]), None, None, max_price, max_date, min_price, min_date, len(days), None, min(ma, 999))
+    held = len(days) - (0 if day_done else 1)        # 아직 끝나지 않은 날은 보유일수에 세지 않음 (장중 실행 대비)
+    return (None, float(mins['Close'].iloc[-1]), None, None, max_price, max_date, min_price, min_date, max(held, 0), None, min(ma, 999))
 
 
 def drop_unfinished_bar(hist):
@@ -519,6 +521,7 @@ def register_new_signals():
             'achievement_pct': '',
             'days_held': '0',
             'last_updated': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+            'scan_type': str(sig.get('scan_type', '')) if 'scan_type' in signals.columns else '',
         }
 
         new_rows.append(new_row)
