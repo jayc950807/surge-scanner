@@ -41,6 +41,24 @@ jobs:
           open("/tmp/go","w").write("1")
           PY
           if [ -f /tmp/go ]; then set -o pipefail; python core/scanner.py --preclose 2>&1 | tee preclose_output.log; fi
+      - name: Bot — 2일 만기 종가 매도 + 새 신호 종가 매수 (BOT_MODE=live 일 때만 실제 주문)
+        if: always()
+        continue-on-error: true
+        env:
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          KIS_ACCOUNT: ${{ secrets.KIS_ACCOUNT }}
+          KIS_ENV: ${{ vars.KIS_ENV || 'real' }}
+          BOT_MODE: ${{ vars.BOT_MODE || 'dry' }}
+          BOT_PAUSE: ${{ vars.BOT_PAUSE || '0' }}
+          BOT_POS_PCT: ${{ vars.BOT_POS_PCT || '10' }}
+          BOT_MAX_POS: ${{ vars.BOT_MAX_POS || '10' }}
+          BOT_START_EQUITY: ${{ vars.BOT_START_EQUITY || '0' }}
+          BOT_MAX_DD: ${{ vars.BOT_MAX_DD || '15' }}
+          BOT_START_DATE: ${{ vars.BOT_START_DATE || '' }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: if [ -f /tmp/go ]; then python core/bot.py preclose; fi
       - name: Register signals (PENDING → 종가 진입은 아침 tracker 가 처리)
         run: if [ -f /tmp/go ]; then python core/tracker.py --register-only; fi
       - uses: actions/upload-artifact@v5

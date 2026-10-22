@@ -1,0 +1,33 @@
+name: Bot Monitor (장중 익절·손절)
+# 09:28 ET 에 바깥 예약이 깨운다. 장 시작 직후 +5% 지정가 매도를 걸고, 09:35부터 5분마다 −10% 를 확인해 손절.
+# 한 작업이 6시간을 넘을 수 없어 5시간 50분이 지나면 스스로 다음 작업을 띄운다. 15:40 ET 에 끝남(만기 매도는 마감 전 작업).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: bot-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+      KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+      KIS_ACCOUNT: ${{ secrets.KIS_ACCOUNT }}
+      KIS_ENV: ${{ vars.KIS_ENV || 'real' }}
+      BOT_MODE: ${{ vars.BOT_MODE || 'dry' }}
+      BOT_PAUSE: ${{ vars.BOT_PAUSE || '0' }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python core/bot.py monitor
