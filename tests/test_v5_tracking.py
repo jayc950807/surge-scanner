@@ -106,6 +106,13 @@ class TestIntraday:
         r = tracker.track_position_intraday(10, 10.5, 9.0, 2, m)
         assert r[0] == 'WIN' and r[1] == 10.5
 
+    def test_sparse_bar_jump_over_tp_fills_at_tp(self):
+        # 09:30 봉 10.0, 다음 체결이 09:35 에 11.0 (목표가 10.5 를 건너뜀) → 걸어 둔 지정가는 10.5 에 체결
+        idx = pd.to_datetime(['2026-03-03 09:30', '2026-03-03 09:35'])
+        m = pd.DataFrame([[10.0, 10.0, 10.0, 10.0], [11.0, 11.0, 11.0, 11.0]], columns=['Open', 'High', 'Low', 'Close'], index=idx)
+        r = tracker.track_position_intraday(10, 10.5, 9.0, 2, m)
+        assert r[0] == 'WIN' and r[1] == 10.5
+
     def test_gap_down_second_day(self):
         m1 = self._mins('2026-03-03', [[10, 10.2, 9.7, 9.8]] * 390)
         m2 = self._mins('2026-03-04', [[8.5, 8.6, 8.4, 8.5]] * 5)
