@@ -1,5 +1,5 @@
 {
-  "last_tracked": "2026-10-21 23:29:52",
+  "last_tracked": "2026-10-22 11:03:32",
   "open_count": 0,
   "pending_count": 0,
   "closed_count": 282,
@@ -11,16 +11,16 @@
     "1": {
       "n": 82,
       "win_rate": 72.0,
-      "mean_pct": 2.22,
-      "median_pct": 4.04,
+      "mean_pct": 1.79,
+      "median_pct": 4.0,
       "overnight_mean_pct": 0.95,
       "cost_pct": 1.0
     },
     "3": {
       "n": 200,
       "win_rate": 72.0,
-      "mean_pct": 2.76,
-      "median_pct": 4.04,
+      "mean_pct": 2.37,
+      "median_pct": 4.0,
       "overnight_mean_pct": 2.31,
       "cost_pct": 1.0
     }
