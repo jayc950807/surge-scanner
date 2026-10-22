@@ -190,8 +190,11 @@ def track_position_intraday(entry_price, tp_price, sl_price, max_hold, mins, fin
         for i, (o, h, l, c) in enumerate(zip(g['Open'], g['High'], g['Low'], g['Close'])):
             if h > max_price: max_price, max_date = h, ds
             if l < min_price: min_price, min_date = l, ds
-            if sl_price > 0 and o <= sl_price: return done('LOSS', o, ds, dn)
-            if tp_price > 0 and o >= tp_price: return done('WIN', o, ds, dn)
+            # 시가 갭 체결은 그날 첫 봉만: 장 시작 전 걸어 둔 주문이 시가에 체결되는 경우.
+            # 장중에 거래가 띄엄띄엄해 다음 봉 시가가 목표가를 건너뛰어도, 걸어 둔 지정가 매도는 목표가에 체결된다.
+            if i == 0 and sl_price > 0 and o <= sl_price: return done('LOSS', o, ds, dn)
+            if i == 0 and tp_price > 0 and o >= tp_price: return done('WIN', o, ds, dn)
+            if i > 0 and sl_price > 0 and o <= sl_price: return done('LOSS', o, ds, dn)   # 손절은 다음 체결가(봉 시가)로 — 보수적
             if sl_price > 0 and l <= sl_price: return done('LOSS', sl_price, ds, dn)
             if tp_price > 0 and h >= tp_price: return done('WIN', tp_price, ds, dn)
     # 마지막 보유일이 끝났는지: 그날 확정 일봉이 있거나(조기 마감·거래 없는 종목 대비) 15:55 이후 봉이 있으면 만기
