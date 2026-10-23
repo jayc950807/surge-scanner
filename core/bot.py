@@ -362,9 +362,12 @@ def run_check(b):
     def step(name, fn):
         nonlocal ok
         try:
-            print(f'  ✓ {name}: {fn()}')
+            msg = f'✓ {name}: {fn()}'
         except Exception as e:
-            ok = False; print(f'  ✗ {name}: {str(e)[:120]}')
+            ok = False; msg = f'✗ {name}: {str(e)[:120]}'
+        print('  ' + msg)
+        if os.environ.get('GITHUB_ACTIONS'):
+            print(f'::notice title=check::{msg}')        # 결과를 실행 요약(annotation)에도 남김 — 금액 없음
     step('토큰 발급(앱키·시크릿)', lambda: '성공' if k.auth() else '실패')
     step('미국 주식 현재가(SPY)', lambda: '받음' if k.price('SPY', 'AMEX') else '값 없음 — 해외 시세 신청 확인')
     step('잔고 조회(계좌번호)', lambda: f'보유 {len(k.balance())}종목')
