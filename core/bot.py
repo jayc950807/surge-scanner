@@ -228,7 +228,7 @@ def run_preclose(b, now=None):
         log('  ' + msg)
     if not ok:
         return
-    held = {h['symbol'] for h in hold}
+    held = {h['symbol'] for h in hold} | {o['symbol'] for o in orders if o['side'] == 'buy'}   # 이미 낸 매수 주문(아직 미체결)도 보유로 침 — 두 번 사지 않게
     hold_val = sum(h['qty'] * (h['price'] or h['avg']) for h in hold)
     ex0 = exchange_of(sigs[0][0]); px0 = b.price(sigs[0][0], ex0) or sigs[0][1] or 1.0
     cash = b.cash(sigs[0][0], ex0, px0)

@@ -1,0 +1,87 @@
+name: Scheduler (정확한 시각에 깨우기)
+# GitHub 예약(cron)은 몇 시간씩 늦거나 아예 건너뛴다. 그래서 이 작업이 계속 깨어 있으면서 정해진 ET 시각에
+# 다른 워크플로를 직접 띄운다. 한 작업은 6시간까지라 5시간 50분마다 스스로 다음 작업을 띄워 이어 간다(공개 저장소라 무료).
+# 사슬이 끊겨도 아래 cron 중 하나가 늦게라도 돌면 다시 이어진다.
+#   09:27 ET  bot_monitor.yml   (장중 익절·손절)
+#   15:43 ET  preclose_scan.yml (15:46 마감 전 스캔 + 봇 매수/만기 매도)
+#   16:21 ET  scan.yml          (마감 뒤 스캔·추적)
+on:
+  workflow_dispatch:
+    inputs:
+      done:
+        description: '이미 띄운 것 (자동으로 넘김)'
+        required: false
+        default: ''
+  schedule:
+    - cron: '7 1,7,13,19 * * *'
+permissions:
+  actions: write
+  contents: read
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 358
+    steps:
+      - name: 정해진 시각에 워크플로 띄우기
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DONE: ${{ github.event.inputs.done }}
+          HANDOFF: ${{ github.event.inputs.done != '' && '1' || '' }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import os, time, json, urllib.request, datetime as dt
+          from zoneinfo import ZoneInfo
+          NY = ZoneInfo('America/New_York')
+          repo, tok = os.environ['REPO'], os.environ['GH_TOKEN']
+          done = set(x for x in os.environ.get('DONE', '').split(',') if x)
+          JOBS = [  # (이름, 띄울 시각, 늦어도 이 시각까지는 띄움, 워크플로)
+              ('monitor', (9, 27), (15, 20), 'bot_monitor.yml'),
+              ('preclose', (15, 43), (15, 47), 'preclose_scan.yml'),
+              ('afterclose', (16, 21), (23, 59), 'scan.yml'),
+          ]
+          def dispatch(wf, inputs=None):
+              body = {'ref': 'main'}
+              if inputs: body['inputs'] = inputs
+              req = urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/workflows/{wf}/dispatches', data=json.dumps(body).encode(),
+                                           headers={'Authorization': f'Bearer {tok}', 'Accept': 'application/vnd.github+json'}, method='POST')
+              for a in range(3):
+                  try:
+                      urllib.request.urlopen(req, timeout=20); return True
+                  except Exception as e:
+                      print('  띄우기 실패', wf, type(e).__name__, getattr(e, 'code', '')); time.sleep(5)
+              return False
+          def trading_day(d):
+              return d.weekday() < 5   # 휴장일은 각 워크플로가 스스로 건너뜀
+          # 이미 돌고 있는 사슬이 있으면(이 실행이 cron 백업이면) 바로 끝낸다 — 사슬이 두 개로 늘지 않게
+          if not os.environ.get('HANDOFF'):
+              req = urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/workflows/scheduler.yml/runs?status=in_progress&per_page=20',
+                                           headers={'Authorization': f'Bearer {tok}', 'Accept': 'application/vnd.github+json'})
+              try:
+                  runs = json.load(urllib.request.urlopen(req, timeout=20)).get('workflow_runs', [])
+                  others = [r for r in runs if str(r['id']) != os.environ['RUN_ID']]
+                  if others:
+                      print('이미 돌고 있는 스케줄러가 있음 → 종료'); raise SystemExit(0)
+              except SystemExit:
+                  raise
+              except Exception as e:
+                  print('  확인 실패 → 그냥 진행', type(e).__name__)
+          start = time.time()
+          print('시작 ET', dt.datetime.now(NY).strftime('%Y-%m-%d %H:%M'), '| 이미 띄운 것', sorted(done))
+          while time.time() - start < 350 * 60:
+              now = dt.datetime.now(NY); day = now.strftime('%Y-%m-%d')
+              done = {x for x in done if x.startswith(day)}
+              if trading_day(now.date()):
+                  for name, (h, m), (lh, lm), wf in JOBS:
+                      key = f'{day}:{name}'
+                      if key in done: continue
+                      t0 = now.replace(hour=h, minute=m, second=0, microsecond=0); t1 = now.replace(hour=lh, minute=lm, second=0, microsecond=0)
+                      if t0 <= now <= t1:
+                          ok = dispatch(wf); print(f'  ET {now:%H:%M:%S} {name} → {wf}: {"띄움" if ok else "실패"}')
+                          print(f'::notice title=scheduler::{day} {name} {now:%H:%M:%S} ET {"OK" if ok else "FAIL"}')
+                          done.add(key)
+              time.sleep(15)
+          print('5시간 50분 — 다음 작업으로 넘김')
+          dispatch('scheduler.yml', {'done': ','.join(sorted(done)) or 'none'})
+          PY

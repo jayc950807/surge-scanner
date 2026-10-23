@@ -111,6 +111,13 @@ class TestPreclose:
         bot.run_preclose(bot.Broker(k), NOW)
         assert k.orders == []
 
+    def test_no_double_buy_when_order_pending(self, live):
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
+        k = FakeKIS(prices={'AAA': 2.0})
+        k.open = [{'odno': '5', 'symbol': 'AAA', 'side': 'buy', 'qty_left': 100, 'price': 2.06, 'excg': 'NASD'}]
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.orders == []
+
     def test_dry_mode_sends_nothing(self, live, monkeypatch):
         monkeypatch.setattr(bot, 'MODE', 'dry')
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
