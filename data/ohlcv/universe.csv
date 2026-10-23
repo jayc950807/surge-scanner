@@ -39,7 +39,6 @@ ABUS,Arbutus Biopharma Corporation Common Stock,NASDAQ
 ABVC,"ABVC BioPharma, Inc. Common Stock",NASDAQ
 ABVX,Abivax SA American Depositary Shares,NASDAQ
 ABX,"Abacus Global Management, Inc.",NYSE
-ACA,"Arcosa, Inc. Common Stock",NYSE
 ACAA,Averin Capital Acquisition Corp. Class A Ordinary Shares,NASDAQ
 ACAD,ACADIA Pharmaceuticals Inc. Common Stock,NASDAQ
 ACB,Aurora Cannabis Inc. Common Shares,NASDAQ
@@ -361,6 +360,7 @@ APUR,Aperture AC Class A Ordinary Shares,NASDAQ
 APUS,"Apimeds Pharmaceuticals US, Inc.",AMEX
 APVO,Aptevo Therapeutics Inc. Common Stock,NASDAQ
 APWC,"Asia Pacific Wire & Cable Corporation, Ltd. Ordinary Shares (Bermuda)",NASDAQ
+APXC,Apex Critical Metals Corp. American Depositary Shares,NASDAQ
 APXT,Apex Treasury Corporation Class A Ordinary Share,NASDAQ
 APYX,Apyx Medical Corporation Common Stock,NASDAQ
 AQB,"AquaBounty Technologies, Inc. Common Stock",NASDAQ
@@ -1097,6 +1097,7 @@ CISS,C3is Inc. Common Stock,NASDAQ
 CITR,CitroTech Inc.,AMEX
 CIVB,"Civista Bancshares, Inc. Common Stock",NASDAQ
 CIX,Comp X International Inc.,AMEX
+CJMB,Callan JMB Inc. Common Stock,NASDAQ
 CKX,"CKX Lands, Inc.",AMEX
 CL,Colgate-Palmolive Company,NYSE
 CLAR,Clarus Corporation Common Stock,NASDAQ
@@ -2710,7 +2711,7 @@ JHX,James Hardie Industries plc,NYSE
 JILL,"J.Jill, Inc. Common Stock",NYSE
 JJSF,J & J Snack Foods Corp. Common Stock,NASDAQ
 JKHY,"Jack Henry & Associates, Inc. Common Stock",NASDAQ
-JKS,JINKOSOLAR HOLDINGS CO,NYSE
+JKS,Jinko Holdings Limited,NYSE
 JL,J-Long Group Limited Class A Ordinary Shares,NASDAQ
 JLHL,Julong Holding Limited Class A Ordinary Shares,NASDAQ
 JLL,"Jones Lang LaSalle, Inc.",NYSE
@@ -3033,7 +3034,7 @@ LTH,"Life Time Group Holdings, Inc.",NYSE
 LTM,"LATAM Airlines Group S.A. American Depositary Shares (each representing two thousand (2,000) shares of Common Stock)",NYSE
 LTRN,Lantern Pharma Inc. Common Stock,NASDAQ
 LTRX,"Lantronix, Inc. Common Stock",NASDAQ
-LU,"Lufax Holding Ltd. American Depositary Shares, each representing two (2) Ordinary Shares",NYSE
+LU,"Lufax Holding Ltd. American Depositary Shares, (each representing twenty (20) Ordinary Shares)",NYSE
 LUCD,Lucid Diagnostics Inc. Common Stock,NASDAQ
 LUCK,Lucky Strike Entertainment Corporation,NYSE
 LUCY,"Innovative Eyewear, Inc. Common Stock",NASDAQ
@@ -3059,6 +3060,7 @@ LXP,LXP Industrial Trust,NYSE
 LXRX,"Lexicon Pharmaceuticals, Inc. Common Stock",NASDAQ
 LXU,LSB INDUSTRIES INC,NYSE
 LYB,LyondellBasell Industries N.V. Class A,NYSE
+LYCA,"Lycia Therapeutics, Inc. Common Stock",NASDAQ
 LYEL,"Lyell Immunopharma, Inc. Common Stock",NASDAQ
 LYFT,"Lyft, Inc. Class A Common Stock",NASDAQ
 LYG,Lloyds Banking Group PLC,NYSE
@@ -3811,6 +3813,7 @@ PATK,"Patrick Industries, Inc. Common Stock",NASDAQ
 PAVM,PAVmed Inc. Common Stock,NASDAQ
 PAVS,Paranovus Entertainment Technology Ltd. Class A Ordinary Shares,NASDAQ
 PAX,Patria Investments Limited Class A Common Shares,NASDAQ
+PAXG,Pine Tree Acquisition Corp. Class A Ordinary Shares,NASDAQ
 PAY,"Paymentus Holdings, Inc.",NYSE
 PAYC,"PAYCOM SOFTWARE, INC.",NYSE
 PAYO,Payoneer Global Inc. Common Stock,NASDAQ
@@ -3868,7 +3871,6 @@ PENG,"Penguin Solutions, Inc. Common Stock",NASDAQ
 PENN,"PENN Entertainment, Inc. Common Stock",NASDAQ
 PEP,"PepsiCo, Inc. Common Stock",NASDAQ
 PEPG,PepGen Inc. Common Stock,NASDAQ
-PERF,Perfect Corp.,NYSE
 PERI,Perion Network Ltd. Ordinary Shares,NASDAQ
 PESI,"Perma-Fix Environmental Services, Inc. Common Stock",NASDAQ
 PETS,"PetMed Express, Inc. Common Stock",NASDAQ
@@ -3920,6 +3922,7 @@ PKOH,Park-Ohio Holdings Corp. Common Stock,NASDAQ
 PKX,POSCO Holdings Inc. American Depositary Shares (Each representing 1/4th of a share of Common Stock),NYSE
 PL,Planet Labs PBC,NYSE
 PLAB,"Photronics, Inc. Common Stock",NASDAQ
+PLAG,Planet Green Holdings Corp.,AMEX
 PLAY,"Dave & Buster's Entertainment, Inc. Common Stock",NASDAQ
 PLBC,Plumas Bancorp,NASDAQ
 PLBL,Polibeli Group Ltd Class A Ordinary Shares,NASDAQ
@@ -4417,7 +4420,6 @@ SDHC,Smith Douglas Homes Corp.,NYSE
 SDHI,Siddhi Acquisition Corp Class A Common stock,NASDAQ
 SDOT,Sadot Group Inc. Common Stock,NASDAQ
 SDRL,Seadrill Limited,NYSE
-SDST,Stardust Power Inc. Common Stock,NASDAQ
 SE,"Sea Limited American Depositary Shares, each representing one Class A Ordinary Share",NYSE
 SEAT,Vivid Seats Inc. Class A Common Stock,NASDAQ
 SEB,Seaboard Corporation,AMEX
@@ -5482,6 +5484,7 @@ XTND,"Xtend AI Robotics, Inc.",NYSE
 XTNT,"Xtant Medical Holdings, Inc.",AMEX
 XWEL,"XWELL, Inc. Common Stock",NASDAQ
 XXI,"Twenty One Capital, Inc.",NYSE
+XXII,"22nd Century Group, Inc. Common Stock",NASDAQ
 XYF,"X Financial American Depositary Shares, each representing six Class A Ordinary Shares",NYSE
 XYL,Xylem Inc,NYSE
 XYZ,"Block, Inc.",NYSE
