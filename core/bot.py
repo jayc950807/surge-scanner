@@ -200,6 +200,12 @@ def run_preclose(b, now=None):
     hm = now.hour * 60 + now.minute
     if not (15 * 60 + 40 <= hm <= 15 * 60 + 49):
         log(f'  ET {now:%H:%M} — 15:40~15:49 밖이라 주문하지 않음'); return
+    try:                                                  # 조기 마감일(13:00) 등 장이 이미 닫혔으면 아무것도 안 함
+        import alpaca_data
+        if alpaca_data.have_keys() and alpaca_data.clock().get('is_open') is False:
+            log('  장이 이미 닫혀 있음(조기 마감일 등) → 주문하지 않음'); return
+    except Exception:
+        pass
     hold = b.holdings(); orders = b.open_orders(); entries = b.entry_dates(today)
 
     # 1) 2거래일째 종목 → 종가 매도
