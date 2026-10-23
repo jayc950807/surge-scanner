@@ -12,6 +12,10 @@ on:
         description: '이미 띄운 것 (자동으로 넘김)'
         required: false
         default: ''
+      minutes:
+        description: '이 작업이 깨어 있을 시간(분, 시험용)'
+        required: false
+        default: '350'
   schedule:
     - cron: '7 1,7,13,19 * * *'
 permissions:
@@ -29,6 +33,7 @@ jobs:
           DONE: ${{ github.event.inputs.done }}
           HANDOFF: ${{ github.event.inputs.done != '' && '1' || '' }}
           RUN_ID: ${{ github.run_id }}
+          MINUTES: ${{ github.event.inputs.minutes || '350' }}
         run: |
           python3 - <<'PY'
           import os, time, json, urllib.request, datetime as dt
@@ -69,7 +74,7 @@ jobs:
                   print('  확인 실패 → 그냥 진행', type(e).__name__)
           start = time.time()
           print('시작 ET', dt.datetime.now(NY).strftime('%Y-%m-%d %H:%M'), '| 이미 띄운 것', sorted(done))
-          while time.time() - start < 350 * 60:
+          while time.time() - start < float(os.environ.get('MINUTES') or 350) * 60:
               now = dt.datetime.now(NY); day = now.strftime('%Y-%m-%d')
               done = {x for x in done if x.startswith(day)}
               if trading_day(now.date()):
@@ -82,6 +87,6 @@ jobs:
                           print(f'::notice title=scheduler::{day} {name} {now:%H:%M:%S} ET {"OK" if ok else "FAIL"}')
                           done.add(key)
               time.sleep(15)
-          print('5시간 50분 — 다음 작업으로 넘김')
+          print('시간 다 됨 — 다음 작업으로 넘김')
           dispatch('scheduler.yml', {'done': ','.join(sorted(done)) or 'none'})
           PY
