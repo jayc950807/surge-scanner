@@ -353,9 +353,31 @@ def run_status(b):
         log(f'  {h["symbol"]} {n}/{MAX_HOLD}일 {r:+.1f}%', f'  {h["symbol"]} {h["qty"]}주 평균 {h["avg"]} 현재 {h["price"]} {n}/{MAX_HOLD}일 {r:+.1f}%')
 
 
+def run_check(b):
+    """연결 확인 — 조회만 하고 주문은 하지 않는다. 금액은 출력하지 않는다."""
+    k = b.k
+    if not b.has_keys:
+        print('  ✗ 키가 비어 있음 — Secrets 이름(KIS_APP_KEY / KIS_APP_SECRET / KIS_ACCOUNT)과 계좌번호 10자리 확인'); raise SystemExit(1)
+    ok = True
+    def step(name, fn):
+        nonlocal ok
+        try:
+            print(f'  ✓ {name}: {fn()}')
+        except Exception as e:
+            ok = False; print(f'  ✗ {name}: {str(e)[:120]}')
+    step('토큰 발급(앱키·시크릿)', lambda: '성공' if k.auth() else '실패')
+    step('미국 주식 현재가(SPY)', lambda: '받음' if k.price('SPY', 'AMEX') else '값 없음 — 해외 시세 신청 확인')
+    step('잔고 조회(계좌번호)', lambda: f'보유 {len(k.balance())}종목')
+    step('주문가능금액', lambda: '있음' if k.buying_power('SPY', 'AMEX', 500) > 0 else '0 — 입금·통합증거금·환전 확인')
+    step('미체결 조회', lambda: f'{len(k.open_orders())}건')
+    print('\n결과:', '✓ 연결 정상 (주문은 하지 않았어요)' if ok else '✗ 위 실패 항목 확인')
+    if not ok:
+        raise SystemExit(1)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['preclose', 'monitor', 'status'])
+    ap.add_argument('cmd', choices=['preclose', 'monitor', 'status', 'check'])
     a = ap.parse_args()
     print(f'봇 {a.cmd} · 모드 {MODE}{" · 새 매수 중지" if PAUSE else ""} · ET {now_et():%Y-%m-%d %H:%M}')
     if MODE == 'off':
@@ -364,7 +386,7 @@ def main():
     if not b.has_keys:
         print('  KIS 키 없음 → 계좌 조회 없이 연습만')
     try:
-        {'preclose': run_preclose, 'monitor': run_monitor, 'status': run_status}[a.cmd](b)
+        {'preclose': run_preclose, 'monitor': run_monitor, 'status': run_status, 'check': run_check}[a.cmd](b)
     finally:
         flush_notes(a.cmd)
 
