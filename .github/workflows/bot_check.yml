@@ -11,6 +11,10 @@ jobs:
       KIS_ACCOUNT: ${{ secrets.KIS_ACCOUNT }}
       KIS_ENV: ${{ vars.KIS_ENV || 'real' }}
       BOT_MODE: dry
+      SET_MODE: ${{ vars.BOT_MODE }}
+      SET_EQ: ${{ vars.BOT_START_EQUITY }}
+      SET_DATE: ${{ vars.BOT_START_DATE }}
+      SET_PAUSE: ${{ vars.BOT_PAUSE }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
@@ -19,3 +23,6 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt
       - run: python core/bot.py check
+      - name: 설정값 확인
+        run: |
+          echo "::notice title=vars::BOT_MODE=${SET_MODE:-(없음→dry)} · BOT_START_EQUITY=${SET_EQ:-(없음)} · BOT_START_DATE=${SET_DATE:-(없음)} · BOT_PAUSE=${SET_PAUSE:-(없음→0)}"
