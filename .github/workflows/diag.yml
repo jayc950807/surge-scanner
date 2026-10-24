@@ -1,0 +1,33 @@
+name: Diag (마감 전 스캔 점검)
+on:
+  workflow_dispatch:
+    inputs:
+      dates:
+        description: '점검할 날짜들 (공백으로 구분, 예: 2026-10-19 2026-10-20)'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: scanner-push
+  cancel-in-progress: false
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python core/diag_preclose.py ${{ github.event.inputs.dates }}
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/diag; git diff --staged --quiet && exit 0
+          git commit -m "diag: preclose check"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin main && exit 0; git rebase --abort 2>/dev/null || true; sleep 5; done
