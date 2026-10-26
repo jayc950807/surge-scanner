@@ -125,6 +125,7 @@ AERT,"Aeries Technology, Inc. Class A Ordinary Share",NASDAQ
 AES,AES Corporation,NYSE
 AESI,Atlas Energy Solutions Inc.,NYSE
 AESP,Aeon Acquisition I Corp. Class A Ordinary Shares,NASDAQ
+AETR,Aetherion Technologies Inc. Common Shares,NASDAQ
 AEVA,"Aeva Technologies, Inc. Common Stock",NASDAQ
 AEXA,American Exceptionalism Acquisition Corp. A,NYSE
 AEYE,"AudioEye, Inc. Common Stock",NASDAQ
@@ -1647,7 +1648,6 @@ ELE,Elemental Royalty Corporation Common Stock,NASDAQ
 ELF,"e.l.f. Beauty, Inc.",NYSE
 ELLO,Ellomay Capital LTD,AMEX
 ELMD,"Electromed, Inc.",AMEX
-ELME,Elme Communities,NYSE
 ELMT,The Elmet Group Co. Common Stock,NASDAQ
 ELOG,Eastern International Ltd. Ordinary Shares,NASDAQ
 ELOX,"Eloxx Pharmaceuticals, Inc. Common Stock",NASDAQ
@@ -1827,6 +1827,7 @@ FCAP,"First Capital, Inc. Common Stock",NASDAQ
 FCBC,"First Community Bankshares, Inc. (VA) Common Stock",NASDAQ
 FCBM,"First Carolina Financial Services, Inc.",NYSE
 FCCO,First Community Corporation Common Stock,NASDAQ
+FCDH,Forcendra Holding Limited Class A Ordinary Shares,NASDAQ
 FCEL,"FuelCell Energy, Inc. Common Stock",NASDAQ
 FCF,First Commonwealth Financial Corporation,NYSE
 FCFS,"FirstCash Holdings, Inc. Common Stock",NASDAQ
@@ -2259,6 +2260,7 @@ GTN,"Gray Media, Inc.",NYSE
 GTX,Garrett Motion Inc. Common Stock,NASDAQ
 GTY,Getty Realty Corp.,NYSE
 GUAC,Berto Acquisition Corp. II Ordinary Shares,NASDAQ
+GUNN,"Gunnison Copper Corp. American Depositary Shares, each representing thirty (30) Common Shares",AMEX
 GURE,"Gulf Resources, Inc. (NV) Common Stock",NASDAQ
 GUT,GABELLI UTILITY TRUST,NYSE
 GUTS,"Fractyl Health, Inc. Common Stock",NASDAQ
@@ -3802,7 +3804,6 @@ PALO,Paloma Acquisition Corp I Class A Ordinary Shares,NASDAQ
 PAM,PAMPA ENERGIA S.A.,NYSE
 PAMT,PAMT CORP Common Stock,NASDAQ
 PANL,Pangaea Logistics Solutions Ltd. Common Shares,NASDAQ
-PAPL,Pineapple Financial Inc.,AMEX
 PAR,PAR Technology Corp.,NYSE
 PARA,"Banzai International, Inc. Class A Common Stock",NASDAQ
 PARK,"Park Dental Partners, Inc. Common Stock",NASDAQ
@@ -4058,6 +4059,7 @@ PTCT,"PTC Therapeutics, Inc. Common Stock",NASDAQ
 PTEN,"Patterson-UTI Energy, Inc. Common Stock",NASDAQ
 PTGX,"Protagonist Therapeutics, Inc. Common Stock",NASDAQ
 PTHS,Pelthos Therapeutics Inc.,AMEX
+PTIV,Pineapple Financial Inc.,AMEX
 PTLE,PTL LTD Class A Ordinary Shares,NASDAQ
 PTLO,Portillo's Inc. Class A Common Stock,NASDAQ
 PTN,"Palatin Technologies, Inc. Common Stock",NASDAQ
@@ -5271,7 +5273,6 @@ VSA,VisionSys AI Inc. American Depositary Shares,NASDAQ
 VSAT,"ViaSat, Inc. Common Stock",NASDAQ
 VSEC,VSE Corporation Common Stock,NASDAQ
 VSH,"Vishay Intertechnology, Inc.",NYSE
-VSME,VS Media Holdings Limited Class A Ordinary Shares,NASDAQ
 VSNT,"Versant Media Group, Inc. Class A Common Stock",NASDAQ
 VST,Vistra Corp.,NYSE
 VSTM,"Verastem, Inc. Common Stock",NASDAQ
@@ -5325,7 +5326,6 @@ WDAY,"Workday, Inc. Class A Common Stock",NASDAQ
 WDC,Western Digital Corporation Common Stock,NASDAQ
 WDFC,WD-40 Company Common Stock,NASDAQ
 WDS,"Woodside Energy Group Limited American Depositary Shares, each representing one Ordinary Share",NYSE
-WEAV,"Weave Communications, Inc.",NYSE
 WEC,"WEC Energy Group, Inc.",NYSE
 WELL,Welltower Inc.,NYSE
 WEN,Wendy's Company (The) Common Stock,NASDAQ
@@ -5389,7 +5389,6 @@ WPAC,White Pearl Acquisition Corp.,NYSE
 WPC,W.P. Carey Inc. (REIT),NYSE
 WPM,Wheaton Precious Metals Corp. Common Stock,NYSE
 WPP,WPP PLC,NYSE
-WPRT,Westport Fuel Systems Inc Common Shares,NASDAQ
 WQEY,WISeQey Corp Ordinary Shares,NASDAQ
 WRAP,"Wrap Technologies, Inc. Common Stock",NASDAQ
 WRB,W.R. Berkley Corporation,NYSE
