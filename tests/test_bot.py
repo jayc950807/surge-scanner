@@ -125,8 +125,8 @@ class TestPreclose:
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
         monkeypatch.setattr(bot, 'PAUSE', True)
         k = FakeKIS(prices={'AAA': 2.0}); bot.run_preclose(bot.Broker(k), NOW); assert k.orders == []
-        monkeypatch.setattr(bot, 'PAUSE', False); monkeypatch.setattr(bot, 'START_EQ', 20000.0)
-        k = FakeKIS(prices={'AAA': 2.0}, cash=10000); bot.run_preclose(bot.Broker(k), NOW); assert k.orders == []   # −50% < −15% 한도
+        monkeypatch.setattr(bot, 'PAUSE', False); monkeypatch.setattr(bot, 'START_EQ', 30000.0)
+        k = FakeKIS(prices={'AAA': 2.0}, cash=10000); bot.run_preclose(bot.Broker(k), NOW); assert k.orders == []   # −67% < −60% 한도
 
     def test_live_check_stops_after_20_negative(self, live, monkeypatch):
         monkeypatch.setattr(bot, 'START_DATE', '2026-10-01')
