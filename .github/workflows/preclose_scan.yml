@@ -54,7 +54,7 @@ jobs:
           BOT_POS_PCT: ${{ vars.BOT_POS_PCT || '10' }}
           BOT_MAX_POS: ${{ vars.BOT_MAX_POS || '10' }}
           BOT_START_EQUITY: ${{ vars.BOT_START_EQUITY || '0' }}
-          BOT_MAX_DD: ${{ vars.BOT_MAX_DD || '15' }}
+          BOT_MAX_DD: ${{ vars.BOT_MAX_DD || '60' }}
           BOT_START_DATE: ${{ vars.BOT_START_DATE || '' }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

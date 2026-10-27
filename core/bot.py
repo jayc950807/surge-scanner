@@ -19,7 +19,7 @@
     BOT_POS_PCT     pct 방식일 때 종목당 계좌의 % (기본 10)
     BOT_MAX_POS     동시 보유 최대 (기본 10)
     BOT_MAX_NEW     하루 새 매수 최대 (기본 10)
-    BOT_START_EQUITY  시작 금액(USD). 계좌가 여기서 BOT_MAX_DD % 이상 줄면 새 매수 중지 (기본 15)
+    BOT_START_EQUITY  시작 금액(USD). 계좌가 여기서 BOT_MAX_DD % 이상 줄면 새 매수 중지 (기본 60 — 나눠서 전부 투자 방식이라 2026-10-27 사용자 결정으로 15→60)
     BOT_START_DATE  봇 시작일. 이후 마감 전 신호 실적이 20건 넘었는데 평균이 마이너스면 새 매수 중지
   공개 저장소라 로그에는 금액·수량·계좌 정보를 쓰지 않는다. 자세한 내용은 TELEGRAM_TOKEN/TELEGRAM_CHAT_ID 가 있으면 텔레그램으로.
 """
@@ -57,7 +57,7 @@ SIZING = os.environ.get('BOT_SIZING', 'split').strip().lower()   # split: 그날
 MAX_POS = int(env_f('BOT_MAX_POS', 10))
 MAX_NEW = int(env_f('BOT_MAX_NEW', 10))
 START_EQ = env_f('BOT_START_EQUITY', 0)
-MAX_DD = env_f('BOT_MAX_DD', 15) / 100
+MAX_DD = env_f('BOT_MAX_DD', 60) / 100
 START_DATE = (os.environ.get('BOT_START_DATE', '') or '').strip()
 DRY_EQUITY = env_f('BOT_DRY_EQUITY', 10000)
 
