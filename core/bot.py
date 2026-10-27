@@ -379,6 +379,20 @@ def run_check(b):
     step('잔고 조회(계좌번호)', lambda: f'보유 {len(k.balance())}종목')
     step('주문가능금액', lambda: '있음' if k.buying_power('SPY', 'AMEX', 500) > 0 else '0 — 입금·통합증거금·환전 확인')
     step('미체결 조회', lambda: f'{len(k.open_orders())}건')
+    def detail():
+        oo = k.open_orders(); out = []
+        for h in k.balance():
+            px = k.price(h['symbol'], h['excg']) or h['price']
+            pct = f'{(px / h["avg"] - 1) * 100:+.1f}%' if h['avg'] and px else '?'
+            sells = sum(1 for o in oo if o['symbol'] == h['symbol'] and o['side'] == 'sell')
+            out.append(f'{h["symbol"]} 평균 대비 {pct} · 팔 수 있음 {"예" if h["sellable"] > 0 else "아니오"} · 걸린 매도 {sells}건')
+        return ' / '.join(out) or '없음'
+    step('보유 상세(금액·수량 없음)', detail)
+    def today_fills():
+        d = now_et().strftime('%Y%m%d'); y = (now_et() - timedelta(days=4)).strftime('%Y%m%d')
+        f = k.fills(y, d)
+        return ', '.join(f'{x["date"]} {x["symbol"]} {"매수" if x["side"] == "buy" else "매도"}' for x in f) or '없음'
+    step('최근 체결(최근 4일, 금액·수량 없음)', today_fills)
     print('\n결과:', '✓ 연결 정상 (주문은 하지 않았어요)' if ok else '✗ 위 실패 항목 확인')
     if not ok:
         raise SystemExit(1)
