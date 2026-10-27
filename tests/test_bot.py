@@ -192,3 +192,28 @@ class TestMonitor:
 
     def test_round_px(self):
         assert round_px(2.163, up=True) == 2.17 and round_px(2.169) == 2.16 and round_px(0.51234) == 0.5123
+
+
+class TestLiveRecord:
+    def test_order_recorded_then_closed(self, live, monkeypatch):
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
+        k = FakeKIS(prices={'AAA': 2.00}, cash=100.0)
+        bot.run_preclose(bot.Broker(k), NOW)
+        d = pd.read_csv('data/live_trades.csv', dtype=str)
+        assert list(d.symbol) == ['AAA'] and d.status[0] == 'ordered' and 95 < float(d.weight_pct[0]) <= 100
+        k2 = FakeKIS(fills=[{'date': '20261022', 'symbol': 'AAA', 'side': 'buy', 'qty': 48, 'price': 2.00},
+                            {'date': '20261023', 'symbol': 'AAA', 'side': 'sell', 'qty': 48, 'price': 2.10}])
+        monkeypatch.setattr(bot, 'now_et', lambda: datetime(2026, 10, 23, 16, 30, tzinfo=ET))
+        bot.run_record(bot.Broker(k2))
+        d = pd.read_csv('data/live_trades.csv', dtype=str)
+        assert d.status[0] == 'closed' and d.result[0] == '익절' and abs(float(d.ret_pct[0]) - 5.0) < 0.01
+        assert 'qty' not in d.columns                                      # 수량·금액은 기록하지 않음
+
+    def test_unfilled_and_holding(self, live, monkeypatch):
+        bot.live_record_order('2026-10-22', 'AAA', 50.0, 2.06); bot.live_record_order('2026-10-22', 'BBB', 50.0, 4.12)
+        k = FakeKIS(hold=[{'symbol': 'BBB', 'qty': 10, 'sellable': 10, 'avg': 4.0, 'price': 4.2, 'excg': 'NYSE'}], prices={'BBB': 4.2},
+                    fills=[{'date': '20261022', 'symbol': 'BBB', 'side': 'buy', 'qty': 10, 'price': 4.0}])
+        monkeypatch.setattr(bot, 'now_et', lambda: datetime(2026, 10, 23, 16, 30, tzinfo=ET))
+        bot.run_record(bot.Broker(k))
+        d = pd.read_csv('data/live_trades.csv', dtype=str).set_index('symbol')
+        assert d.at['AAA', 'status'] == 'unfilled' and d.at['BBB', 'status'] == 'holding' and abs(float(d.at['BBB', 'cur_pct']) - 5.0) < 0.01

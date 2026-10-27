@@ -74,6 +74,16 @@ jobs:
           else
             python core/tracker.py
           fi
+      - name: Bot — 실제 매매 기록 갱신 (조회만, 금액·수량 없음)
+        if: always()
+        continue-on-error: true
+        env:
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          KIS_ACCOUNT: ${{ secrets.KIS_ACCOUNT }}
+          KIS_ENV: ${{ vars.KIS_ENV || 'real' }}
+          BOT_MODE: ${{ vars.BOT_MODE || 'dry' }}
+        run: if [ -f data/live_trades.csv ]; then python core/bot.py record; fi
       - name: Summary
         if: always()
         run: |

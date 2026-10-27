@@ -144,6 +144,77 @@ def live_check():
     return True, f'실전 실적 {len(r)}건 평균 {r.mean():+.2f}%' if len(r) else ''
 
 
+# ─── 실제 매매 기록 (공개 저장소: 금액·수량 없이 날짜·가격·비중%·수익률만) ─────────────────────
+LIVE_FILE = 'data/live_trades.csv'
+LIVE_COLS = ['order_date', 'symbol', 'weight_pct', 'limit_px', 'status', 'buy_date', 'buy_px', 'sell_date', 'sell_px', 'ret_pct', 'result', 'cur_pct', 'updated']
+LIVE_START = os.environ.get('BOT_LIVE_START', '2026-10-27')   # 새 규칙(추천 수로 나눠 전부 투자) 시작일(미국 날짜)
+
+
+def live_load():
+    if os.path.exists(LIVE_FILE):
+        d = pd.read_csv(LIVE_FILE, dtype=str, keep_default_na=False)
+        for c in LIVE_COLS:
+            if c not in d.columns:
+                d[c] = ''
+        return d[LIVE_COLS]
+    return pd.DataFrame(columns=LIVE_COLS)
+
+
+def live_record_order(day, sym, weight_pct, lim):
+    d = live_load()
+    if ((d['order_date'] == day) & (d['symbol'] == sym)).any():
+        return
+    row = {c: '' for c in LIVE_COLS}
+    row.update(order_date=day, symbol=sym, weight_pct=f'{weight_pct:.1f}', limit_px=f'{lim}', status='ordered', updated=day)
+    d = pd.concat([d, pd.DataFrame([row])], ignore_index=True)
+    os.makedirs('data', exist_ok=True); d.to_csv(LIVE_FILE, index=False)
+
+
+def run_record(b):
+    """체결 내역·잔고로 실매매 기록 갱신 (조회만, 주문 없음)"""
+    d = live_load()
+    if d.empty:
+        log('  실매매 기록 없음'); return
+    today = now_et().date(); ts = today.strftime('%Y-%m-%d')
+    start = min(d['order_date']).replace('-', '')
+    fills = b.k.fills(start, today.strftime('%Y%m%d')) if b.has_keys else []
+    hold = {h['symbol']: h for h in (b.holdings() if b.has_keys else [])}
+    for i, r in d.iterrows():
+        if r['status'] in ('closed', 'unfilled'):
+            continue
+        od = r['order_date'].replace('-', '')
+        buys = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'buy' and f['date'] >= od]
+        if not buys:
+            if ts > r['order_date']:
+                d.at[i, 'status'] = 'unfilled'; d.at[i, 'updated'] = ts
+            continue
+        bd = min(f['date'] for f in buys); bq = sum(f['qty'] for f in buys); bpx = sum(f['qty'] * f['price'] for f in buys) / bq
+        sells = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'sell' and f['date'] >= bd]
+        sq = sum(f['qty'] for f in sells)
+        d.at[i, 'buy_date'] = f'{bd[:4]}-{bd[4:6]}-{bd[6:]}'; d.at[i, 'buy_px'] = f'{bpx:.4f}'
+        try:
+            lim = float(r['limit_px'] or 0); w = float(r['weight_pct'] or 0)
+            if lim > 0 and w > 0:
+                d.at[i, 'weight_pct'] = f'{w * min(bpx / lim, 1.0):.1f}'      # 실제 체결가로 비중 보정
+                d.at[i, 'limit_px'] = ''
+        except ValueError:
+            pass
+        if sq >= bq:
+            spx = sum(f['qty'] * f['price'] for f in sells) / sq; sd = max(f['date'] for f in sells)
+            ret = (spx / bpx - 1) * 100
+            d.at[i, 'sell_date'] = f'{sd[:4]}-{sd[4:6]}-{sd[6:]}'; d.at[i, 'sell_px'] = f'{spx:.4f}'; d.at[i, 'ret_pct'] = f'{ret:.2f}'
+            d.at[i, 'result'] = '익절' if ret >= TP * 100 - 0.5 else ('손절' if ret <= SL * 100 + 1 else '만기')
+            d.at[i, 'status'] = 'closed'; d.at[i, 'cur_pct'] = ''
+        else:
+            h = hold.get(r['symbol'])
+            px = (b.price(r['symbol'], h['excg']) or h['price']) if h else None
+            d.at[i, 'status'] = 'holding'; d.at[i, 'cur_pct'] = f'{(px / bpx - 1) * 100:.2f}' if px else ''
+        d.at[i, 'updated'] = ts
+    d.to_csv(LIVE_FILE, index=False)
+    n = d['status'].value_counts().to_dict()
+    log(f'  실매매 기록 갱신: 끝 {n.get("closed", 0)} · 보유 {n.get("holding", 0)} · 주문 {n.get("ordered", 0)} · 미체결 {n.get("unfilled", 0)}')
+
+
 # ─── 브로커 래퍼 (dry 면 주문만 막음) ──────────────────────────────────────────
 class Broker:
     def __init__(self, kis=None):
@@ -270,14 +341,18 @@ def run_preclose(b, now=None):
         qty = math.floor(min(per, cash) / lim)
         if qty < 1:
             log(f'  {sym} 살 돈 부족 → 건너뜀'); continue
+        used = lim
         try:
             b.order('buy', sym, ex, qty, lim, '34', '신호 종가 매수')
         except KISError as e:
             log(f'  LOC 거부({str(e)[:40]}) → 지정가로')
             try:
-                b.order('buy', sym, ex, qty, round_px(px * 1.01, up=True), '00', '신호 매수')
+                used = round_px(px * 1.01, up=True)
+                b.order('buy', sym, ex, qty, used, '00', '신호 매수')
             except KISError as e2:
                 log(f'  {sym} 매수 실패: {str(e2)[:60]}'); continue
+        if b.live and equity > 0:
+            live_record_order(ts, sym, qty * used / equity * 100, used)
         cash -= qty * lim
 
 
@@ -428,7 +503,7 @@ def run_check(b):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['preclose', 'monitor', 'status', 'check'])
+    ap.add_argument('cmd', choices=['preclose', 'monitor', 'status', 'check', 'record'])
     a = ap.parse_args()
     print(f'봇 {a.cmd} · 모드 {MODE}{" · 새 매수 중지" if PAUSE else ""} · ET {now_et():%Y-%m-%d %H:%M}')
     if MODE == 'off':
@@ -437,7 +512,7 @@ def main():
     if not b.has_keys:
         print('  KIS 키 없음 → 계좌 조회 없이 연습만')
     try:
-        {'preclose': run_preclose, 'monitor': run_monitor, 'status': run_status, 'check': run_check}[a.cmd](b)
+        {'preclose': run_preclose, 'monitor': run_monitor, 'status': run_status, 'check': run_check, 'record': run_record}[a.cmd](b)
     finally:
         flush_notes(a.cmd)
 
