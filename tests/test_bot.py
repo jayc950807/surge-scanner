@@ -134,6 +134,19 @@ class TestMonitor:
         bot.place_take_profits(bot.Broker(k))
         assert k.orders == [('sell', 'AAA', 100, 2.1, '00')]             # BBB 는 이미 걸려 있음
 
+    def test_take_profit_gap_up_sells_near_market(self, live):
+        hold = [{'symbol': 'AAA', 'qty': 2, 'sellable': 2, 'avg': 2.70, 'price': 3.9, 'excg': 'NASD'}]
+        k = FakeKIS(hold=hold, prices={'AAA': 3.92})
+        bot.place_take_profits(bot.Broker(k))
+        assert k.orders == [('sell', 'AAA', 2, 3.88, '00')]           # 목표(2.84)보다 위 → 현재가 −1%
+
+    def test_take_profit_retried_when_missing(self, live):
+        hold = [{'symbol': 'AAA', 'qty': 2, 'sellable': 2, 'avg': 2.0, 'price': 2.0, 'excg': 'NASD'}]
+        k = FakeKIS(hold=hold, prices={'AAA': 2.0})
+        bot.place_take_profits(bot.Broker(k)); k.open = [{'odno': '1', 'symbol': 'AAA', 'side': 'sell', 'qty_left': 2, 'price': 2.1, 'excg': 'NASD'}]
+        bot.place_take_profits(bot.Broker(k))
+        assert k.orders == [('sell', 'AAA', 2, 2.1, '00')]             # 이미 걸려 있으면 다시 안 검
+
     def test_stop_loss(self, live):
         hold = [{'symbol': 'AAA', 'qty': 100, 'sellable': 0, 'avg': 2.0, 'price': 1.79, 'excg': 'NASD'},
                 {'symbol': 'BBB', 'qty': 10, 'sellable': 10, 'avg': 4.0, 'price': 3.7, 'excg': 'NYSE'}]

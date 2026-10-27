@@ -271,15 +271,25 @@ def run_preclose(b, now=None):
 
 # ─── 장중: 익절 주문 걸기 + 손절 감시 ─────────────────────────────────────────
 def place_take_profits(b):
+    """+5% 익절 지정가. 이미 목표보다 높게 거래 중이면(갭 상승) 현재가 −1% 로 바로 팔리게 건다
+    (현재가와 너무 먼 지정가는 증권사가 거부할 수 있음 — 2026-10-27 BRAI 사례). 감시 루프에서 5분마다 다시 불러 빠진 주문을 채운다."""
     hold = b.holdings(); orders = b.open_orders()
     has_sell = {o['symbol'] for o in orders if o['side'] == 'sell'}
     for h in hold:
         if h['symbol'] in has_sell or h['sellable'] <= 0 or h['avg'] <= 0:
             continue
+        tgt = round_px(h['avg'] * (1 + TP) + 1e-9)
+        px = b.price(h['symbol'], h['excg'])
+        lim, why = tgt, '+5% 익절 주문'
+        if px and px >= tgt:
+            lim, why = round_px(px * 0.99), f'목표 이미 넘음({px / h["avg"] * 100 - 100:+.1f}%) → 현재가 −1% 매도'
         try:
-            b.order('sell', h['symbol'], h['excg'], h['sellable'], round_px(h['avg'] * (1 + TP) + 1e-9), '00', '+5% 익절 주문')
+            b.order('sell', h['symbol'], h['excg'], h['sellable'], lim, '00', why)
         except KISError as e:
-            log(f'  {h["symbol"]} 익절 주문 실패: {str(e)[:60]}')
+            msg = f'  {h["symbol"]} 익절 주문 실패: {str(e)[:80]}'
+            log(msg)
+            if os.environ.get('GITHUB_ACTIONS'):
+                print(f'::warning title=take-profit::{msg.strip()}')
     return hold
 
 
@@ -342,6 +352,7 @@ def run_monitor(b, max_minutes=350):
             log('  15:40 ET — 감시 끝 (만기 매도는 마감 전 작업이 처리)'); return
         try:
             check_stops(b)
+            place_take_profits(b)      # 빠진 익절 주문(거부·실패·갭 상승) 다시 걸기 — 이미 걸려 있으면 건너뜀
         except KISError as e:
             print('  확인 실패:', str(e)[:80])
         if (time.time() - start) / 60 > max_minutes:
