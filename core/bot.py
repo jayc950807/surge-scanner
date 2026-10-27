@@ -516,6 +516,15 @@ def run_check(b):
             out.append(f'{h["symbol"]} 평균 대비 {pct} · 팔 수 있음 {"예" if h["sellable"] > 0 else "아니오"} · 걸린 매도 {sells}건')
         return ' / '.join(out) or '없음'
     step('보유 상세(금액·수량 없음)', detail)
+    def cash_detail():
+        o2, o3 = k.present_balance()
+        usd = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
+        keys2 = ('crcy_cd', 'frcr_dncl_amt_2', 'frcr_drwg_psbl_amt_1', 'frst_bltn_exrt', 'frcr_evlu_amt2')
+        keys3 = ('tot_asst_amt', 'tot_dncl_amt', 'wdrw_psbl_tot_amt', 'frcr_evlu_tota', 'evlu_amt_smtl_amt', 'tot_frcr_cblc_smtl')
+        a = ' | '.join(', '.join(f'{k_}={x.get(k_)}' for k_ in keys2 if k_ in x) for x in (usd or o2[:2]))
+        b_ = ', '.join(f'{k_}={o3.get(k_)}' for k_ in keys3 if k_ in o3)
+        return f'USD: {a or "없음"} / 합계: {b_ or "없음"} / 주문가능(USD)={k.buying_power("SPY", "AMEX", 500)}'
+    step('현금 상세(금액 공개 — 사용자 결정)', cash_detail)
     def today_fills():
         d = now_et().strftime('%Y%m%d'); y = (now_et() - timedelta(days=4)).strftime('%Y%m%d')
         f = k.fills(y, d)

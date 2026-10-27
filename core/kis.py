@@ -157,6 +157,12 @@ class KIS:
                 pass
         return 0.0
 
+    def present_balance(self):
+        """체결기준 현재잔고(CTRP6504R) — 통화별 외화예수금 등. 반환: (output2 리스트, output3 dict)"""
+        j, _ = self._req('GET', '/uapi/overseas-stock/v1/trading/inquire-present-balance', 'CTRP6504R',
+                         {'CANO': self.cano, 'ACNT_PRDT_CD': self.prod, 'WCRC_FRCR_DVSN_CD': '02', 'NATN_CD': '840', 'TR_MKET_CD': '00', 'INQR_DVSN_CD': '00'})
+        return j.get('output2') or [], j.get('output3') or {}
+
     def open_orders(self):
         """미체결 [{odno, symbol, side(buy/sell), qty_left, price, excg}]"""
         out = []
