@@ -1,1 +1,2 @@
-strategy,ticker,date,price,scan_type
+strategy,ticker,date,scan_time,scan_type,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+3,HUHU,2026-10-27,05:22 KST,afterclose,1.0,9.3,50.0,4,2.04,-9.9,-40.8,362709,1.05,0.9

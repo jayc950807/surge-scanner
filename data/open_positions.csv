@@ -1,2 +1,2 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,overnight_pct,method,judge,scan_type
-3,BRAI,2026-10-26,2.7,,,2.84,2.43,0.05,2,PENDING,,,,,,,,0,2026-10-26,,,,preclose
+3,BRAI,2026-10-26,2.12,2026-10-26,2.12,2.23,1.91,0.05,2,OPEN,2.12,2.12,2026-10-26,2.12,2026-10-26,,,0,2026-10-27,,v6_close_entry,,preclose

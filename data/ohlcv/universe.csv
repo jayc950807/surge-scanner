@@ -3311,8 +3311,9 @@ MSCI,"MSCI, Inc.",NYSE
 MSEX,Middlesex Water Company Common Stock,NASDAQ
 MSFT,Microsoft Corporation Common Stock,NASDAQ
 MSGE,Madison Square Garden Entertainment Corp.,NYSE
+MSGK,MSG Knickerbockers Corp.,NYSE
 MSGM,Motorsport Games Inc. Class A Common Stock,NASDAQ
-MSGS,Madison Square Garden Sports Corp.,NYSE
+MSGR,MSG Rangers Corp.,NYSE
 MSGY,Masonglory Limited Class A Ordinary Shares,NASDAQ
 MSI,"Motorola Solutions, Inc. New",NYSE
 MSLE,Satellos Bioscience Inc. Common Stock,NASDAQ
@@ -3387,7 +3388,6 @@ NAMM,Namib Minerals Ordinary Shares,NASDAQ
 NAMS,NewAmsterdam Pharma Company N.V. Ordinary Shares,NASDAQ
 NANO,Forge Nano Holdings Inc. Common Stock,NASDAQ
 NAT,Nordic American Tanker,NYSE
-NATH,"Nathan's Famous, Inc. Common Stock",NASDAQ
 NATL,NCR Atleos Corporation,NYSE
 NATR,"Nature's Sunshine Products, Inc. Common Stock",NASDAQ
 NAUT,"Nautilus Biotechnology, Inc. Common Stock",NASDAQ
@@ -3805,7 +3805,7 @@ PAM,PAMPA ENERGIA S.A.,NYSE
 PAMT,PAMT CORP Common Stock,NASDAQ
 PANL,Pangaea Logistics Solutions Ltd. Common Shares,NASDAQ
 PAR,PAR Technology Corp.,NYSE
-PARA,"Banzai International, Inc. Class A Common Stock",NASDAQ
+PARA,"Parabolic Technologies, Inc. Class A Common Stock",NASDAQ
 PARK,"Park Dental Partners, Inc. Common Stock",NASDAQ
 PARR,"Par Pacific Holdings, Inc. Common Stock",NYSE
 PASG,"Passage Bio, Inc. Common Stock",NASDAQ
