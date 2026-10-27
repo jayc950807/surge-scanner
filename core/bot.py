@@ -15,7 +15,8 @@
   안전장치
     BOT_MODE        off(아무것도 안 함) | dry(주문 없이 기록만, 기본) | live(실제 주문)
     BOT_PAUSE       1 이면 새 매수 중지 (보유 종목 익절·손절·만기는 계속)
-    BOT_POS_PCT     종목당 계좌의 % (기본 10)
+    BOT_SIZING      split(기본: 그날 쓸 수 있는 현금 ÷ 그날 살 신호 수, 보유 중인 종목은 그대로) | pct(종목당 계좌의 BOT_POS_PCT %)
+    BOT_POS_PCT     pct 방식일 때 종목당 계좌의 % (기본 10)
     BOT_MAX_POS     동시 보유 최대 (기본 10)
     BOT_MAX_NEW     하루 새 매수 최대 (기본 10)
     BOT_START_EQUITY  시작 금액(USD). 계좌가 여기서 BOT_MAX_DD % 이상 줄면 새 매수 중지 (기본 15)
@@ -52,6 +53,7 @@ def env_f(name, default):
 MODE = (os.environ.get('BOT_MODE', '') or 'dry').strip().lower()
 PAUSE = (os.environ.get('BOT_PAUSE', '') or '0').strip() in ('1', 'true', 'yes', 'YES')
 POS_PCT = env_f('BOT_POS_PCT', 10) / 100
+SIZING = os.environ.get('BOT_SIZING', 'split').strip().lower()   # split: 그날 쓸 수 있는 현금을 그날 신호 수로 똑같이 나눔(사용자 지정 2026-10-27) | pct: 종목당 계좌의 POS_PCT
 MAX_POS = int(env_f('BOT_MAX_POS', 10))
 MAX_NEW = int(env_f('BOT_MAX_NEW', 10))
 START_EQ = env_f('BOT_START_EQUITY', 0)
@@ -242,19 +244,29 @@ def run_preclose(b, now=None):
     if START_EQ > 0 and equity < START_EQ * (1 - MAX_DD):
         log(f'  계좌가 시작 대비 −{MAX_DD*100:.0f}% 아래 → 새 매수 중지', f'  계좌 {equity:,.0f} < 시작 {START_EQ:,.0f} × {1-MAX_DD:.2f} → 새 매수 중지'); return
     slots = MAX_POS - (len(held) - len(exiting))
-    per = equity * POS_PCT
-    log(f'  신호 {len(sigs)}종목 · 빈자리 {max(slots, 0)}', f'  신호 {len(sigs)} · 빈자리 {slots} · 계좌 {equity:,.0f} · 종목당 {per:,.0f} · 현금 {cash:,.0f}')
-    n_new = 0
+    # 살 후보: 이미 보유·주문 중이 아닌 신호, 빈자리·하루 한도 안에서
+    cands = []
     for sym, px1530 in sigs:
-        if n_new >= min(MAX_NEW, slots):
-            log(f'  자리 없음 → {sym} 건너뜀'); continue
         if sym in held:
             log(f'  {sym} 이미 보유 → 건너뜀'); continue
+        if len(cands) >= max(0, min(MAX_NEW, slots)):
+            log(f'  자리 없음 → {sym} 건너뜀'); continue
         ex = exchange_of(sym)
         px = b.price(sym, ex) or px1530
         if not px:
             log(f'  {sym} 가격 없음 → 건너뜀'); continue
-        lim = round_px(px * (1 + LOC_CAP), up=True)
+        cands.append([sym, ex, px, round_px(px * (1 + LOC_CAP), up=True)])
+    if SIZING == 'split':
+        # 그날 쓸 수 있는 현금을 살 종목 수로 똑같이 나눔. 1주도 못 사는 종목(비싼 것부터)은 빼고 다시 나눔
+        while cands and min(cash / len(cands), cash) < max(c[3] for c in cands):
+            drop = max(cands, key=lambda c: c[3]); cands.remove(drop)
+            log(f'  {drop[0]} 나눈 금액으로 1주도 못 삼 → 건너뜀')
+        per = cash / len(cands) if cands else 0.0
+        log(f'  신호 {len(sigs)}종목 · 살 종목 {len(cands)} · 현금을 {len(cands)}등분', f'  현금 {cash:,.2f} ÷ {len(cands)} = 종목당 {per:,.2f} (계좌 {equity:,.2f})')
+    else:
+        per = equity * POS_PCT
+        log(f'  신호 {len(sigs)}종목 · 빈자리 {max(slots, 0)}', f'  신호 {len(sigs)} · 빈자리 {slots} · 계좌 {equity:,.0f} · 종목당 {per:,.0f} · 현금 {cash:,.0f}')
+    for sym, ex, px, lim in cands:
         qty = math.floor(min(per, cash) / lim)
         if qty < 1:
             log(f'  {sym} 살 돈 부족 → 건너뜀'); continue
@@ -266,7 +278,7 @@ def run_preclose(b, now=None):
                 b.order('buy', sym, ex, qty, round_px(px * 1.01, up=True), '00', '신호 매수')
             except KISError as e2:
                 log(f'  {sym} 매수 실패: {str(e2)[:60]}'); continue
-        cash -= qty * lim; n_new += 1
+        cash -= qty * lim
 
 
 # ─── 장중: 익절 주문 걸기 + 손절 감시 ─────────────────────────────────────────
@@ -275,8 +287,12 @@ def place_take_profits(b):
     (현재가와 너무 먼 지정가는 증권사가 거부할 수 있음 — 2026-10-27 BRAI 사례). 감시 루프에서 5분마다 다시 불러 빠진 주문을 채운다."""
     hold = b.holdings(); orders = b.open_orders()
     has_sell = {o['symbol'] for o in orders if o['side'] == 'sell'}
+    gh = os.environ.get('GITHUB_ACTIONS')
     for h in hold:
-        if h['symbol'] in has_sell or h['sellable'] <= 0 or h['avg'] <= 0:
+        if h['symbol'] in has_sell or h['avg'] <= 0:
+            continue
+        if h['sellable'] <= 0:
+            if gh: print(f'::notice title=take-profit::{h["symbol"]} 팔 수 있는 수량 0 → 익절 주문 못 검(다음 확인 때 다시)')
             continue
         tgt = round_px(h['avg'] * (1 + TP) + 1e-9)
         px = b.price(h['symbol'], h['excg'])
@@ -285,10 +301,11 @@ def place_take_profits(b):
             lim, why = round_px(px * 0.99), f'목표 이미 넘음({px / h["avg"] * 100 - 100:+.1f}%) → 현재가 −1% 매도'
         try:
             b.order('sell', h['symbol'], h['excg'], h['sellable'], lim, '00', why)
+            if gh: print(f'::notice title=take-profit::{h["symbol"]} 익절 매도 주문 접수 — {why}')
         except KISError as e:
             msg = f'  {h["symbol"]} 익절 주문 실패: {str(e)[:80]}'
             log(msg)
-            if os.environ.get('GITHUB_ACTIONS'):
+            if gh:
                 print(f'::warning title=take-profit::{msg.strip()}')
     return hold
 

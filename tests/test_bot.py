@@ -50,7 +50,8 @@ NOW = datetime(2026, 10, 22, 15, 46, tzinfo=ET)    # 목요일
 
 
 class TestPreclose:
-    def test_buys_loc_with_cap_and_sizing(self, live):
+    def test_buys_loc_with_cap_and_sizing(self, live, monkeypatch):
+        monkeypatch.setattr(bot, 'SIZING', 'pct')
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
                  {'strategy': '3', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
                  {'strategy': '1', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'afterclose', 'price_1530': ''}])
@@ -58,11 +59,40 @@ class TestPreclose:
         bot.run_preclose(bot.Broker(k), NOW)
         assert k.orders == [('buy', 'AAA', 460, 2.17, '34')]        # 계좌 10000 의 10% = 1000 / 한도 2.17(2.10×1.03 올림) = 460주, 마감 뒤 신호(BBB)는 안 삼
 
-    def test_loc_rejected_falls_back_to_limit(self, live):
+    def test_loc_rejected_falls_back_to_limit(self, live, monkeypatch):
+        monkeypatch.setattr(bot, 'SIZING', 'pct')
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
         k = FakeKIS(prices={'AAA': 2.00}, reject_loc=True)
         bot.run_preclose(bot.Broker(k), NOW)
         assert k.orders == [('buy', 'AAA', 485, 2.02, '00')]
+
+    def test_split_cash_equally_by_signal_count(self, live):
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
+                 {'strategy': '3', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '4.00'}])
+        k = FakeKIS(prices={'AAA': 2.00, 'BBB': 4.00}, cash=1000.0)
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.orders == [('buy', 'AAA', 242, 2.06, '34'), ('buy', 'BBB', 121, 4.12, '34')]   # 1000 ÷ 2 = 500씩 (한도가 +3%)
+
+    def test_split_one_signal_uses_all_cash(self, live):
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
+        k = FakeKIS(prices={'AAA': 2.00}, cash=72.0)
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.orders == [('buy', 'AAA', 34, 2.06, '34')]                # 72 전부 → 34주
+
+    def test_split_drops_unaffordable_and_redistributes(self, live):
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
+                 {'strategy': '1', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '50.00'}])
+        k = FakeKIS(prices={'AAA': 2.00, 'BBB': 50.00}, cash=60.0)
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.orders == [('buy', 'AAA', 29, 2.06, '34')]                # 30씩이면 BBB(51.5) 못 삼 → 빼고 AAA 에 60 전부
+
+    def test_split_uses_only_cash_keeps_holdings(self, live):
+        hold = [{'symbol': 'ZZZ', 'qty': 10, 'sellable': 10, 'avg': 5.0, 'price': 5.0, 'excg': 'NASD'}]
+        k = FakeKIS(hold=hold, fills=[{'date': '20261022', 'symbol': 'ZZZ', 'side': 'buy', 'qty': 10, 'price': 5.0}], prices={'AAA': 2.0, 'BBB': 2.0}, cash=40.0)
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
+                 {'strategy': '1', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.orders == [('buy', 'AAA', 9, 2.06, '34'), ('buy', 'BBB', 9, 2.06, '34')]      # 현금 40 ÷ 2 = 20씩, ZZZ 는 그대로
 
     def test_day2_exit_moc_and_slots(self, live):
         # AAA: 화(10-20) 종가 매수 → 수=1일, 목=2일 → 목요일 마감에 MOC. BBB: 수(10-21) 매수 → 목=1일 → 보유
