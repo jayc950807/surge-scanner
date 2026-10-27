@@ -364,9 +364,9 @@ elif view == '성적':
     sub = st.segmented_control('성적 보기', ['실제 매매', '과거부터 지금까지'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
     if sub == '실제 매매':
         L = _csv('data/live_trades.csv')
-        st.markdown('<div class="ss-sec">실제 매매 <small>새 규칙(추천 수로 나눠 전부 투자) 시작 10/27(미국)부터 · 한국투자 체결 기준</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="ss-sec">실제 매매 <small>봇 첫 매매 10/26(미국)부터 · 한국투자 체결 기준 · 10/27부터 추천 수로 나눠 전부 투자</small></div>', unsafe_allow_html=True)
         if L.empty:
-            st.markdown('<div class="card muted">아직 새 규칙으로 산 종목이 없어요. 다음 마감 전 신호부터 여기에 쌓여요.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card muted">아직 기록이 없어요. 장 마감 뒤 갱신 때 체결 내역으로 채워져요.</div>', unsafe_allow_html=True)
         else:
             for c in ('weight_pct', 'buy_px', 'sell_px', 'ret_pct', 'cur_pct'):
                 L[c] = _num(L[c])

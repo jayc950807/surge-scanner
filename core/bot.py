@@ -147,7 +147,7 @@ def live_check():
 # ─── 실제 매매 기록 (공개 저장소: 금액·수량 없이 날짜·가격·비중%·수익률만) ─────────────────────
 LIVE_FILE = 'data/live_trades.csv'
 LIVE_COLS = ['order_date', 'symbol', 'weight_pct', 'limit_px', 'status', 'buy_date', 'buy_px', 'sell_date', 'sell_px', 'ret_pct', 'result', 'cur_pct', 'updated']
-LIVE_START = os.environ.get('BOT_LIVE_START', '2026-10-27')   # 새 규칙(추천 수로 나눠 전부 투자) 시작일(미국 날짜)
+LIVE_START = os.environ.get('BOT_LIVE_START', '2026-10-26')   # 실매매 성적 시작일(미국 날짜) — 첫 실매매 BRAI(10/26 매수, 예전 10% 방식) 포함
 
 
 def live_load():
@@ -179,6 +179,12 @@ def run_record(b):
     start = min(d['order_date']).replace('-', '')
     fills = b.k.fills(start, today.strftime('%Y%m%d')) if b.has_keys else []
     hold = {h['symbol']: h for h in (b.holdings() if b.has_keys else [])}
+    eq_now = None
+    if b.has_keys and (d['weight_pct'] == '').any():       # 비중이 비어 있는 행(직접 넣은 기록)만 지금 계좌로 추정
+        try:
+            eq_now = b.cash('SPY', 'AMEX', 500) + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
+        except KISError:
+            eq_now = None
     for i, r in d.iterrows():
         if r['status'] in ('closed', 'unfilled'):
             continue
@@ -199,6 +205,9 @@ def run_record(b):
                 d.at[i, 'limit_px'] = ''
         except ValueError:
             pass
+        if r['weight_pct'] == '' and eq_now:
+            pnl = sum(f['qty'] * f['price'] for f in sells) - bpx * min(sq, bq) if sells else 0.0
+            d.at[i, 'weight_pct'] = f'{bq * bpx / max(eq_now - pnl, 1e-9) * 100:.1f}'
         if sq >= bq:
             spx = sum(f['qty'] * f['price'] for f in sells) / sq; sd = max(f['date'] for f in sells)
             ret = (spx / bpx - 1) * 100
