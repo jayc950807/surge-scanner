@@ -184,7 +184,10 @@ def run_record(b):
     eq_now = None
     if b.has_keys and (d['weight_pct'] == '').any():       # 비중이 비어 있는 행(직접 넣은 기록)만 지금 계좌로 추정
         try:
-            eq_now = b.cash('SPY', 'AMEX', 500) + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
+            o2, _ = b.k.present_balance() if hasattr(b.k, 'present_balance') else ([], {})
+            usd = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
+            c_ = float(usd[0].get('frcr_dncl_amt_2') or 0) if usd else b.cash('SPY', 'AMEX', 500)
+            eq_now = c_ + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
         except KISError:
             eq_now = None
     for i, r in d.iterrows():
@@ -228,7 +231,16 @@ def run_record(b):
     # 계좌 금액 스냅샷 (하루 한 줄, 같은 날이면 덮어씀)
     if b.has_keys:
         try:
-            cash = b.cash('SPY', 'AMEX', 500)
+            cash = None
+            try:                                   # 외화예수금(USD) — '주문가능금액'은 통합증거금이 섞여 실제보다 클 수 있음
+                o2, _ = b.k.present_balance()
+                usd = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
+                if usd:
+                    cash = float(usd[0].get('frcr_dncl_amt_2') or 0)
+            except (KISError, ValueError, AttributeError):
+                cash = None
+            if cash is None:
+                cash = b.cash('SPY', 'AMEX', 500)
             stock = sum(h['qty'] * ((b.price(h['symbol'], h['excg']) or h['price']) or h['avg']) for h in hold.values())
             a = pd.read_csv(ACCT_FILE, dtype=str) if os.path.exists(ACCT_FILE) else pd.DataFrame(columns=['date', 'equity_usd', 'cash_usd', 'stock_usd'])
             a = a[a['date'] != ts]
