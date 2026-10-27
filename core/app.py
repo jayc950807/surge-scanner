@@ -368,44 +368,55 @@ elif view == '성적':
         if L.empty:
             st.markdown('<div class="card muted">아직 기록이 없어요. 장 마감 뒤 갱신 때 체결 내역으로 채워져요.</div>', unsafe_allow_html=True)
         else:
-            for c in ('weight_pct', 'buy_px', 'sell_px', 'ret_pct', 'cur_pct'):
-                L[c] = _num(L[c])
+            for c in ('weight_pct', 'buy_px', 'sell_px', 'ret_pct', 'cur_pct', 'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd'):
+                L[c] = _num(L[c]) if c in L.columns else np.nan
             done = L[L['status'] == 'closed'].sort_values('sell_date'); hold_l = L[L['status'] == 'holding']
-            idx = 100.0; pts_ = [(pd.to_datetime(min(L['order_date'])), 100.0)]; peak = 100.0; mdd_l = 0.0
-            for d_, g in done.groupby('sell_date'):
-                idx *= 1 + (g['weight_pct'].fillna(0) / 100 * g['ret_pct'] / 100).sum()
-                peak = max(peak, idx); mdd_l = min(mdd_l, idx / peak - 1); pts_.append((pd.to_datetime(d_), idx))
-            live_ret = idx - 100
-            unreal = (hold_l['weight_pct'].fillna(0) / 100 * hold_l['cur_pct'].fillna(0)).sum() if not hold_l.empty else 0.0
+            AC = _csv('data/live_account.csv')
+            real = done['pnl_usd'].sum(); unreal = hold_l['pnl_usd'].sum() if not hold_l.empty else 0.0
+            if not AC.empty:
+                AC['equity_usd'] = _num(AC['equity_usd']); AC = AC.sort_values('date')
+                d0 = AC['date'].iloc[0]
+                start_eq = AC['equity_usd'].iloc[0] - done[done['sell_date'] <= d0]['pnl_usd'].sum() - (hold_l['pnl_usd'].sum() if False else 0)
+                now_eq = AC['equity_usd'].iloc[-1]
+                cv = pd.concat([pd.DataFrame({'date': [min(L['order_date'])], 'equity_usd': [start_eq]}), AC[['date', 'equity_usd']]], ignore_index=True)
+                cv['date'] = pd.to_datetime(cv['date'])
+            else:
+                start_eq = now_eq = np.nan; cv = pd.DataFrame()
+            chg = (now_eq / start_eq - 1) * 100 if start_eq and not np.isnan(start_eq) else np.nan
             w = (done['result'] == '익절').sum(); l_ = (done['result'] == '손절').sum(); e_ = (done['result'] == '만기').sum()
+            usd = lambda x: '—' if x is None or (isinstance(x, float) and np.isnan(x)) else (f'+${x:,.2f}' if x > 0 else (f'−${-x:,.2f}' if x < 0 else '$0.00'))
             kp = [
-                ('hero', '시작 이후 계좌 (팔고 확정된 것)', fmt_pct(live_ret), f"끝난 거래 {len(done)}건 · 100만 원이었다면 {100 * idx / 100 * 10_000:,.0f}원", color_pct(live_ret)),
-                ('', '들고 있는 것 (확정 전)', f"{len(hold_l)}건", f"계좌 기준 {fmt_pct(unreal)}" if len(hold_l) else '없음', color_pct(unreal) if len(hold_l) else C['text']),
+                ('hero', '지금 계좌 (현금 + 주식)', f"${now_eq:,.2f}" if not np.isnan(now_eq) else '—',
+                 f"시작 ${start_eq:,.2f} → {fmt_pct(chg)} · {AC['date'].iloc[-1] if not AC.empty else ''} 기준" if not np.isnan(now_eq) else '장 마감 뒤 갱신 때 채워져요', color_pct(chg)),
+                ('', '팔아서 확정된 손익', usd(real), f"끝난 거래 {len(done)}건", color_pct(real)),
+                ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{len(hold_l)}건", color_pct(unreal) if len(hold_l) else C['text']),
                 ('', '익절 · 손절 · 만기', f"{w} · {l_} · {e_}", '끝난 거래', C['text']),
                 ('', '한 번 살 때 평균', fmt_pct(done['ret_pct'].mean()) if len(done) else '—', '수수료 빼기 전', color_pct(done['ret_pct'].mean()) if len(done) else C['muted']),
-                ('', '중간에 가장 많이 줄었을 때', fmt_pct(mdd_l * 100) if len(done) else '—', '확정 기준', C['red'] if mdd_l < 0 else C['muted']),
             ]
             st.markdown('<div class="grid2">' + ''.join(
                 f'<div class="kpi {cls}"><div class="l">{l}</div><div class="v" style="color:{vc}">{v}</div><div class="d">{dsc}</div></div>'
                 for cls, l, v, dsc, vc in kp) + '</div>', unsafe_allow_html=True)
-            if len(pts_) > 1:
-                cv = pd.DataFrame(pts_, columns=['date', 'idx'])
+            if len(cv) > 1:
                 ch = alt.Chart(cv).mark_line(point=True, color=C['blue'], strokeWidth=2).encode(
                     x=alt.X('date:T', title=None, axis=alt.Axis(format='%m/%d', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
-                    y=alt.Y('idx:Q', title=None, scale=alt.Scale(zero=False), axis=alt.Axis(labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
-                    tooltip=[alt.Tooltip('date:T', title='날짜', format='%Y-%m-%d'), alt.Tooltip('idx:Q', title='계좌(시작=100)', format='.1f')])
-                rl = alt.Chart(pd.DataFrame({'y': [100]})).mark_rule(color=C['muted'], strokeDash=[4, 4]).encode(y='y:Q')
-                st.markdown('<div class="muted" style="margin-top:12px">계좌 (시작 = 100)</div>', unsafe_allow_html=True)
+                    y=alt.Y('equity_usd:Q', title=None, scale=alt.Scale(zero=False), axis=alt.Axis(format='$,.0f', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
+                    tooltip=[alt.Tooltip('date:T', title='날짜', format='%Y-%m-%d'), alt.Tooltip('equity_usd:Q', title='계좌($)', format=',.2f')])
+                rl = alt.Chart(pd.DataFrame({'y': [start_eq]})).mark_rule(color=C['muted'], strokeDash=[4, 4]).encode(y='y:Q')
+                st.markdown('<div class="muted" style="margin-top:12px">계좌 금액 (달러)</div>', unsafe_allow_html=True)
                 st.altair_chart((rl + ch).properties(height=180, background=C['surface']).configure_view(stroke=None), use_container_width=True)
             rows_ = ''
             stt = {'closed': '', 'holding': '보유 중', 'ordered': '주문', 'unfilled': '안 사짐'}
             for r in L.sort_values('order_date', ascending=False).itertuples():
                 if r.status == 'closed':
                     right = f'<span style="font-weight:700;color:{color_pct(r.ret_pct)}">{fmt_pct(r.ret_pct)}</span>'
-                    sub_ = f'{pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED"))} <span class="muted">${r.buy_px:,.2f} → ${r.sell_px:,.2f} · {r.buy_date} → {r.sell_date}</span>'
+                    pnl_t = '' if np.isnan(r.pnl_usd) else (f' · <b style="color:{color_pct(r.pnl_usd)}">{"+" if r.pnl_usd >= 0 else "−"}${abs(r.pnl_usd):,.2f}</b>')
+                    q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주 · '
+                    sub_ = f'{pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED"))} <span class="muted">{q_t}${r.buy_px:,.2f} → ${r.sell_px:,.2f} · {r.buy_date} → {r.sell_date}</span>{pnl_t}'
                 elif r.status == 'holding':
                     right = f'<span style="font-weight:700;color:{color_pct(r.cur_pct)}">{fmt_pct(r.cur_pct)}</span>'
-                    sub_ = f'{pill("OPEN")} <span class="muted">${r.buy_px:,.2f}에 삼 · {r.buy_date}</span>'
+                    q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주 · '
+                    pnl_t = '' if np.isnan(r.pnl_usd) else (f' · <b style="color:{color_pct(r.pnl_usd)}">{"+" if r.pnl_usd >= 0 else "−"}${abs(r.pnl_usd):,.2f}</b>')
+                    sub_ = f'{pill("OPEN")} <span class="muted">{q_t}${r.buy_px:,.2f}에 삼 · {r.buy_date}</span>{pnl_t}'
                 else:
                     right = f'<span class="muted">{stt.get(r.status, r.status)}</span>'; sub_ = f'<span class="muted">{r.order_date} 마감 주문</span>'
                 wtxt = f' · 계좌의 {r.weight_pct:.0f}%' if not np.isnan(r.weight_pct) else ''

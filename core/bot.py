@@ -144,9 +144,11 @@ def live_check():
     return True, f'실전 실적 {len(r)}건 평균 {r.mean():+.2f}%' if len(r) else ''
 
 
-# ─── 실제 매매 기록 (공개 저장소: 금액·수량 없이 날짜·가격·비중%·수익률만) ─────────────────────
+# ─── 실제 매매 기록 (2026-10-27 사용자 결정: 금액·수량도 공개 저장소에 기록. 계좌번호·키는 절대 쓰지 않음) ──────
 LIVE_FILE = 'data/live_trades.csv'
-LIVE_COLS = ['order_date', 'symbol', 'weight_pct', 'limit_px', 'status', 'buy_date', 'buy_px', 'sell_date', 'sell_px', 'ret_pct', 'result', 'cur_pct', 'updated']
+LIVE_COLS = ['order_date', 'symbol', 'weight_pct', 'limit_px', 'status', 'buy_date', 'buy_px', 'sell_date', 'sell_px', 'ret_pct', 'result', 'cur_pct', 'updated',
+             'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd']
+ACCT_FILE = 'data/live_account.csv'   # date, equity_usd, cash_usd, stock_usd (하루 한 줄)
 LIVE_START = os.environ.get('BOT_LIVE_START', '2026-10-26')   # 실매매 성적 시작일(미국 날짜) — 첫 실매매 BRAI(10/26 매수, 예전 10% 방식) 포함
 
 
@@ -186,7 +188,7 @@ def run_record(b):
         except KISError:
             eq_now = None
     for i, r in d.iterrows():
-        if r['status'] in ('closed', 'unfilled'):
+        if r['status'] == 'unfilled' or (r['status'] == 'closed' and r['qty'] != ''):
             continue
         od = r['order_date'].replace('-', '')
         buys = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'buy' and f['date'] >= od]
@@ -198,6 +200,7 @@ def run_record(b):
         sells = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'sell' and f['date'] >= bd]
         sq = sum(f['qty'] for f in sells)
         d.at[i, 'buy_date'] = f'{bd[:4]}-{bd[4:6]}-{bd[6:]}'; d.at[i, 'buy_px'] = f'{bpx:.4f}'
+        d.at[i, 'qty'] = str(bq); d.at[i, 'buy_usd'] = f'{bq * bpx:.2f}'
         try:
             lim = float(r['limit_px'] or 0); w = float(r['weight_pct'] or 0)
             if lim > 0 and w > 0:
@@ -214,12 +217,25 @@ def run_record(b):
             d.at[i, 'sell_date'] = f'{sd[:4]}-{sd[4:6]}-{sd[6:]}'; d.at[i, 'sell_px'] = f'{spx:.4f}'; d.at[i, 'ret_pct'] = f'{ret:.2f}'
             d.at[i, 'result'] = '익절' if ret >= TP * 100 - 0.5 else ('손절' if ret <= SL * 100 + 1 else '만기')
             d.at[i, 'status'] = 'closed'; d.at[i, 'cur_pct'] = ''
+            d.at[i, 'sell_usd'] = f'{sq * spx:.2f}'; d.at[i, 'pnl_usd'] = f'{sq * spx - bq * bpx:.2f}'; d.at[i, 'value_usd'] = ''
         else:
             h = hold.get(r['symbol'])
             px = (b.price(r['symbol'], h['excg']) or h['price']) if h else None
             d.at[i, 'status'] = 'holding'; d.at[i, 'cur_pct'] = f'{(px / bpx - 1) * 100:.2f}' if px else ''
+            d.at[i, 'value_usd'] = f'{(bq - sq) * px:.2f}' if px else ''; d.at[i, 'pnl_usd'] = f'{(bq - sq) * (px - bpx):.2f}' if px else ''
         d.at[i, 'updated'] = ts
     d.to_csv(LIVE_FILE, index=False)
+    # 계좌 금액 스냅샷 (하루 한 줄, 같은 날이면 덮어씀)
+    if b.has_keys:
+        try:
+            cash = b.cash('SPY', 'AMEX', 500)
+            stock = sum(h['qty'] * ((b.price(h['symbol'], h['excg']) or h['price']) or h['avg']) for h in hold.values())
+            a = pd.read_csv(ACCT_FILE, dtype=str) if os.path.exists(ACCT_FILE) else pd.DataFrame(columns=['date', 'equity_usd', 'cash_usd', 'stock_usd'])
+            a = a[a['date'] != ts]
+            a = pd.concat([a, pd.DataFrame([{'date': ts, 'equity_usd': f'{cash + stock:.2f}', 'cash_usd': f'{cash:.2f}', 'stock_usd': f'{stock:.2f}'}])], ignore_index=True)
+            a.sort_values('date').to_csv(ACCT_FILE, index=False)
+        except KISError as e:
+            log(f'  계좌 금액 조회 실패: {str(e)[:60]}')
     n = d['status'].value_counts().to_dict()
     log(f'  실매매 기록 갱신: 끝 {n.get("closed", 0)} · 보유 {n.get("holding", 0)} · 주문 {n.get("ordered", 0)} · 미체결 {n.get("unfilled", 0)}')
 
