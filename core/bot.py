@@ -184,10 +184,7 @@ def run_record(b):
     eq_now = None
     if b.has_keys and (d['weight_pct'] == '').any():       # 비중이 비어 있는 행(직접 넣은 기록)만 지금 계좌로 추정
         try:
-            o2, _ = b.k.present_balance() if hasattr(b.k, 'present_balance') else ([], {})
-            usd = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
-            c_ = float(usd[0].get('frcr_dncl_amt_2') or 0) if usd else b.cash('SPY', 'AMEX', 500)
-            eq_now = c_ + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
+            eq_now = b.cash('SPY', 'AMEX', 500) + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
         except KISError:
             eq_now = None
     for i, r in d.iterrows():
@@ -231,16 +228,9 @@ def run_record(b):
     # 계좌 금액 스냅샷 (하루 한 줄, 같은 날이면 덮어씀)
     if b.has_keys:
         try:
-            cash = None
-            try:                                   # 외화예수금(USD) — '주문가능금액'은 통합증거금이 섞여 실제보다 클 수 있음
-                o2, _ = b.k.present_balance()
-                usd = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
-                if usd:
-                    cash = float(usd[0].get('frcr_dncl_amt_2') or 0)
-            except (KISError, ValueError, AttributeError):
-                cash = None
-            if cash is None:
-                cash = b.cash('SPY', 'AMEX', 500)
+            # 현금 = 주문가능금액. 외화예수금(frcr_dncl_amt_2)은 결제(T+1) 전 매수·매도가 반영되지 않아
+            # 산 날에는 현금과 주식이 이중으로 잡힘(2026-10-28 UPC: 76 + 83 = 159 로 잘못 표시). 주문가능금액은 바로 반영되고 수수료도 빠짐.
+            cash = b.cash('SPY', 'AMEX', 500)
             stock = sum(h['qty'] * ((b.price(h['symbol'], h['excg']) or h['price']) or h['avg']) for h in hold.values())
             a = pd.read_csv(ACCT_FILE, dtype=str) if os.path.exists(ACCT_FILE) else pd.DataFrame(columns=['date', 'equity_usd', 'cash_usd', 'stock_usd'])
             a = a[a['date'] != ts]
