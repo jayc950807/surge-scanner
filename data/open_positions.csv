@@ -1,4 +1,4 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,overnight_pct,method,judge,scan_type
-3,UPC,2026-10-28,1.94,,,2.04,1.75,0.05,2,PENDING,,,,,,,,0,2026-10-28,,,,preclose
+3,UPC,2026-10-28,1.93,2026-10-28,1.93,2.03,1.74,0.05,2,OPEN,1.93,1.93,2026-10-28,1.93,2026-10-28,,,0,2026-10-29,,v6_close_entry,,preclose
 3,BXBL,2026-10-29,1.96,,,2.06,1.76,0.05,2,PENDING,,,,,,,,0,2026-10-29,,,,preclose
 3,CRVO,2026-10-29,1.71,,,1.8,1.54,0.05,2,PENDING,,,,,,,,0,2026-10-29,,,,preclose

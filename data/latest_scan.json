@@ -1,12 +1,12 @@
 {
   "scan_date": "2026-10-29",
-  "scan_time": "2026-10-30 04:46:26 KST",
+  "scan_time": "2026-10-30 05:22:41 KST",
   "strategy_1_count": 0,
-  "strategy_3_count": 2,
+  "strategy_3_count": 3,
   "preclose_count": 2,
-  "total_count": 2,
+  "total_count": 3,
   "dq_warnings": 0,
   "version": "v6",
   "data_source": "alpaca",
-  "mode": "preclose"
+  "mode": "afterclose"
 }
