@@ -368,7 +368,7 @@ elif view == '성적':
         if L.empty:
             st.markdown('<div class="card muted">아직 기록이 없어요. 장 마감 뒤 갱신 때 체결 내역으로 채워져요.</div>', unsafe_allow_html=True)
         else:
-            for c in ('weight_pct', 'buy_px', 'sell_px', 'ret_pct', 'cur_pct', 'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd'):
+            for c in ('weight_pct', 'buy_px', 'sell_px', 'ret_pct', 'cur_pct', 'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd', 'buy_fx', 'sell_fx'):
                 L[c] = _num(L[c]) if c in L.columns else np.nan
             done = L[L['status'] == 'closed'].sort_values('sell_date'); hold_l = L[L['status'] == 'holding']
             AC = _csv('data/live_account.csv')
@@ -385,11 +385,21 @@ elif view == '성적':
             chg = (now_eq / start_eq - 1) * 100 if start_eq and not np.isnan(start_eq) else np.nan
             w = (done['result'] == '익절').sum(); l_ = (done['result'] == '손절').sum(); e_ = (done['result'] == '만기').sum()
             usd = lambda x: '—' if x is None or (isinstance(x, float) and np.isnan(x)) else (f'+${x:,.2f}' if x > 0 else (f'−${-x:,.2f}' if x < 0 else '$0.00'))
+            fx_now = np.nan
+            if not AC.empty and 'usdkrw' in AC.columns:
+                _f = _num(AC['usdkrw']).dropna()
+                fx_now = float(_f.iloc[-1]) if len(_f) else np.nan
+            def won(x, fx=None, sign=False):
+                fx = fx if fx is not None and not (isinstance(fx, float) and np.isnan(fx)) else fx_now
+                if x is None or np.isnan(x) or np.isnan(fx):
+                    return ''
+                v = x * fx
+                return (('+' if v > 0 else ('−' if v < 0 else '')) if sign else '') + f'{abs(v) if sign else v:,.0f}원'
             kp = [
-                ('hero', '지금 계좌 (현금 + 주식)', f"${now_eq:,.2f}" if not np.isnan(now_eq) else '—',
-                 f"시작 ${start_eq:,.2f} → {fmt_pct(chg)} · {AC['date'].iloc[-1] if not AC.empty else ''} 기준" if not np.isnan(now_eq) else '장 마감 뒤 갱신 때 채워져요', color_pct(chg)),
-                ('', '팔아서 확정된 손익', usd(real), f"끝난 거래 {len(done)}건", color_pct(real)),
-                ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{len(hold_l)}건", color_pct(unreal) if len(hold_l) else C['text']),
+                ('hero', '지금 계좌 (현금 + 주식)', (f"${now_eq:,.2f} · {won(now_eq)}" if won(now_eq) else f"${now_eq:,.2f}") if not np.isnan(now_eq) else '—',
+                 f"시작 ${start_eq:,.2f}({won(start_eq)}) → {fmt_pct(chg)} · {AC['date'].iloc[-1] if not AC.empty else ''} 기준 · 환율 {fx_now:,.0f}원" if not np.isnan(now_eq) else '장 마감 뒤 갱신 때 채워져요', color_pct(chg)),
+                ('', '팔아서 확정된 손익', usd(real), f"{won(real, sign=True)} · 끝난 거래 {len(done)}건", color_pct(real)),
+                ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{won(unreal, sign=True)} · {len(hold_l)}건" if len(hold_l) else '0건', color_pct(unreal) if len(hold_l) else C['text']),
                 ('', '익절 · 손절 · 만기', f"{w} · {l_} · {e_}", '끝난 거래', C['text']),
                 ('', '한 번 살 때 평균', fmt_pct(done['ret_pct'].mean()) if len(done) else '—', '수수료 빼기 전', color_pct(done['ret_pct'].mean()) if len(done) else C['muted']),
             ]
@@ -407,21 +417,24 @@ elif view == '성적':
             rows_ = ''
             stt = {'closed': '', 'holding': '보유 중', 'ordered': '주문', 'unfilled': '안 사짐'}
             for r in L.sort_values('order_date', ascending=False).itertuples():
+                q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주'
+                bfx = r.buy_fx if not np.isnan(r.buy_fx) else None; sfx = r.sell_fx if not np.isnan(r.sell_fx) else None
                 if r.status == 'closed':
                     right = f'<span style="font-weight:700;color:{color_pct(r.ret_pct)}">{fmt_pct(r.ret_pct)}</span>'
-                    pnl_t = '' if np.isnan(r.pnl_usd) else (f' · <b style="color:{color_pct(r.pnl_usd)}">{"+" if r.pnl_usd >= 0 else "−"}${abs(r.pnl_usd):,.2f}</b>')
-                    q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주 · '
-                    sub_ = f'{pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED"))} <span class="muted">{q_t}${r.buy_px:,.2f} → ${r.sell_px:,.2f} · {r.buy_date} → {r.sell_date}</span>{pnl_t}'
+                    l2 = f'{pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED"))} <span class="muted">{r.buy_date} 삼 → {r.sell_date} 팖 · {q_t} · 1주 ${r.buy_px:,.2f} → ${r.sell_px:,.2f}</span>'
+                    l3 = (f'<span>산 금액 <b>${r.buy_usd:,.2f}</b> <span class="muted">({won(r.buy_usd, bfx)})</span> → 판 금액 <b>${r.sell_usd:,.2f}</b> <span class="muted">({won(r.sell_usd, sfx)})</span></span>'
+                          f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:400">({won(r.pnl_usd, sfx, sign=True)})</span></span>') if not np.isnan(r.buy_usd) else ''
                 elif r.status == 'holding':
                     right = f'<span style="font-weight:700;color:{color_pct(r.cur_pct)}">{fmt_pct(r.cur_pct)}</span>'
-                    q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주 · '
-                    pnl_t = '' if np.isnan(r.pnl_usd) else (f' · <b style="color:{color_pct(r.pnl_usd)}">{"+" if r.pnl_usd >= 0 else "−"}${abs(r.pnl_usd):,.2f}</b>')
-                    sub_ = f'{pill("OPEN")} <span class="muted">{q_t}${r.buy_px:,.2f}에 삼 · {r.buy_date}</span>{pnl_t}'
+                    l2 = f'{pill("OPEN")} <span class="muted">{r.buy_date} 삼 · {q_t} · 1주 ${r.buy_px:,.2f}</span>'
+                    l3 = (f'<span>산 금액 <b>${r.buy_usd:,.2f}</b> <span class="muted">({won(r.buy_usd, bfx)})</span> → 지금 <b>${r.value_usd:,.2f}</b> <span class="muted">({won(r.value_usd)})</span></span>'
+                          f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:400">({won(r.pnl_usd, sign=True)})</span></span>') if not np.isnan(r.buy_usd) and not np.isnan(r.value_usd) else ''
                 else:
-                    right = f'<span class="muted">{stt.get(r.status, r.status)}</span>'; sub_ = f'<span class="muted">{r.order_date} 마감 주문</span>'
+                    right = f'<span class="muted">{stt.get(r.status, r.status)}</span>'; l2 = f'<span class="muted">{r.order_date} 마감 주문</span>'; l3 = ''
                 wtxt = f' · 계좌의 {r.weight_pct:.0f}%' if not np.isnan(r.weight_pct) else ''
                 rows_ += (f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:1.05rem">{r.symbol}</span>'
-                          f'<span class="muted">{wtxt}</span></span>{right}</div><div class="row" style="margin-top:4px"><span>{sub_}</span></div></div>')
+                          f'<span class="muted">{wtxt}</span></span>{right}</div><div class="row" style="margin-top:4px"><span>{l2}</span></div>'
+                          + (f'<div class="row" style="margin-top:4px">{l3}</div>' if l3 else '') + '</div>')
             st.markdown(rows_, unsafe_allow_html=True)
             st.markdown('<div class="muted">매일 장 마감 뒤(한국 05:20 무렵) 한국투자 체결 내역으로 갱신돼요. 금액·수량은 공개 저장소라 기록하지 않고, 계좌 대비 비중(%)과 수익률만 보여요. '
                         '직접 판 거래도 체결 기준으로 들어가요. 수익률은 증권사 수수료 빼기 전이에요.</div>', unsafe_allow_html=True)

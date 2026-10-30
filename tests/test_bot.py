@@ -208,7 +208,7 @@ class TestLiveRecord:
         d = pd.read_csv('data/live_trades.csv', dtype=str)
         assert d.status[0] == 'closed' and d.result[0] == '익절' and abs(float(d.ret_pct[0]) - 5.0) < 0.01
         assert d.qty[0] == '48' and abs(float(d.pnl_usd[0]) - 4.8) < 0.01   # 2026-10-27 사용자 결정: 금액·수량 공개 기록
-        a = pd.read_csv('data/live_account.csv'); assert list(a.columns) == ['date', 'equity_usd', 'cash_usd', 'stock_usd'] and len(a) == 1
+        a = pd.read_csv('data/live_account.csv'); assert list(a.columns) == ['date', 'equity_usd', 'cash_usd', 'stock_usd', 'usdkrw'] and len(a) == 1
 
     def test_unfilled_and_holding(self, live, monkeypatch):
         bot.live_record_order('2026-10-22', 'AAA', 50.0, 2.06); bot.live_record_order('2026-10-22', 'BBB', 50.0, 4.12)

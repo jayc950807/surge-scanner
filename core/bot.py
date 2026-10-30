@@ -147,8 +147,8 @@ def live_check():
 # ─── 실제 매매 기록 (2026-10-27 사용자 결정: 금액·수량도 공개 저장소에 기록. 계좌번호·키는 절대 쓰지 않음) ──────
 LIVE_FILE = 'data/live_trades.csv'
 LIVE_COLS = ['order_date', 'symbol', 'weight_pct', 'limit_px', 'status', 'buy_date', 'buy_px', 'sell_date', 'sell_px', 'ret_pct', 'result', 'cur_pct', 'updated',
-             'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd']
-ACCT_FILE = 'data/live_account.csv'   # date, equity_usd, cash_usd, stock_usd (하루 한 줄)
+             'qty', 'buy_usd', 'sell_usd', 'pnl_usd', 'value_usd', 'buy_fx', 'sell_fx']
+ACCT_FILE = 'data/live_account.csv'   # date, equity_usd, cash_usd, stock_usd, usdkrw (하루 한 줄)
 LIVE_START = os.environ.get('BOT_LIVE_START', '2026-10-26')   # 실매매 성적 시작일(미국 날짜) — 첫 실매매 BRAI(10/26 매수, 예전 10% 방식) 포함
 
 
@@ -181,6 +181,14 @@ def run_record(b):
     start = min(d['order_date']).replace('-', '')
     fills = b.k.fills(start, today.strftime('%Y%m%d')) if b.has_keys else []
     hold = {h['symbol']: h for h in (b.holdings() if b.has_keys else [])}
+    fx = ''
+    try:                                                    # 원화 표시용 환율(한국투자 고시 환율)
+        o2, _ = b.k.present_balance() if b.has_keys else ([], {})
+        u = [x for x in o2 if (x.get('crcy_cd') or '') == 'USD']
+        if u and float(u[0].get('frst_bltn_exrt') or 0) > 0:
+            fx = f"{float(u[0]['frst_bltn_exrt']):.2f}"
+    except (KISError, ValueError, AttributeError):
+        fx = ''
     eq_now = None
     if b.has_keys and (d['weight_pct'] == '').any():       # 비중이 비어 있는 행(직접 넣은 기록)만 지금 계좌로 추정
         try:
@@ -188,7 +196,11 @@ def run_record(b):
         except KISError:
             eq_now = None
     for i, r in d.iterrows():
-        if r['status'] == 'unfilled' or (r['status'] == 'closed' and r['qty'] != ''):
+        if r['status'] == 'closed' and r['qty'] != '':
+            if fx and r['buy_fx'] == '': d.at[i, 'buy_fx'] = fx          # 예전 기록은 지금 환율로 채움(근사)
+            if fx and r['sell_fx'] == '': d.at[i, 'sell_fx'] = fx
+            continue
+        if r['status'] == 'unfilled':
             continue
         od = r['order_date'].replace('-', '')
         buys = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'buy' and f['date'] >= od]
@@ -201,6 +213,7 @@ def run_record(b):
         sq = sum(f['qty'] for f in sells)
         d.at[i, 'buy_date'] = f'{bd[:4]}-{bd[4:6]}-{bd[6:]}'; d.at[i, 'buy_px'] = f'{bpx:.4f}'
         d.at[i, 'qty'] = str(bq); d.at[i, 'buy_usd'] = f'{bq * bpx:.2f}'
+        if fx and r['buy_fx'] == '': d.at[i, 'buy_fx'] = fx
         try:
             lim = float(r['limit_px'] or 0); w = float(r['weight_pct'] or 0)
             if lim > 0 and w > 0:
@@ -218,6 +231,7 @@ def run_record(b):
             d.at[i, 'result'] = '익절' if ret >= TP * 100 - 0.5 else ('손절' if ret <= SL * 100 + 1 else '만기')
             d.at[i, 'status'] = 'closed'; d.at[i, 'cur_pct'] = ''
             d.at[i, 'sell_usd'] = f'{sq * spx:.2f}'; d.at[i, 'pnl_usd'] = f'{sq * spx - bq * bpx:.2f}'; d.at[i, 'value_usd'] = ''
+            if fx and r['sell_fx'] == '': d.at[i, 'sell_fx'] = fx
         else:
             h = hold.get(r['symbol'])
             px = (b.price(r['symbol'], h['excg']) or h['price']) if h else None
@@ -232,9 +246,10 @@ def run_record(b):
             # 산 날에는 현금과 주식이 이중으로 잡힘(2026-10-28 UPC: 76 + 83 = 159 로 잘못 표시). 주문가능금액은 바로 반영되고 수수료도 빠짐.
             cash = b.cash('SPY', 'AMEX', 500)
             stock = sum(h['qty'] * ((b.price(h['symbol'], h['excg']) or h['price']) or h['avg']) for h in hold.values())
-            a = pd.read_csv(ACCT_FILE, dtype=str) if os.path.exists(ACCT_FILE) else pd.DataFrame(columns=['date', 'equity_usd', 'cash_usd', 'stock_usd'])
+            a = pd.read_csv(ACCT_FILE, dtype=str, keep_default_na=False) if os.path.exists(ACCT_FILE) else pd.DataFrame(columns=['date', 'equity_usd', 'cash_usd', 'stock_usd', 'usdkrw'])
+            if 'usdkrw' not in a.columns: a['usdkrw'] = fx
             a = a[a['date'] != ts]
-            a = pd.concat([a, pd.DataFrame([{'date': ts, 'equity_usd': f'{cash + stock:.2f}', 'cash_usd': f'{cash:.2f}', 'stock_usd': f'{stock:.2f}'}])], ignore_index=True)
+            a = pd.concat([a, pd.DataFrame([{'date': ts, 'equity_usd': f'{cash + stock:.2f}', 'cash_usd': f'{cash:.2f}', 'stock_usd': f'{stock:.2f}', 'usdkrw': fx}])], ignore_index=True)
             a.sort_values('date').to_csv(ACCT_FILE, index=False)
         except KISError as e:
             log(f'  계좌 금액 조회 실패: {str(e)[:60]}')
