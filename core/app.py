@@ -85,6 +85,14 @@ h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .todo {{ background:{C['surface']}; border-left:4px solid {C['blue']}; padding:10px 14px; border-radius:6px; color:{C['text']}; font-size:0.92rem; line-height:1.55; }}
 .todo b {{ color:{C['text']}; }}
 .muted {{ color:{C['muted']}; font-size:0.85rem; }}
+.tt {{ width:100%; border-collapse:collapse; margin-top:8px; font-size:0.92rem; }}
+.tt th {{ color:{C['muted']}; font-weight:500; font-size:0.78rem; text-align:right; padding:2px 0 4px; }}
+.tt th:first-child, .tt td:first-child {{ text-align:left; color:{C['sub']}; width:22%; }}
+.tt td {{ text-align:right; padding:5px 0; border-top:1px solid {C['line']}; font-variant-numeric:tabular-nums; }}
+.tt td small {{ display:block; color:{C['muted']}; font-size:0.78rem; }}
+.tt, .tt tr, .tt th, .tt td {{ border-left:none !important; border-right:none !important; border-bottom:none !important; background:transparent !important; }}
+.tt th {{ border-top:none !important; }}
+.tfoot {{ display:flex; justify-content:space-between; align-items:baseline; margin-top:8px; padding-top:8px; border-top:1px solid {C['line']}; }}
 div[data-testid="stExpander"] {{ border:1px solid {C['line']}; border-radius:10px; background:{C['surface']}; }}
 div[data-testid="stSegmentedControl"] button, div[data-testid="stSegmentedControl"] label {{ font-weight:700; }}
 </style>
@@ -416,25 +424,35 @@ elif view == '성적':
                 st.altair_chart((rl + ch).properties(height=180, background=C['surface']).configure_view(stroke=None), use_container_width=True)
             rows_ = ''
             stt = {'closed': '', 'holding': '보유 중', 'ordered': '주문', 'unfilled': '안 사짐'}
+            def _d(x):
+                return x[5:].replace('-', '/') if isinstance(x, str) and len(x) >= 10 else ''
             for r in L.sort_values('order_date', ascending=False).itertuples():
-                q_t = '' if np.isnan(r.qty) else f'{r.qty:.0f}주'
                 bfx = r.buy_fx if not np.isnan(r.buy_fx) else None; sfx = r.sell_fx if not np.isnan(r.sell_fx) else None
-                if r.status == 'closed':
-                    right = f'<span style="font-weight:700;color:{color_pct(r.ret_pct)}">{fmt_pct(r.ret_pct)}</span>'
-                    l2 = f'{pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED"))} <span class="muted">{r.buy_date} 삼 → {r.sell_date} 팖 · {q_t} · 1주 ${r.buy_px:,.2f} → ${r.sell_px:,.2f}</span>'
-                    l3 = (f'<span>산 금액 <b>${r.buy_usd:,.2f}</b> <span class="muted">({won(r.buy_usd, bfx)})</span> → 판 금액 <b>${r.sell_usd:,.2f}</b> <span class="muted">({won(r.sell_usd, sfx)})</span></span>'
-                          f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:400">({won(r.pnl_usd, sfx, sign=True)})</span></span>') if not np.isnan(r.buy_usd) else ''
-                elif r.status == 'holding':
-                    right = f'<span style="font-weight:700;color:{color_pct(r.cur_pct)}">{fmt_pct(r.cur_pct)}</span>'
-                    l2 = f'{pill("OPEN")} <span class="muted">{r.buy_date} 삼 · {q_t} · 1주 ${r.buy_px:,.2f}</span>'
-                    l3 = (f'<span>산 금액 <b>${r.buy_usd:,.2f}</b> <span class="muted">({won(r.buy_usd, bfx)})</span> → 지금 <b>${r.value_usd:,.2f}</b> <span class="muted">({won(r.value_usd)})</span></span>'
-                          f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:400">({won(r.pnl_usd, sign=True)})</span></span>') if not np.isnan(r.buy_usd) and not np.isnan(r.value_usd) else ''
+                qty = '' if np.isnan(r.qty) else f'{r.qty:.0f}주'
+                wtxt = f'계좌의 {r.weight_pct:.0f}%' if not np.isnan(r.weight_pct) else ''
+                if r.status in ('closed', 'holding') and not np.isnan(r.buy_usd):
+                    closed_ = r.status == 'closed'
+                    tag = pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED")) if closed_ else pill("OPEN")
+                    pct = r.ret_pct if closed_ else r.cur_pct
+                    now_amt = r.sell_usd if closed_ else r.value_usd
+                    now_px = r.sell_px if closed_ else (r.value_usd / r.qty if r.qty and not np.isnan(r.value_usd) else np.nan)
+                    now_fx = sfx if closed_ else None
+                    when = f'{_d(r.buy_date)} 삼 → {_d(r.sell_date)} 팖' if closed_ else f'{_d(r.buy_date)} 삼 · 보유 중'
+                    lab2 = '판 때' if closed_ else '지금'
+                    px_s = lambda v: '—' if v is None or np.isnan(v) else f'${v:,.2f}'
+                    amt_s = lambda v, fx_: '—' if v is None or np.isnan(v) else f'${v:,.2f}<small>{won(v, fx_)}</small>'
+                    rows_ += (f'<div class="card" style="padding:12px 14px">'
+                              f'<div class="row"><span><span class="tk" style="font-size:1.1rem">{r.symbol}</span> {tag}</span>'
+                              f'<span style="font-weight:700;font-size:1.1rem;color:{color_pct(pct)}">{fmt_pct(pct)}</span></div>'
+                              f'<div class="muted" style="margin-top:2px">{when} · {qty} · {wtxt}</div>'
+                              f'<table class="tt"><tr><th></th><th>1주 가격(평단)</th><th>총 금액</th></tr>'
+                              f'<tr><td>산 때</td><td>{px_s(r.buy_px)}</td><td>{amt_s(r.buy_usd, bfx)}</td></tr>'
+                              f'<tr><td>{lab2}</td><td>{px_s(now_px)}</td><td>{amt_s(now_amt, now_fx)}</td></tr></table>'
+                              f'<div class="tfoot"><span class="muted">{"손익(확정)" if closed_ else "손익(확정 전)"}</span>'
+                              f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:500">({won(r.pnl_usd, now_fx, sign=True)})</span></span></div></div>')
                 else:
-                    right = f'<span class="muted">{stt.get(r.status, r.status)}</span>'; l2 = f'<span class="muted">{r.order_date} 마감 주문</span>'; l3 = ''
-                wtxt = f' · 계좌의 {r.weight_pct:.0f}%' if not np.isnan(r.weight_pct) else ''
-                rows_ += (f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:1.05rem">{r.symbol}</span>'
-                          f'<span class="muted">{wtxt}</span></span>{right}</div><div class="row" style="margin-top:4px"><span>{l2}</span></div>'
-                          + (f'<div class="row" style="margin-top:4px">{l3}</div>' if l3 else '') + '</div>')
+                    rows_ += (f'<div class="card" style="padding:12px 14px"><div class="row"><span><span class="tk" style="font-size:1.1rem">{r.symbol}</span></span>'
+                              f'<span class="muted">{stt.get(r.status, r.status)}</span></div><div class="muted" style="margin-top:2px">{_d(r.order_date)} 마감 주문 · {wtxt}</div></div>')
             st.markdown(rows_, unsafe_allow_html=True)
             st.markdown('<div class="muted">매일 장 마감 뒤(한국 05:20 무렵) 한국투자 체결 내역으로 갱신돼요. 금액·수량은 공개 저장소라 기록하지 않고, 계좌 대비 비중(%)과 수익률만 보여요. '
                         '직접 판 거래도 체결 기준으로 들어가요. 수익률은 증권사 수수료 빼기 전이에요.</div>', unsafe_allow_html=True)
