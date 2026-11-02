@@ -330,16 +330,23 @@ def run_preclose(b, now=None):
     exiting = set()
     for h in hold:
         d0 = entries.get(h['symbol'])
-        if d0 is None or trading_days_after(d0, today) < MAX_HOLD or h['sellable'] <= 0:
+        # 걸어 둔 익절 주문이 있으면 증권사가 '팔 수 있는 수량'을 0으로 보여 줌 → 보유 수량(qty)으로 판단하고, 먼저 취소한 뒤 판다
+        # (2026-11-02 CRVO: 익절 주문 때문에 sellable=0 이라 만기 매도를 건너뛴 버그)
+        if d0 is None or trading_days_after(d0, today) < MAX_HOLD or h['qty'] <= 0:
             continue
         exiting.add(h['symbol'])
-        b.cancel_sells(h['symbol'], orders); time.sleep(1 if b.live else 0)
+        b.cancel_sells(h['symbol'], orders); time.sleep(2 if b.live else 0)
+        qty = h['qty']
         try:
-            b.order('sell', h['symbol'], h['excg'], h['sellable'], 0, '33', '2일 만기')
+            b.order('sell', h['symbol'], h['excg'], qty, 0, '33', '2일 만기' if trading_days_after(d0, today) == MAX_HOLD else '만기 지남')
         except KISError as e:
             px = b.price(h['symbol'], h['excg']) or h['price']
             log(f'  MOC 거부({str(e)[:40]}) → 지정가로')
-            b.order('sell', h['symbol'], h['excg'], h['sellable'], round_px(px * 0.97), '00', '2일 만기')
+            try:
+                b.order('sell', h['symbol'], h['excg'], qty, round_px(px * 0.97), '00', '2일 만기')
+            except KISError as e2:
+                log(f'  {h["symbol"]} 만기 매도 실패: {str(e2)[:60]}')
+                if os.environ.get('GITHUB_ACTIONS'): print(f'::warning title=expiry::{h["symbol"]} 만기 매도 실패: {str(e2)[:80]}')
 
     # 2) 새 신호 매수
     sigs = todays_signals(ts)

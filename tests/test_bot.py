@@ -109,6 +109,14 @@ class TestPreclose:
         assert not any(o[1] == 'BBB' and o[0] == 'sell' for o in k.orders)   # 1일째 → 계속 보유
         assert not any(o[0] == 'buy' for o in k.orders)                  # BBB 이미 보유 → 안 삼
 
+    def test_day2_exit_even_when_tp_order_locks_shares(self, live):
+        # 익절 주문이 걸려 있으면 증권사는 sellable=0 으로 줌 → 그래도 취소하고 만기 매도해야 함
+        hold = [{'symbol': 'AAA', 'qty': 19, 'sellable': 0, 'avg': 1.75, 'price': 1.64, 'excg': 'NASD'}]
+        k = FakeKIS(hold=hold, fills=[{'date': '20261020', 'symbol': 'AAA', 'side': 'buy', 'qty': 19, 'price': 1.75}], prices={'AAA': 1.64})
+        k.open = [{'odno': '7', 'symbol': 'AAA', 'side': 'sell', 'qty_left': 19, 'price': 1.84, 'excg': 'NASD'}]
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert k.cancels == ['7'] and ('sell', 'AAA', 19, 0, '33') in k.orders
+
     def test_moc_rejected_falls_back(self, live):
         hold = [{'symbol': 'AAA', 'qty': 10, 'sellable': 10, 'avg': 2.0, 'price': 2.0, 'excg': 'NASD'}]
         k = FakeKIS(hold=hold, fills=[{'date': '20261020', 'symbol': 'AAA', 'side': 'buy', 'qty': 10, 'price': 2.0}], prices={'AAA': 2.0}, reject_moc=True)
