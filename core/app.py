@@ -263,6 +263,24 @@ except Exception:
     view = st.radio('화면', VIEWS, horizontal=True, label_visibility='collapsed', key='view_radio')
 
 # 공통으로 쓰는 것
+def _fx_latest():
+    try:
+        a = _csv('data/live_account.csv')
+        v = _num(a['usdkrw']).dropna() if 'usdkrw' in a.columns else pd.Series(dtype=float)
+        return float(v.iloc[-1]) if len(v) else np.nan
+    except Exception:
+        return np.nan
+FX = _fx_latest()
+def kw(x):
+    """달러 → '4,740원' (한국투자 고시 환율). 환율 없으면 빈칸"""
+    try:
+        return '' if x is None or np.isnan(x) or np.isnan(FX) else f'{x * FX:,.0f}원'
+    except TypeError:
+        return ''
+def dk(x, small=True):
+    """'$3.55 · 4,740원'"""
+    w = kw(x)
+    return f'${x:,.2f}' + (f' <span class="muted" style="font-size:0.78rem">{w}</span>' if (w and small) else (f' · {w}' if w else ''))
 act = open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])] if not open_pos.empty and 'status' in open_pos else pd.DataFrame()
 n_open = int((open_pos['status'] == 'OPEN').sum()) if not open_pos.empty and 'status' in open_pos else 0
 closed_m = mark_executable(closed_v6) if not closed_v6.empty else closed_v6
@@ -288,14 +306,17 @@ if view == '오늘':
                              rsi=_num(pd.Series([r0.get('rsi7')])).iloc[0], intra=_num(pd.Series([r0.get('intraday')])).iloc[0],
                              ret1=_num(pd.Series([r0.get('ret1d')])).iloc[0], down=r0.get('consec_down', ''), vol=_num(pd.Series([r0.get('avg_vol20', np.nan)])).iloc[0]))
         rows.sort(key=lambda r: (-len(r['strats']), r['ticker']))
-        st.markdown(f'<div class="todo"><b>{len(rows)}종목.</b> 각각 투자금의 10%, 동시에 최대 10종목. <b>{T_MOC}까지 종가 주문(MOC)</b>, 안 되면 {T_CLOSE} 직전 시장가. {T_CLOSE} 넘기면 사지 않아요.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="todo"><b>{len(rows)}종목.</b> 봇이 그때 쓸 수 있는 현금을 <b>{len(rows)}등분</b>해서 마감가(LOC 주문)로 자동으로 사요. 직접 하실 건 없어요. '
+                    f'원화는 한국투자 고시 환율({FX:,.0f}원)로 바꾼 참고 금액이에요.</div>' if not np.isnan(FX) else
+                    f'<div class="todo"><b>{len(rows)}종목.</b> 봇이 그때 쓸 수 있는 현금을 <b>{len(rows)}등분</b>해서 마감가(LOC 주문)로 자동으로 사요. 직접 하실 건 없어요.</div>', unsafe_allow_html=True)
         cards = ''
         for r in rows:
             p = r['price']
             down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
-            cards += (f'<div class="card act"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700">${p:,.2f} <span class="muted" style="font-size:0.75rem">15:30</span></span></div>'
+            cards += (f'<div class="card act"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700;text-align:right">${p:,.2f} <span class="muted" style="font-size:0.75rem">15:30</span>'
+                      f'<div class="muted" style="font-size:0.8rem;font-weight:400">{kw(p)}</div></span></div>'
                       f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
-                      f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b></span>'
+                      f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b> <span class="muted">{kw(p*1.05)}</span></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b> <span class="muted">{kw(p*0.9)}</span></span>'
                       f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
         st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="muted">가격은 15:30 ET 기준. 실제 진입가(종가)와 그에 맞춘 익절·손절가는 {T_TRK} 추적 뒤 "보유" 화면에 확정돼요.</div>', unsafe_allow_html=True)
@@ -311,20 +332,20 @@ if view == '오늘':
     if due.empty:
         st.markdown('<div class="card muted">없어요. 보유 중인 건 걸어 둔 익절·손절 주문이 알아서 처리해요.</div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="todo">아래 종목은 이번 장이 마지막(2일째)이에요. 익절·손절이 안 됐으면 <b>{T_MOC} 종가 주문으로 전량 매도</b>하고, 걸어 둔 주문은 취소해요.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="todo">아래 종목은 이번 장이 마지막(2일째)이에요. 익절·손절이 안 되면 봇이 <b>장 마감 가격으로 자동 매도</b>해요.</div>', unsafe_allow_html=True)
         cards = ''
         for r in due.itertuples():
             ch = r.change_pct if not np.isnan(r.change_pct) else 0.0
             cards += (f'<div class="card sell"><div class="row"><span class="tk">{r.ticker}</span><span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span></div>'
-                      f'<div class="row muted" style="margin-top:4px"><span>진입 ${r.entry_price:,.2f} · 현재 ${r.current_price:,.2f}</span><span>{int(r.days_held) if not np.isnan(r.days_held) else 0}/{int(r.max_hold) if not np.isnan(r.max_hold) else 2}일</span></div></div>')
+                      f'<div class="row muted" style="margin-top:4px"><span>진입 ${r.entry_price:,.2f}({kw(r.entry_price)}) · 현재 ${r.current_price:,.2f}({kw(r.current_price)})</span><span>{int(r.days_held) if not np.isnan(r.days_held) else 0}/{int(r.max_hold) if not np.isnan(r.max_hold) else 2}일</span></div></div>')
         st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
 
     # ── 오늘 할 일 요약 ──
-    st.markdown('<div class="ss-sec">매일 순서</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ss-sec">매일 자동으로 하는 일</div>', unsafe_allow_html=True)
     st.markdown(f"""<div class="card muted" style="line-height:1.6">
-<b style="color:{C['text']}">{T_SIG}</b> 신호 확인 → <b style="color:{C['text']}">{T_MOC}</b> 정리할 것 먼저 종가 매도, 새 신호 종가 매수 → <b style="color:{C['text']}">{T_CLOSE}</b> 마감 →
-<b style="color:{C['text']}">{T_TRK}</b> "보유" 화면에서 진입가·목표가·손절가 확인하고 매도 주문 두 개(목표가 지정가, 손절가 스탑) 걸기. 낮에는 할 일 없음.
-<br>일·월 새벽은 미국 장이 없어요. {'11월 첫째 일요일부터 겨울 시간이라 한 시간 늦어져요.' if _dst else '3월 둘째 일요일부터 서머타임이라 한 시간 빨라져요.'}</div>""", unsafe_allow_html=True)
+<b style="color:{C['text']}">장 시작 직후</b> 들고 있는 종목에 +5% 익절 주문(이미 넘었으면 바로 매도) → <b style="color:{C['text']}">장중</b> 5분마다 −10% 손절 감시 →
+<b style="color:{C['text']}">{T_SIG}</b> 마감 전 스캔 · 2일째 종목 마감가 매도 · 새 신호를 현금 나눠서 마감가 매수 → <b style="color:{C['text']}">{T_TRK}</b> 기록 갱신("성적 → 실제 매매").
+<br>전부 봇이 해요. 일·월 새벽은 미국 장이 없어요. {'11월 첫째 일요일부터 겨울 시간이라 한 시간 늦어져요.' if _dst else '3월 둘째 일요일부터 서머타임이라 한 시간 빨라져요.'}</div>""", unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -350,17 +371,17 @@ elif view == '보유':
                 pos = min(max((ch + 10) / 15, 0), 1) * 100 if not np.isnan(ch) else 0
                 fill = '#5fd35f' if ch >= 0 else C['red']
                 left, width = (66.7, pos - 66.7) if pos >= 66.7 else (pos, 66.7 - pos)
-                body = (f'<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">진입 ${ep:,.2f}</span>'
-                        f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted">현재 ${cp:,.2f}</span></div>'
+                body = (f'<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">진입 ${ep:,.2f}<br>{kw(ep)}</span>'
+                        f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted" style="text-align:right">현재 ${cp:,.2f}<br>{kw(cp)}</span></div>'
                         f'<div class="bar"><div class="f" style="left:{left}%;width:{max(width,0)}%;background:{fill}"></div><div class="z"></div><div class="m" style="left:calc({pos}% - 2px)"></div></div>'
-                        f'<div style="display:flex;justify-content:space-between" class="muted"><span>손절 ${r["sl_price"]:,.2f}</span><span>{int(dh) if not np.isnan(dh) else 0}/{int(mh)}일</span><span>목표 ${r["tp_price"]:,.2f}</span></div>')
+                        f'<div style="display:flex;justify-content:space-between" class="muted"><span>손절 ${r["sl_price"]:,.2f} {kw(r["sl_price"])}</span><span>{int(dh) if not np.isnan(dh) else 0}/{int(mh)}일</span><span>목표 ${r["tp_price"]:,.2f} {kw(r["tp_price"])}</span></div>')
             cards += (f'<div class="card"><div class="row"><span class="tk">{tk}</span>{pill(r["status"])}</div>'
                       f'<div style="margin:4px 0">{badges(x["strategy"])}</div>{body}</div>')
         if fresh:
-            st.markdown(f'<div class="todo">방금 들어간 {len(fresh)}종목 — 아래 값으로 <b>매도 주문 두 개</b>를 걸어 두세요.</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="todo">방금 들어간 {len(fresh)}종목 — 다음 장 시작에 봇이 익절 주문을 걸고 손절을 감시해요.</div>', unsafe_allow_html=True)
             st.markdown('<div class="grid">' + ''.join(
                 f'<div class="card act"><div class="row"><span class="tk">{tk}</span>{badges(ss, short=True)}</div>'
-                f'<div class="chips"><span>진입 <b>${ep:,.2f}</b></span><span>목표가 지정가 매도 <b style="color:#5fd35f">${tp:,.2f}</b></span><span>손절가 스탑 매도 <b style="color:{C["red"]}">${sl:,.2f}</b></span></div></div>'
+                f'<div class="chips"><span>진입 <b>${ep:,.2f}</b> <span class="muted">{kw(ep)}</span></span><span>익절 <b style="color:#5fd35f">${tp:,.2f}</b> <span class="muted">{kw(tp)}</span></span><span>손절 <b style="color:{C["red"]}">${sl:,.2f}</b> <span class="muted">{kw(sl)}</span></span></div></div>'
                 for tk, ss, ep, tp, sl in fresh) + '</div>', unsafe_allow_html=True)
         if cards:
             st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
