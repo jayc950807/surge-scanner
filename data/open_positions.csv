@@ -1,8 +1,6 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,overnight_pct,method,judge,scan_type
-3,BXBL,2026-10-29,1.9,2026-10-29,1.9,1.99,1.71,0.05,2,OPEN,1.9,1.9,2026-10-29,1.9,2026-10-29,,,0,2026-10-30,,v6_close_entry,,preclose
-3,CRVO,2026-10-29,1.75,2026-10-29,1.75,1.84,1.57,0.05,2,OPEN,1.75,1.75,2026-10-29,1.75,2026-10-29,,,0,2026-10-30,,v6_close_entry,,preclose
-3,COUR,2026-10-30,3.55,,,3.73,3.19,0.05,2,PENDING,,,,,,,,0,2026-10-30,,,,preclose
-3,JAGX,2026-10-30,1.64,,,1.72,1.48,0.05,2,PENDING,,,,,,,,0,2026-10-30,,,,preclose
+3,COUR,2026-10-30,3.47,2026-10-30,3.47,3.64,3.12,0.05,2,OPEN,3.47,3.47,2026-10-30,3.47,2026-10-30,,,0,2026-11-02,,v6_close_entry,,preclose
+3,JAGX,2026-10-30,1.62,2026-10-30,1.62,1.7,1.46,0.05,2,OPEN,1.62,1.62,2026-10-30,1.62,2026-10-30,,,0,2026-11-02,,v6_close_entry,,preclose
 1,AGMB,2026-11-02,6.68,,,7.01,6.01,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose
 1,GNLN,2026-11-02,1.33,,,1.4,1.2,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose
 3,AGMB,2026-11-02,6.68,,,7.01,6.01,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose

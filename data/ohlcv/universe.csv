@@ -939,6 +939,7 @@ CARR,Carrier Global Corporation,NYSE
 CARS,Cars.com Inc. Common Stock,NYSE
 CART,Maplebear Inc. Common Stock,NASDAQ
 CASH,"Pathward Financial, Inc. Common Stock",NASDAQ
+CASK,"Sempreon, Inc. Common Stock",NASDAQ
 CASS,"Cass Information Systems, Inc Common Stock",NASDAQ
 CAST,"FreeCast, Inc. Class A Common Stock",NASDAQ
 CASY,"Casey's General Stores, Inc. Common Stock",NASDAQ
@@ -966,7 +967,6 @@ CBSH,"Commerce Bancshares, Inc. Common Stock",NASDAQ
 CBT,Cabot Corporation,NYSE
 CBU,"Community Financial System, Inc.",NYSE
 CBUS,"Cibus, Inc. Class A Common Stock",NASDAQ
-CBZ,"CBIZ, Inc.",NYSE
 CC,The Chemours Company,NYSE
 CCAP,"Crescent Capital BDC, Inc. Common stock",NASDAQ
 CCAQ,Collective Acquisition Corp. Class A Ordinary Shares,NASDAQ
@@ -2860,7 +2860,6 @@ KULR,"KULR Technology Group, Inc.",AMEX
 KURA,"Kura Oncology, Inc. Common Stock",NASDAQ
 KUST,"Kustom Entertainment, Inc. Common Stock",NASDAQ
 KVHI,"KVH Industries, Inc. Common Stock",NASDAQ
-KVUE,Kenvue Inc.,NYSE
 KVYO,"Klaviyo, Inc.",NYSE
 KWR,Quaker Houghton,NYSE
 KWY,Kingsway Corporation,NYSE
@@ -3059,7 +3058,6 @@ LX,LexinFintech Holdings Ltd. American Depositary Shares,NASDAQ
 LXEH,"Lixiang Education Holding Co., Ltd. American Depositary Shares",NASDAQ
 LXEO,"Lexeo Therapeutics, Inc. Common Stock",NASDAQ
 LXFR,Luxfer Holdings PLC Ordinary Shares,NYSE
-LXP,LXP Industrial Trust,NYSE
 LXRX,"Lexicon Pharmaceuticals, Inc. Common Stock",NASDAQ
 LXU,LSB INDUSTRIES INC,NYSE
 LYB,LyondellBasell Industries N.V. Class A,NYSE
@@ -3186,7 +3184,6 @@ MGM,MGM RESORTS INTERNATIONAL,NYSE
 MGN,Megan Holdings Limited Class A Ordinary Shares,NASDAQ
 MGNI,"Magnite, Inc. Common Stock",NASDAQ
 MGNX,"MacroGenics, Inc. Common Stock",NASDAQ
-MGPI,"MGP Ingredients, Inc.",NASDAQ
 MGRC,McGrath RentCorp Common Stock,NASDAQ
 MGRT,Mega Fortune Company Limited Ordinary Shares,NASDAQ
 MGRX,"Mangoceuticals, Inc. Common Stock",NASDAQ
@@ -3387,6 +3384,7 @@ NAMI,Jinxin Technology Holding Company American Depositary Shares,NASDAQ
 NAMM,Namib Minerals Ordinary Shares,NASDAQ
 NAMS,NewAmsterdam Pharma Company N.V. Ordinary Shares,NASDAQ
 NANO,Forge Nano Holdings Inc. Common Stock,NASDAQ
+NARA,"Narragansett Bancorp, Inc. Common Stock",NASDAQ
 NAT,Nordic American Tanker,NYSE
 NATL,NCR Atleos Corporation,NYSE
 NATR,"Nature's Sunshine Products, Inc. Common Stock",NASDAQ
@@ -3719,7 +3717,6 @@ ONTO,Onto Innovation Inc.,NYSE
 OOMA,"Ooma, Inc. Common Stock",NYSE
 OPAD,Offerpad Solutions Inc. Class A Common Stock,NASDAQ
 OPAL,OPAL Fuels Inc. Class A Common Stock,NASDAQ
-OPAY,"OPay Limited American Depositary Shares, each representing ten Ordinary Shares",NYSE
 OPBK,OP Bancorp Common Stock,NASDAQ
 OPCH,"Option Care Health, Inc. Common Stock",NASDAQ
 OPEN,Opendoor Technologies Inc Common Stock,NASDAQ
@@ -4140,7 +4137,6 @@ RADX,Radiopharm Theranostics Limited American Depositary Shares,NASDAQ
 RAIL,"FreightCar America, Inc. Common Stock",NASDAQ
 RAIN,"Rain Enhancement Technologies Holdco, Inc. Class A Common Stock",NASDAQ
 RAL,Ralliant Corporation,NYSE
-RAMP,"LiveRamp Holdings, Inc. Common Stock",NYSE
 RAND,Rand Capital Corporation Common Stock,NASDAQ
 RANG,Range Capital Acquisition Corp. Ordinary Shares,NASDAQ
 RANI,"Rani Therapeutics Holdings, Inc. Class A Common Stock",NASDAQ
