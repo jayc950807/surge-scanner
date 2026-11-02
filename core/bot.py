@@ -291,7 +291,10 @@ class Broker:
         for o in (orders if orders is not None else self.open_orders()):
             if o['symbol'] == sym and o['side'] == 'sell':
                 if self.live:
-                    self.k.cancel(o['odno'], sym, o['excg'], o['qty_left'])
+                    try:                     # 한 건 취소가 실패해도(이미 취소·체결됨 등) 손절 주문은 계속 진행
+                        self.k.cancel(o['odno'], sym, o['excg'], o['qty_left'])
+                    except KISError as e:
+                        log(f'  {sym} 주문 취소 실패(계속 진행): {str(e)[:60]}')
                 log(f'  {"[연습] " if not self.live else ""}{sym} 걸어 둔 매도 취소')
 
     def entry_dates(self, today):

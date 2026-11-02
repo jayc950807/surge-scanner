@@ -165,13 +165,14 @@ class KIS:
 
     def open_orders(self):
         """미체결 [{odno, symbol, side(buy/sell), qty_left, price, excg}]"""
-        out = []
+        out = []; seen = set()      # 거래소별로 조회하면 같은 주문이 두 번 나올 수 있음(NYSE·AMEX) → 주문번호로 한 번만
         for ex in ('NASD', 'NYSE', 'AMEX'):
             j, _ = self._req('GET', '/uapi/overseas-stock/v1/trading/inquire-nccs', 'TTTS3018R',
                              {'CANO': self.cano, 'ACNT_PRDT_CD': self.prod, 'OVRS_EXCG_CD': ex, 'SORT_SQN': 'DS', 'CTX_AREA_FK200': '', 'CTX_AREA_NK200': ''})
             for o in j.get('output') or []:
                 left = int(float(o.get('nccs_qty') or 0))
-                if left > 0:
+                if left > 0 and o.get('odno') not in seen:
+                    seen.add(o.get('odno'))
                     out.append({'odno': o.get('odno'), 'symbol': o.get('pdno'), 'side': 'sell' if o.get('sll_buy_dvsn_cd') == '01' else 'buy',
                                 'qty_left': left, 'price': float(o.get('ft_ord_unpr3') or 0), 'excg': o.get('ovrs_excg_cd') or ex})
         return out
