@@ -455,9 +455,7 @@ elif view == '성적':
                 S12m = f'font-size:10px;color:{C["muted"]}'; S12 = 'font-size:10px'; S14 = 'font-size:10px;font-weight:800'   # 투자 중 박스: 전부 10px (사용자 지정)
                 money = lambda v, fx_=None: '—' if v is None or np.isnan(v) else f'${v:,.2f}' + (f' ({won(v, fx_)})' if won(v, fx_) else '')
                 g = 'display:grid;grid-template-columns:30% 12% 37% 21%;align-items:center;column-gap:0'
-                rows_h = (f'<div style="{g};padding:0 0 6px;border-bottom:1px solid {C["line"]}">'
-                          f'<div style="{S12m}">종목</div><div style="{S12m};text-align:right">수량</div>'
-                          f'<div style="{S12m};text-align:right">지금 · 산 금액</div><div style="{S12m};text-align:right">익절 · 손절</div></div>')
+                rows_h = ''
                 for r in hold_l.sort_values('buy_date').itertuples():
                     name = nm.get(r.symbol) or en.get(r.symbol, r.symbol)
                     tp = round(r.buy_px * 1.05 + 1e-9, 2) if not np.isnan(r.buy_px) else np.nan
@@ -467,7 +465,7 @@ elif view == '성적':
                                f'<div style="min-width:0"><div style="{S14};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{name}</div><div style="{S12m}">{r.symbol}</div></div>'
                                f'<div style="{S14};text-align:right">{"" if np.isnan(r.qty) else f"{r.qty:.0f}주"}</div>'
                                f'<div style="text-align:right"><div style="{S14};color:{color_pct(r.pnl_usd)}">{money(r.value_usd)}</div>'
-                               f'<div style="{S12m}">산 {money(r.buy_usd, bfx)}</div></div>'
+                               f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(r.pnl_usd, sign=True)}) {fmt_pct(r.pnl_usd / r.buy_usd * 100 if r.buy_usd else np.nan)}</div></div>'
                                f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
             kp = [
