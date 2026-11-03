@@ -8,3 +8,4 @@ strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_pric
 3,GNLN,2026-11-02,1.33,,,1.4,1.2,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose
 3,SGML,2026-11-02,5.03,,,5.28,4.53,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose
 3,XTND,2026-11-02,1.25,,,1.31,1.12,0.05,2,PENDING,,,,,,,,0,2026-11-02,,,,preclose
+3,ICU,2026-11-03,1.94,,,2.04,1.75,0.05,2,PENDING,,,,,,,,0,2026-11-03,,,,preclose

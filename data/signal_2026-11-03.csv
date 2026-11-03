@@ -1,0 +1,2 @@
+strategy,ticker,date,scan_time,scan_type,price_1530,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+3,ICU,2026-11-03,05:46 KST,preclose,1.94,1.94,19.7,30.0,5,2.11,-11.4,-16.0,248524,2.04,1.75
