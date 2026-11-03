@@ -22,7 +22,7 @@ except Exception:  # 단독 실행 대비
     KST = timezone(timedelta(hours=9))
     ACTIVE_STRATEGIES = ['1', '3']; COST_PCT = 1.0
     STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2} for s in ACTIVE_STRATEGIES}
-    STRATEGY_NAMES = {'1': '1차_1 · 급락반등', '3': '1차_3 · 과매도'}
+    STRATEGY_NAMES = {'1': '1. 급락반등', '3': '2. 과매도'}
     def is_us_dst(d):
         return 3 < d.month < 11 or (d.month == 3 and d.day >= 8 + (6 - datetime(d.year, 3, 1).weekday()) % 7) or (d.month == 11 and d.day < 1 + (6 - datetime(d.year, 11, 1).weekday()) % 7)
 
@@ -31,7 +31,7 @@ st.set_page_config(page_title="Surge Scanner", page_icon="📈", layout="wide", 
 # ─── 색 (dataviz 기준 팔레트: 어두운 바탕용) ─────────────────────────────────
 C = dict(bg="#141413", surface="#1f1f1d", line="#2e2e2b", text="#f0efec", sub="#c3c2b7", muted="#8a897f",
          blue="#3987e5", good="#0ca30c", warn="#fab219", bad="#d03b3b", red="#e66767")
-STRAT_SHORT = {'1': '1차_1', '3': '1차_3'}
+STRAT_SHORT = {'1': '1.', '3': '2.'}
 STRAT_KR = {'1': '급락반등', '3': '과매도'}
 METHOD_V6 = 'v6_close_entry'
 
@@ -388,6 +388,28 @@ elif view == '성적':
                                f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(abs(r.pnl_usd))}) {abs(r.pnl_usd / r.buy_usd * 100) if r.buy_usd else 0:.1f}%</div></div>'
                                f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
+            # ── 결과: 전체 · 전략별 익절/손절/만기 ──
+            if not done.empty:
+                def strat_of(sym, od):
+                    f = f'data/signal_{od}.csv'
+                    if not os.path.exists(f): return set()
+                    x = _csv(f)
+                    if 'scan_type' in x.columns: x = x[x['scan_type'] == 'preclose']
+                    return set(x[x['ticker'] == sym]['strategy']) if not x.empty else set()
+                dd = done.copy(); dd['strats'] = [strat_of(a, b) for a, b in zip(dd['symbol'], dd['order_date'])]
+                T10m = f'font-size:10px;color:{C["muted"]}'; T10b = 'font-size:10px;font-weight:800'
+                def line(lbl, sub_):
+                    w_ = int((sub_['result'] == '익절').sum()); l2 = int((sub_['result'] == '손절').sum()); e2 = int((sub_['result'] == '만기').sum())
+                    pnl = sub_['pnl_usd'].sum()
+                    return (f'<div style="display:grid;grid-template-columns:34% 42% 24%;align-items:center;padding:8px 0;border-bottom:1px solid {C["line"]}">'
+                            f'<div style="{T10b}">{lbl}</div>'
+                            f'<div style="font-size:10px;text-align:right"><b style="color:#5fd35f">익절 {w_}</b> · <b style="color:{C["red"]}">손절 {l2}</b> · <b style="color:{C["warn"]}">만기 {e2}</b></div>'
+                            f'<div style="{T10b};text-align:right;color:{color_pct(pnl)}">{usd(pnl)}</div></div>')
+                rows_r = line(f'전체 {len(dd)}건', dd)
+                for sid in ACTIVE_STRATEGIES:
+                    sub_ = dd[dd['strats'].map(lambda z: sid in z)]
+                    rows_r += line(f'{STRAT_SHORT[sid]} {STRAT_KR[sid]} {len(sub_)}건', sub_)
+                st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{T10m};margin-bottom:6px">끝난 거래</div>{rows_r}</div>', unsafe_allow_html=True)
     else:
         ex = closed_m[closed_m['exec_ok']] if not closed_m.empty else closed_m
         allv = closed_m[~closed_m['is_etf']] if not closed_m.empty else closed_m
@@ -463,11 +485,12 @@ else:
         st.markdown('<div class="muted">없음</div>', unsafe_allow_html=True)
     else:
         f1, f2 = st.columns([1, 3])
-        pick = f1.selectbox('전략', ['전체'] + [f"{STRAT_SHORT[s]} {STRAT_KR[s]}" for s in ACTIVE_STRATEGIES], label_visibility='collapsed')
+        _opts = {f"{STRAT_SHORT[s]} {STRAT_KR[s]}": s for s in ACTIVE_STRATEGIES}
+        pick = f1.selectbox('전략', ['전체'] + list(_opts), label_visibility='collapsed')
         res = f2.radio('결과', ['전체', '익절', '손절', '만기'], horizontal=True, label_visibility='collapsed')
         x = closed_m if not closed_m.empty else closed.assign(exec_ok=False, is_etf=False)
         if pick != '전체':
-            x = x[x['strategy'] == pick.split()[0].replace('1차_', '')]
+            x = x[x['strategy'] == _opts[pick]]
         if res != '전체':
             x = x[x['result_status'] == {'익절': 'WIN', '손절': 'LOSS', '만기': 'EXPIRED'}[res]]
         x = x.sort_values(['close_date', 'signal_date'], ascending=False).head(300)
@@ -501,7 +524,7 @@ else:
     with st.expander("이 화면의 숫자는 어떻게 계산되나 (규칙)", expanded=False):
         st.markdown(f"""
 - **감시목록**: 전날 데이터로 "내일 신호가 날 수 있는 종목"(RSI7<45, 연속하락 3일 이상)을 미리 추려요. 하루 400~700종목.
-- **신호**: 미국장 마감 30분 전(15:30 ET) 가격으로 감시목록만 확인해서 1차_1·1차_3 조건에 맞는 종목을 올려요(데이터가 15분 늦게 와서 15:46에 돌아요). ETF·레버리지 상품은 빼요. 마감 뒤 전 종목 스캔도 돌지만 그건 기록·대조용이에요.
+- **신호**: 미국장 마감 30분 전(15:30 ET) 가격으로 감시목록만 확인해서 1. 급락반등·2. 과매도 조건에 맞는 종목을 올려요(데이터가 15분 늦게 와서 15:46에 돌아요). ETF·레버리지 상품은 빼요. 마감 뒤 전 종목 스캔도 돌지만 그건 기록·대조용이에요.
 - **매수**: 신호일 **마감가**(종가 주문)에 산 것으로 계산해요.
 - **매도**: +5% 익절, −10% 손절, 최대 2거래일. 1분봉으로 어느 쪽이 먼저였는지 봐요. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요.
 - **비용**: 거래마다 왕복 {COST_PCT:.0f}%를 빼요.
