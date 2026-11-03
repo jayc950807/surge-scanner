@@ -74,6 +74,10 @@ jobs:
           else
             python core/tracker.py
           fi
+      - name: 시뮬레이션 갱신 (지금 봇 방식 그대로 1분봉 재계산)
+        if: always()
+        continue-on-error: true
+        run: if [ -f /tmp/scanned ]; then python core/sim_realistic.py; fi
       - name: Bot — 실제 매매 기록 갱신 (조회만, 금액·수량 없음)
         if: always()
         continue-on-error: true

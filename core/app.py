@@ -311,7 +311,7 @@ if view == '오늘':
 
 # ════════════════════════════════════════════════════════════════════════════
 elif view == '성적':
-    sub = st.segmented_control('성적 보기', ['실제 매매', '과거부터 지금까지'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
+    sub = st.segmented_control('성적 보기', ['실제 매매', '시뮬레이션'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
     if sub == '실제 매매':
         L = _csv('data/live_trades.csv')
         if L.empty:
@@ -413,12 +413,23 @@ elif view == '성적':
     else:
         ex = closed_m[closed_m['exec_ok']] if not closed_m.empty else closed_m
         allv = closed_m[~closed_m['is_etf']] if not closed_m.empty else closed_m
+        S_old = sim_of(ex)                                   # 예전 계산(추적기: 정확히 +5%/−10%, 비용 1%, 전부 체결)
+        # 지금 봇 방식 그대로 다시 계산한 결과(data/sim_realistic.csv: LOC 한도·익절 지정가·5분 손절·만기·수수료)로 바꿔 끼움
+        SR = _csv('data/sim_realistic.csv'); SRJ = json.load(open('data/sim_realistic.json')) if os.path.exists('data/sim_realistic.json') else {}
+        if not SR.empty and not ex.empty:
+            SR = SR[SR['status'] == 'closed'].copy()
+            SR['ret_pct'] = _num(SR['ret_pct'])
+            mp = {(a, b): (r_, d_, e_) for a, b, r_, d_, e_ in zip(SR['ticker'], SR['signal_date'], SR['ret_pct'], SR['date'], SR['exit'])}
+            ex = ex[[(a, b) in mp for a, b in zip(ex['ticker'], ex['signal_date'])]].copy()
+            ex['result_pct'] = [mp[(a, b)][0] for a, b in zip(ex['ticker'], ex['signal_date'])]
+            ex['close_date'] = [mp[(a, b)][1] for a, b in zip(ex['ticker'], ex['signal_date'])]
+            ex['result_status'] = [('WIN' if str(mp[(a, b)][2]).startswith('익절') else ('LOSS' if mp[(a, b)][2] == '손절' else 'EXPIRED')) for a, b in zip(ex['ticker'], ex['signal_date'])]
         S = sim_of(ex); A = sim_of(allv); Sp = sim_of(ex, 'pct')
         ret = (S['final'] / 1_000_000 - 1) * 100 if S['n'] else np.nan
-        st.markdown('<div class="ss-sec">과거부터 지금까지 <small>이렇게 샀다면 · 살 수 있었던 신호만 · 비용 1% 포함</small></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="ss-sec">시뮬레이션 <small>지금 봇 방식 그대로 · {ex["signal_date"].min() if not ex.empty else ""}부터</small></div>', unsafe_allow_html=True)
         kpis = [
             ('hero', '100만 원으로 따라 샀다면', f"{S['final']:,.0f}원" if S['n'] else '—',
-             f"{fmt_pct(ret)} · 15:30에 잡힌 신호 {S['n']}건 · 지금 방식: 그날 추천 수로 나눠 전부 투자 · 예전 방식(종목당 10%)이면 {Sp['final']:,.0f}원(최대 {fmt_pct(Sp['mdd'] * 100)})" if S['n'] else '아직 없음', color_pct(ret)),
+             f"{fmt_pct(ret)} · {S['n']}건 · 예전 계산(체결·손절 미끄러짐·수수료 빼기 전)이면 {S_old['final']:,.0f}원" if S['n'] else '아직 없음', color_pct(ret)),
             ('', '중간에 가장 많이 줄었을 때', fmt_pct(S['mdd'] * 100) if S['n'] else '—', '최고점 대비', C['red'] if S['n'] else C['muted']),
             ('', '+5% 도달률', fmt_pct(S['wr'], False) if S['n'] else '—', f"{S['n']}건", C['text']),
             ('', '한 번 살 때 평균', fmt_pct(S['avg']) if S['n'] else '—', '비용 뺀 값', color_pct(S['avg'])),
