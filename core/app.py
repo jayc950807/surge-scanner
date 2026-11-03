@@ -44,35 +44,38 @@ header[data-testid="stHeader"] {{ background:transparent; height:0; }}
 .grid2 {{ display:grid; gap:8px; grid-template-columns:1fr 1fr; }}
 .kpi.hero {{ grid-column:1 / -1; }}
 .row {{ display:flex; justify-content:space-between; align-items:center; gap:8px; }}
-.chips {{ display:flex; flex-wrap:wrap; gap:6px 12px; color:{C['sub']}; font-size:0.84rem; margin-top:8px; }}
+.chips {{ display:flex; flex-wrap:wrap; gap:6px 12px; color:{C['sub']}; font-size:12px; margin-top:8px; }}
 .chips b {{ color:{C['text']}; font-weight:600; }}
 @media (max-width:640px) {{
   .block-container {{ padding-left:0.9rem; padding-right:0.9rem; padding-top:1.0rem; }}
-  .ss-h1 {{ font-size:1.3rem; }}
+  .ss-h1 {{ font-size:14px; }}
   .kpi {{ padding:12px 13px; min-height:0; }}
-  .kpi .v {{ font-size:1.35rem; }}
-  .kpi.hero .v {{ font-size:1.8rem; }}
+  .kpi .v {{ font-size:14px; }}
+  .kpi.hero .v {{ font-size:14px; }}
   .ss-sec {{ margin:18px 0 8px; }}
 }}
 .stApp {{ background:{C['bg']}; color:{C['text']}; }}
+.stApp, .stApp p, .stApp li, .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] {{ font-size:12px; letter-spacing:normal; }}
+.stApp button p, .stApp button div {{ font-size:12px !important; }}
+div[data-testid="stExpander"] summary p {{ font-size:12px !important; }}
 .block-container {{ padding-top:2.0rem; padding-bottom:3rem; max-width:1180px; }}
 h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
-.ss-h1 {{ font-size:1.6rem; font-weight:700; margin:0; }}
-.ss-sub {{ color:{C['sub']}; font-size:0.92rem; margin-top:2px; }}
-.ss-sec {{ font-size:1.1rem; font-weight:700; margin:22px 0 10px; display:flex; align-items:baseline; gap:10px; }}
-.ss-sec small {{ color:{C['muted']}; font-weight:400; font-size:0.85rem; }}
+.ss-h1 {{ font-size:14px; font-weight:700; margin:0; }}
+.ss-sub {{ color:{C['sub']}; font-size:12px; margin-top:2px; }}
+.ss-sec {{ font-size:14px; font-weight:700; margin:22px 0 10px; display:flex; align-items:baseline; gap:10px; }}
+.ss-sec small {{ color:{C['muted']}; font-weight:400; font-size:12px; }}
 .kpi {{ background:{C['surface']}; border:1px solid {C['line']}; border-radius:12px; padding:14px 16px; min-height:92px; }}
-.kpi .l {{ color:{C['sub']}; font-size:0.82rem; }}
-.kpi .v {{ font-size:1.7rem; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; }}
-.kpi .d {{ color:{C['muted']}; font-size:0.78rem; margin-top:2px; }}
+.kpi .l {{ color:{C['sub']}; font-size:12px; }}
+.kpi .v {{ font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; }}
+.kpi .d {{ color:{C['muted']}; font-size:10px; margin-top:2px; }}
 .card {{ background:{C['surface']}; border:1px solid {C['line']}; border-radius:12px; padding:14px 16px; margin-bottom:10px; }}
 .card.act {{ border-color:{C['blue']}88; }}
 .card.sell {{ border-color:{C['warn']}88; }}
-.tk {{ font-size:1.25rem; font-weight:700; letter-spacing:0.02em; }}
-.badge {{ display:inline-block; white-space:nowrap; padding:2px 8px; border-radius:999px; font-size:0.74rem; font-weight:600; border:1px solid {C['line']}; color:{C['sub']}; margin-right:4px; vertical-align:middle; }}
+.tk {{ font-size:14px; font-weight:700; letter-spacing:0.02em; }}
+.badge {{ display:inline-block; white-space:nowrap; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:600; border:1px solid {C['line']}; color:{C['sub']}; margin-right:4px; vertical-align:middle; }}
 .b1 {{ border-color:{C['blue']}66; color:{C['blue']}; }}
 .b3 {{ border-color:{C['warn']}66; color:{C['warn']}; }}
-.pill {{ display:inline-block; padding:3px 10px; border-radius:6px; font-weight:700; font-size:0.85rem; }}
+.pill {{ display:inline-block; padding:3px 10px; border-radius:6px; font-weight:700; font-size:12px; }}
 .win {{ background:{C['good']}22; color:#5fd35f; }}
 .loss {{ background:{C['bad']}22; color:{C['red']}; }}
 .exp {{ background:{C['warn']}22; color:{C['warn']}; }}
@@ -81,15 +84,15 @@ h1,h2,h3 {{ color:{C['text']} !important; letter-spacing:-0.01em; }}
 .bar .z {{ position:absolute; left:66.7%; top:-3px; width:2px; height:16px; background:{C['sub']}; }}
 .bar .f {{ position:absolute; top:0; height:10px; border-radius:5px; }}
 .bar .m {{ position:absolute; top:-3px; width:4px; height:16px; border-radius:2px; background:{C['text']}; }}
-.note {{ background:{C['surface']}; border-left:4px solid {C['warn']}; padding:10px 14px; border-radius:6px; color:{C['sub']}; font-size:0.9rem; }}
-.todo {{ background:{C['surface']}; border-left:4px solid {C['blue']}; padding:10px 14px; border-radius:6px; color:{C['text']}; font-size:0.92rem; line-height:1.55; }}
+.note {{ background:{C['surface']}; border-left:4px solid {C['warn']}; padding:10px 14px; border-radius:6px; color:{C['sub']}; font-size:12px; }}
+.todo {{ background:{C['surface']}; border-left:4px solid {C['blue']}; padding:10px 14px; border-radius:6px; color:{C['text']}; font-size:12px; line-height:1.55; }}
 .todo b {{ color:{C['text']}; }}
-.muted {{ color:{C['muted']}; font-size:0.85rem; }}
-.tt {{ width:100%; border-collapse:collapse; margin-top:8px; font-size:0.92rem; }}
-.tt th {{ color:{C['muted']}; font-weight:500; font-size:0.78rem; text-align:right; padding:2px 0 4px; }}
+.muted {{ color:{C['muted']}; font-size:12px; }}
+.tt {{ width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }}
+.tt th {{ color:{C['muted']}; font-weight:500; font-size:10px; text-align:right; padding:2px 0 4px; }}
 .tt th:first-child, .tt td:first-child {{ text-align:left; color:{C['sub']}; width:22%; }}
 .tt td {{ text-align:right; padding:5px 0; border-top:1px solid {C['line']}; font-variant-numeric:tabular-nums; }}
-.tt td small {{ display:block; color:{C['muted']}; font-size:0.78rem; }}
+.tt td small {{ display:block; color:{C['muted']}; font-size:10px; }}
 .tt, .tt tr, .tt th, .tt td {{ border-left:none !important; border-right:none !important; border-bottom:none !important; background:transparent !important; }}
 .tt th {{ border-top:none !important; }}
 .tfoot {{ display:flex; justify-content:space-between; align-items:baseline; margin-top:8px; padding-top:8px; border-top:1px solid {C['line']}; }}
@@ -280,7 +283,7 @@ def kw(x):
 def dk(x, small=True):
     """'$3.55 · 4,740원'"""
     w = kw(x)
-    return f'${x:,.2f}' + (f' <span class="muted" style="font-size:0.78rem">{w}</span>' if (w and small) else (f' · {w}' if w else ''))
+    return f'${x:,.2f}' + (f' <span class="muted" style="font-size:10px">{w}</span>' if (w and small) else (f' · {w}' if w else ''))
 act = open_pos[open_pos['status'].isin(['OPEN', 'PENDING'])] if not open_pos.empty and 'status' in open_pos else pd.DataFrame()
 n_open = int((open_pos['status'] == 'OPEN').sum()) if not open_pos.empty and 'status' in open_pos else 0
 closed_m = mark_executable(closed_v6) if not closed_v6.empty else closed_v6
@@ -313,8 +316,8 @@ if view == '오늘':
         for r in rows:
             p = r['price']
             down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
-            cards += (f'<div class="card act"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:1.1rem;font-weight:700;text-align:right">${p:,.2f} <span class="muted" style="font-size:0.75rem">15:30</span>'
-                      f'<div class="muted" style="font-size:0.8rem;font-weight:400">{kw(p)}</div></span></div>'
+            cards += (f'<div class="card act"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:14px;font-weight:700;text-align:right">${p:,.2f} <span class="muted" style="font-size:10px">15:30</span>'
+                      f'<div class="muted" style="font-size:10px;font-weight:400">{kw(p)}</div></span></div>'
                       f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
                       f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b> <span class="muted">{kw(p*1.05)}</span></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b> <span class="muted">{kw(p*0.9)}</span></span>'
                       f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
@@ -505,8 +508,8 @@ elif view == '성적':
                     px_s = lambda v: '—' if v is None or np.isnan(v) else f'${v:,.2f}'
                     amt_s = lambda v, fx_: '—' if v is None or np.isnan(v) else f'${v:,.2f}<small>{won(v, fx_)}</small>'
                     rows_ += (f'<div class="card" style="padding:12px 14px">'
-                              f'<div class="row"><span><span class="tk" style="font-size:1.1rem">{r.symbol}</span> {tag}</span>'
-                              f'<span style="font-weight:700;font-size:1.1rem;color:{color_pct(pct)}">{fmt_pct(pct)}</span></div>'
+                              f'<div class="row"><span><span class="tk" style="font-size:14px">{r.symbol}</span> {tag}</span>'
+                              f'<span style="font-weight:700;font-size:14px;color:{color_pct(pct)}">{fmt_pct(pct)}</span></div>'
                               f'<div class="muted" style="margin-top:2px">{when} · {qty} · {wtxt}</div>'
                               f'<table class="tt"><tr><th></th><th>1주 가격(평단)</th><th>총 금액</th></tr>'
                               f'<tr><td>산 때</td><td>{px_s(r.buy_px)}</td><td>{amt_s(r.buy_usd, bfx)}</td></tr>'
@@ -514,7 +517,7 @@ elif view == '성적':
                               f'<div class="tfoot"><span class="muted">{"손익(확정)" if closed_ else "손익(확정 전)"}</span>'
                               f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:500">({won(r.pnl_usd, now_fx, sign=True)})</span></span></div></div>')
                 else:
-                    rows_ += (f'<div class="card" style="padding:12px 14px"><div class="row"><span><span class="tk" style="font-size:1.1rem">{r.symbol}</span></span>'
+                    rows_ += (f'<div class="card" style="padding:12px 14px"><div class="row"><span><span class="tk" style="font-size:14px">{r.symbol}</span></span>'
                               f'<span class="muted">{stt.get(r.status, r.status)}</span></div><div class="muted" style="margin-top:2px">{_d(r.order_date)} 마감 주문 · {wtxt}</div></div>')
             st.markdown(rows_, unsafe_allow_html=True)
             st.markdown('<div class="muted">매일 장 마감 뒤(한국 05:20 무렵) 한국투자 체결 내역으로 갱신돼요. 금액·수량은 공개 저장소라 기록하지 않고, 계좌 대비 비중(%)과 수익률만 보여요. '
@@ -577,9 +580,9 @@ elif view == '성적':
                 on = x['overnight_pct'].dropna() if 'overnight_pct' in x else pd.Series(dtype=float)
                 w, l, e = (x['result_status'] == 'WIN').sum(), (x['result_status'] == 'LOSS').sum(), (x['result_status'] == 'EXPIRED').sum()
                 cards += (f'<div class="card"><div class="row"><span>{badges([s])}</span><span class="muted">{len(x)}건</span></div>'
-                          f'<div class="row" style="margin-top:8px"><div><div class="muted">건당 평균</div><div style="font-size:1.3rem;font-weight:700;color:{color_pct(x["result_pct"].mean())}">{fmt_pct(x["result_pct"].mean())}</div></div>'
-                          f'<div><div class="muted">도달률</div><div style="font-size:1.3rem;font-weight:700">{(x["result_status"] == "WIN").mean() * 100:.0f}%</div></div>'
-                          f'<div><div class="muted">중간값</div><div style="font-size:1.3rem;font-weight:700">{fmt_pct(x["result_pct"].median())}</div></div></div>'
+                          f'<div class="row" style="margin-top:8px"><div><div class="muted">건당 평균</div><div style="font-size:14px;font-weight:700;color:{color_pct(x["result_pct"].mean())}">{fmt_pct(x["result_pct"].mean())}</div></div>'
+                          f'<div><div class="muted">도달률</div><div style="font-size:14px;font-weight:700">{(x["result_status"] == "WIN").mean() * 100:.0f}%</div></div>'
+                          f'<div><div class="muted">중간값</div><div style="font-size:14px;font-weight:700">{fmt_pct(x["result_pct"].median())}</div></div></div>'
                           f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on.mean() if len(on) else np.nan)}</b></span></div></div>')
             st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
             nj = ex['judge'].value_counts().to_dict() if 'judge' in ex.columns else {}
@@ -606,7 +609,7 @@ else:
         for r in x.itertuples():
             dh = int(r.days_held) if not np.isnan(r.days_held) else '—'
             tag = '' if r.exec_ok else (f'<span class="badge">ETF</span>' if r.is_etf else f'<span class="badge">마감 뒤 신호</span>')
-            cards += (f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:1.05rem">{r.ticker}</span> '
+            cards += (f'<div class="card" style="padding:10px 14px"><div class="row"><span><span class="tk" style="font-size:14px">{r.ticker}</span> '
                       f'<span class="muted">{r.signal_date}</span></span><span style="font-weight:700;color:{color_pct(r.result_pct)}">{fmt_pct(r.result_pct)}</span></div>'
                       f'<div class="row" style="margin-top:4px"><span>{badges([r.strategy], short=True)}{pill(r.result_status)} {tag}</span>'
                       f'<span class="muted">${r.entry_price:,.2f} → ${r.close_price:,.2f} · {dh}일</span></div></div>')
