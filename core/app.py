@@ -430,20 +430,21 @@ elif view == '성적':
                 cash_now = float(_num(pd.Series([last.get('cash_usd')])).iloc[0]); stock_now = float(_num(pd.Series([last.get('stock_usd')])).iloc[0])
                 diff = now_eq - start_eq
                 sgn = lambda v: '+' if v > 0 else ('−' if v < 0 else '')
+                S12 = f'font-size:12px;color:{C["muted"]}'          # 설명·원화 (사용자 지정 12px)
+                S14 = 'font-size:14px;font-weight:800'                # 큰 금액 (사용자 지정 14px)
                 st.markdown(
-                    f'<div class="card" style="padding:18px 18px 16px">'
-                    f'<div class="muted">지금 내 계좌 <span style="font-size:0.75rem">(주식 + 현금 · {last.get("date", "")} 기준)</span></div>'
-                    f'<div style="margin-top:4px;line-height:1.15"><span style="font-size:2.1rem;font-weight:800">${now_eq:,.2f}</span>'
-                    f'<span class="muted" style="margin-left:8px">{won(now_eq)}</span></div>'
-                    f'<div style="display:flex;gap:10px;margin-top:12px">'
+                    f'<div class="card" style="padding:16px 16px 14px">'
+                    f'<div style="{S12}">지금 내 계좌 (주식 + 현금 · {last.get("date", "")} 기준)</div>'
+                    f'<div style="margin-top:4px"><span style="{S14}">${now_eq:,.2f}</span><span style="{S12};margin-left:6px">{won(now_eq)}</span></div>'
+                    f'<div style="display:flex;gap:10px;margin-top:10px">'
                     f'<div style="flex:1;border:1px solid {C["line"]};border-radius:10px;padding:8px 10px">'
-                    f'<div class="muted">투자 중 (주식)</div><div><span style="font-weight:700">${stock_now:,.2f}</span><span class="muted" style="margin-left:6px">{won(stock_now)}</span></div></div>'
+                    f'<div style="{S12}">투자 중 (주식)</div><div><span style="{S14}">${stock_now:,.2f}</span><span style="{S12};margin-left:6px">{won(stock_now)}</span></div></div>'
                     f'<div style="flex:1;border:1px solid {C["line"]};border-radius:10px;padding:8px 10px">'
-                    f'<div class="muted">현금</div><div><span style="font-weight:700">${cash_now:,.2f}</span><span class="muted" style="margin-left:6px">{won(cash_now)}</span></div></div></div>'
-                    f'<div style="margin-top:14px;padding-top:12px;border-top:1px solid {C["line"]}">'
-                    f'<div class="muted">처음 넣은 돈 ${start_eq:,.2f} ({won(start_eq)}) 대비</div>'
-                    f'<div><span style="font-size:1.6rem;font-weight:800;color:{color_pct(diff)}">{sgn(diff)}${abs(diff):,.2f} ({fmt_pct(chg)})</span>'
-                    f'<span class="muted" style="margin-left:8px;color:{color_pct(diff)}">{won(diff, sign=True)}</span></div></div></div>',
+                    f'<div style="{S12}">현금</div><div><span style="{S14}">${cash_now:,.2f}</span><span style="{S12};margin-left:6px">{won(cash_now)}</span></div></div></div>'
+                    f'<div style="margin-top:12px;padding-top:10px;border-top:1px solid {C["line"]}">'
+                    f'<div style="{S12}">처음 넣은 돈 ${start_eq:,.2f} ({won(start_eq)}) 대비</div>'
+                    f'<div><span style="{S14};color:{color_pct(diff)}">{sgn(diff)}${abs(diff):,.2f} ({fmt_pct(chg)})</span>'
+                    f'<span style="{S12};margin-left:6px;color:{color_pct(diff)}">{won(diff, sign=True)}</span></div></div></div>',
                     unsafe_allow_html=True)
             else:
                 st.markdown('<div class="card muted">계좌 금액은 장 마감 뒤 갱신 때 채워져요.</div>', unsafe_allow_html=True)
