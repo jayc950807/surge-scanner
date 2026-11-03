@@ -465,7 +465,7 @@ elif view == '성적':
                                f'<div style="min-width:0"><div style="{S14};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{name}</div><div style="{S12m}">{r.symbol}</div></div>'
                                f'<div style="{S14};text-align:right">{"" if np.isnan(r.qty) else f"{r.qty:.0f}주"}</div>'
                                f'<div style="text-align:right"><div style="{S14};color:{color_pct(r.pnl_usd)}">{money(r.value_usd)}</div>'
-                               f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(r.pnl_usd, sign=True)}) {fmt_pct(r.pnl_usd / r.buy_usd * 100 if r.buy_usd else np.nan)}</div></div>'
+                               f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(abs(r.pnl_usd))}) {abs(r.pnl_usd / r.buy_usd * 100) if r.buy_usd else 0:.1f}%</div></div>'
                                f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
             kp = [
