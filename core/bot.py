@@ -172,6 +172,34 @@ def live_record_order(day, sym, weight_pct, lim):
     os.makedirs('data', exist_ok=True); d.to_csv(LIVE_FILE, index=False)
 
 
+NAMES_FILE = 'data/names_kr.csv'      # symbol,name_kr (한국투자 해외주식 종목 마스터의 한글 종목명)
+
+
+def kr_names(symbols):
+    """처음 보는 종목의 한글명을 한국투자 종목 마스터 파일에서 찾아 data/names_kr.csv 에 쌓음 (실패해도 조용히 넘어감)"""
+    known = pd.read_csv(NAMES_FILE, dtype=str, keep_default_na=False) if os.path.exists(NAMES_FILE) else pd.DataFrame(columns=['symbol', 'name_kr'])
+    need = sorted(set(symbols) - set(known['symbol']))
+    if not need:
+        return
+    import io, zipfile
+    found = {}
+    for mk in ('nas', 'nys', 'ams'):
+        try:
+            r = requests.get(f'https://new.real.download.dws.co.kr/common/master/{mk}mst.cod.zip', timeout=30)
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            raw = z.read(z.namelist()[0]).decode('cp949', errors='ignore')
+            for line in raw.splitlines():
+                f = line.split('\t')
+                if len(f) > 7 and f[4] in need and f[6].strip():
+                    found[f[4]] = f[6].strip()
+        except Exception as e:
+            print('  종목 마스터 받기 실패:', mk, type(e).__name__)
+    if found:
+        known = pd.concat([known, pd.DataFrame([{'symbol': k, 'name_kr': v} for k, v in found.items()])], ignore_index=True)
+        known.drop_duplicates('symbol', keep='last').sort_values('symbol').to_csv(NAMES_FILE, index=False)
+        print(f'  한글 종목명 {len(found)}개 추가')
+
+
 def run_record(b):
     """체결 내역·잔고로 실매매 기록 갱신 (조회만, 주문 없음)"""
     d = live_load()
@@ -239,6 +267,10 @@ def run_record(b):
             d.at[i, 'value_usd'] = f'{(bq - sq) * px:.2f}' if px else ''; d.at[i, 'pnl_usd'] = f'{(bq - sq) * (px - bpx):.2f}' if px else ''
         d.at[i, 'updated'] = ts
     d.to_csv(LIVE_FILE, index=False)
+    try:
+        kr_names(list(d['symbol']))
+    except Exception as e:
+        print('  한글 종목명 갱신 실패:', type(e).__name__)
     # 계좌 금액 스냅샷 (하루 한 줄, 같은 날이면 덮어씀)
     if b.has_keys:
         try:
@@ -486,7 +518,7 @@ def live_commit(msg):
     import subprocess
     run = lambda *a: subprocess.run(list(a), capture_output=True, text=True)
     run('git', 'config', 'user.name', 'github-actions[bot]'); run('git', 'config', 'user.email', 'github-actions[bot]@users.noreply.github.com')
-    run('git', 'add', LIVE_FILE, ACCT_FILE)
+    run('git', 'add', LIVE_FILE, ACCT_FILE, NAMES_FILE)
     if run('git', 'diff', '--staged', '--quiet').returncode == 0:
         return
     run('git', 'commit', '-m', msg)

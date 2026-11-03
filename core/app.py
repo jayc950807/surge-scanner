@@ -448,6 +448,28 @@ elif view == '성적':
                     unsafe_allow_html=True)
             else:
                 st.markdown('<div class="card muted">계좌 금액은 장 마감 뒤 갱신 때 채워져요.</div>', unsafe_allow_html=True)
+            # ── 투자 중인 종목 ──
+            if not hold_l.empty:
+                NM = _csv('data/names_kr.csv'); nm = dict(zip(NM['symbol'], NM['name_kr'])) if not NM.empty else {}
+                UNI = _csv('data/ohlcv/universe.csv'); en = dict(zip(UNI['symbol'], UNI['name'])) if not UNI.empty and 'name' in UNI.columns else {}
+                S12m = f'font-size:12px;color:{C["muted"]}'; S12 = 'font-size:12px'; S14 = 'font-size:14px;font-weight:800'
+                money = lambda v, fx_=None: '—' if v is None or np.isnan(v) else f'${v:,.2f}' + (f' ({won(v, fx_)})' if won(v, fx_) else '')
+                g = 'display:grid;grid-template-columns:30% 12% 37% 21%;align-items:center;column-gap:0'
+                rows_h = (f'<div style="{g};padding:0 0 6px;border-bottom:1px solid {C["line"]}">'
+                          f'<div style="{S12m}">종목</div><div style="{S12m};text-align:right">수량</div>'
+                          f'<div style="{S12m};text-align:right">지금 · 산 금액</div><div style="{S12m};text-align:right">익절 · 손절</div></div>')
+                for r in hold_l.sort_values('buy_date').itertuples():
+                    name = nm.get(r.symbol) or en.get(r.symbol, r.symbol)
+                    tp = round(r.buy_px * 1.05 + 1e-9, 2) if not np.isnan(r.buy_px) else np.nan
+                    sl = round(r.buy_px * 0.90, 2) if not np.isnan(r.buy_px) else np.nan
+                    bfx = r.buy_fx if not np.isnan(r.buy_fx) else None
+                    rows_h += (f'<div style="{g};padding:10px 0;border-bottom:1px solid {C["line"]}">'
+                               f'<div style="min-width:0"><div style="{S14};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{name}</div><div style="{S12m}">{r.symbol}</div></div>'
+                               f'<div style="{S14};text-align:right">{"" if np.isnan(r.qty) else f"{r.qty:.0f}주"}</div>'
+                               f'<div style="text-align:right"><div style="{S14};color:{color_pct(r.pnl_usd)}">{money(r.value_usd)}</div>'
+                               f'<div style="{S12m}">산 {money(r.buy_usd, bfx)}</div></div>'
+                               f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
+                st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
             kp = [
                 ('', '팔아서 확정된 손익', usd(real), f"{won(real, sign=True)} · 끝난 거래 {len(done)}건", color_pct(real)),
                 ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{won(unreal, sign=True)} · {len(hold_l)}건" if len(hold_l) else '0건', color_pct(unreal) if len(hold_l) else C['text']),
