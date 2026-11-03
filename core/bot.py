@@ -268,7 +268,10 @@ def run_record(b):
         d.at[i, 'updated'] = ts
     d.to_csv(LIVE_FILE, index=False)
     try:
-        kr_names(list(d['symbol']))
+        import glob as _g
+        sig = sorted(_g.glob('data/signal_*.csv'))
+        extra = list(pd.read_csv(sig[-1], dtype=str)['ticker'].dropna()) if sig else []
+        kr_names(list(d['symbol']) + extra)                 # 오늘 추천 종목 이름도 같이
     except Exception as e:
         print('  한글 종목명 갱신 실패:', type(e).__name__)
     # 계좌 금액 스냅샷 (하루 한 줄, 같은 날이면 덮어씀)

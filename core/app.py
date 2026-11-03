@@ -259,7 +259,7 @@ c1.markdown(f'<div class="ss-h1">Surge Scanner</div><div class="ss-sub">마감 �
 if c2.button("새로고침", help="60초 캐시를 비우고 다시 읽어요", use_container_width=True):
     st.cache_data.clear(); st.rerun()
 
-VIEWS = ['오늘', '보유', '성적', '기록']
+VIEWS = ['오늘', '성적', '기록']
 try:
     view = st.segmented_control('화면', VIEWS, default='오늘', selection_mode='single', label_visibility='collapsed', key='view') or '오늘'
 except Exception:
@@ -291,104 +291,22 @@ closed_m = mark_executable(closed_v6) if not closed_v6.empty else closed_v6
 
 # ════════════════════════════════════════════════════════════════════════════
 if view == '오늘':
-    # ── 오늘 신호 ──
     pre_rows = today[today['scan_type'] == 'preclose'] if (not today.empty and 'scan_type' in today.columns) else pd.DataFrame()
-    pre_ran = scan.get('mode') == 'preclose' and scan.get('scan_date') == sig_date
-    st.markdown(f'<div class="ss-sec">오늘 신호 <small>{sig_date} 미국장 · 마감 전 스캔 기준</small></div>', unsafe_allow_html=True)
+    S10m = f'font-size:10px;color:{C["muted"]}'; S10 = 'font-size:10px'; S10b = 'font-size:10px;font-weight:800'
+    NM = _csv('data/names_kr.csv'); nm = dict(zip(NM['symbol'], NM['name_kr'])) if not NM.empty else {}
+    UNI = _csv('data/ohlcv/universe.csv'); en = dict(zip(UNI['symbol'], UNI['name'])) if not UNI.empty and 'name' in UNI.columns else {}
     if pre_rows.empty:
-        if pre_ran or (not today.empty and 'scan_type' in today.columns):
-            st.markdown(f'<div class="card muted">마감 전 스캔에서 조건에 맞는 종목이 없었어요. 오늘은 사지 않아요.</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="card muted">마감 전 스캔은 매일 {T_SIG}(한국)에 올라와요. 아직 오늘 결과가 없어요.</div>', unsafe_allow_html=True)
+        body = f'<div style="{S10m};padding:6px 0">추천 없음</div>'
     else:
-        g = pre_rows.groupby('ticker')
-        rows = []
-        for tk, x in g:
-            r0 = x.iloc[0]
-            rows.append(dict(ticker=tk, strats=list(x['strategy']), price=_num(pd.Series([r0.get('price')])).iloc[0],
-                             rsi=_num(pd.Series([r0.get('rsi7')])).iloc[0], intra=_num(pd.Series([r0.get('intraday')])).iloc[0],
-                             ret1=_num(pd.Series([r0.get('ret1d')])).iloc[0], down=r0.get('consec_down', ''), vol=_num(pd.Series([r0.get('avg_vol20', np.nan)])).iloc[0]))
-        rows.sort(key=lambda r: (-len(r['strats']), r['ticker']))
-        st.markdown(f'<div class="todo"><b>{len(rows)}종목.</b> 봇이 그때 쓸 수 있는 현금을 <b>{len(rows)}등분</b>해서 마감가(LOC 주문)로 자동으로 사요. 직접 하실 건 없어요. '
-                    f'원화는 한국투자 고시 환율({FX:,.0f}원)로 바꾼 참고 금액이에요.</div>' if not np.isnan(FX) else
-                    f'<div class="todo"><b>{len(rows)}종목.</b> 봇이 그때 쓸 수 있는 현금을 <b>{len(rows)}등분</b>해서 마감가(LOC 주문)로 자동으로 사요. 직접 하실 건 없어요.</div>', unsafe_allow_html=True)
-        cards = ''
-        for r in rows:
-            p = r['price']
-            down = int(float(r['down'])) if str(r['down']).replace('.', '', 1).isdigit() else r['down']
-            cards += (f'<div class="card act"><div class="row"><span class="tk">{r["ticker"]}</span><span style="font-size:14px;font-weight:700;text-align:right">${p:,.2f} <span class="muted" style="font-size:10px">15:30</span>'
-                      f'<div class="muted" style="font-size:10px;font-weight:400">{kw(p)}</div></span></div>'
-                      f'<div style="margin-top:4px">{badges(r["strats"])}</div>'
-                      f'<div class="chips"><span>익절 <b style="color:#5fd35f">${p*1.05:,.2f}</b> <span class="muted">{kw(p*1.05)}</span></span><span>손절 <b style="color:{C["red"]}">${p*0.9:,.2f}</b> <span class="muted">{kw(p*0.9)}</span></span>'
-                      f'<span>RSI7 <b>{r["rsi"]:.0f}</b></span><span>일중 <b>{r["intra"]:.0f}%</b></span><span>당일 <b>{fmt_pct(r["ret1"])}</b></span><span>연속하락 <b>{down}일</b></span></div></div>')
-        st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="muted">가격은 15:30 ET 기준. 실제 진입가(종가)와 그에 맞춘 익절·손절가는 {T_TRK} 추적 뒤 "보유" 화면에 확정돼요.</div>', unsafe_allow_html=True)
-
-    # ── 이번 장 마감에 정리할 것 ──
-    due = pd.DataFrame()
-    if not act.empty:
-        a2 = act[act['status'] == 'OPEN'].copy()
-        if not a2.empty:
-            rem = a2['max_hold'].fillna(2) - a2['days_held'].fillna(0)
-            due = a2[rem <= 1].drop_duplicates('ticker')
-    st.markdown('<div class="ss-sec">이번 장 마감에 정리 <small>2거래일이 끝나는 것</small></div>', unsafe_allow_html=True)
-    if due.empty:
-        st.markdown('<div class="card muted">없어요. 보유 중인 건 걸어 둔 익절·손절 주문이 알아서 처리해요.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="todo">아래 종목은 이번 장이 마지막(2일째)이에요. 익절·손절이 안 되면 봇이 <b>장 마감 가격으로 자동 매도</b>해요.</div>', unsafe_allow_html=True)
-        cards = ''
-        for r in due.itertuples():
-            ch = r.change_pct if not np.isnan(r.change_pct) else 0.0
-            cards += (f'<div class="card sell"><div class="row"><span class="tk">{r.ticker}</span><span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span></div>'
-                      f'<div class="row muted" style="margin-top:4px"><span>진입 ${r.entry_price:,.2f}({kw(r.entry_price)}) · 현재 ${r.current_price:,.2f}({kw(r.current_price)})</span><span>{int(r.days_held) if not np.isnan(r.days_held) else 0}/{int(r.max_hold) if not np.isnan(r.max_hold) else 2}일</span></div></div>')
-        st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-
-    # ── 오늘 할 일 요약 ──
-    st.markdown('<div class="ss-sec">매일 자동으로 하는 일</div>', unsafe_allow_html=True)
-    st.markdown(f"""<div class="card muted" style="line-height:1.6">
-<b style="color:{C['text']}">장 시작 직후</b> 들고 있는 종목에 +5% 익절 주문(이미 넘었으면 바로 매도) → <b style="color:{C['text']}">장중</b> 5분마다 −10% 손절 감시 →
-<b style="color:{C['text']}">{T_SIG}</b> 마감 전 스캔 · 2일째 종목 마감가 매도 · 새 신호를 현금 나눠서 마감가 매수 → <b style="color:{C['text']}">{T_TRK}</b> 기록 갱신("성적 → 실제 매매").
-<br>전부 봇이 해요. 일·월 새벽은 미국 장이 없어요. {'11월 첫째 일요일부터 겨울 시간이라 한 시간 늦어져요.' if _dst else '3월 둘째 일요일부터 서머타임이라 한 시간 빨라져요.'}</div>""", unsafe_allow_html=True)
-
-
-# ════════════════════════════════════════════════════════════════════════════
-elif view == '보유':
-    st.markdown(f'<div class="ss-sec">보유 <small>{n_open}건 진행 중</small></div>', unsafe_allow_html=True)
-    if act.empty:
-        st.markdown('<div class="card muted">진행 중인 포지션이 없어요.</div>', unsafe_allow_html=True)
-    else:
-        a2 = act.sort_values(['status', 'signal_date'], ascending=[False, False])
-        cards = ''; fresh = []
-        for tk, x in a2.groupby('ticker', sort=False):
-            r = x.iloc[0]
-            if r['status'] == 'OPEN' and (np.isnan(r.get('days_held', np.nan)) or r.get('days_held', 0) < 1):
-                fresh.append((tk, list(x['strategy']), r.get('entry_price'), r.get('tp_price'), r.get('sl_price')))
-                continue
-            ep, cp, ch = r.get('entry_price'), r.get('current_price'), r.get('change_pct')
-            if np.isnan(ch) and not np.isnan(ep):
-                ch = 0.0; cp = ep if np.isnan(cp) else cp
-            dh, mh = r.get('days_held'), r.get('max_hold') if not np.isnan(r.get('max_hold', np.nan)) else 2
-            if r['status'] == 'PENDING' or np.isnan(ep):
-                body = f'<div class="muted">신호일 마감가로 진입 예정(종가 확정 대기) · 신호 {r["signal_date"]}</div>'
-            else:
-                pos = min(max((ch + 10) / 15, 0), 1) * 100 if not np.isnan(ch) else 0
-                fill = '#5fd35f' if ch >= 0 else C['red']
-                left, width = (66.7, pos - 66.7) if pos >= 66.7 else (pos, 66.7 - pos)
-                body = (f'<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="muted">진입 ${ep:,.2f}<br>{kw(ep)}</span>'
-                        f'<span style="font-weight:700;color:{color_pct(ch)}">{fmt_pct(ch)}</span><span class="muted" style="text-align:right">현재 ${cp:,.2f}<br>{kw(cp)}</span></div>'
-                        f'<div class="bar"><div class="f" style="left:{left}%;width:{max(width,0)}%;background:{fill}"></div><div class="z"></div><div class="m" style="left:calc({pos}% - 2px)"></div></div>'
-                        f'<div style="display:flex;justify-content:space-between" class="muted"><span>손절 ${r["sl_price"]:,.2f} {kw(r["sl_price"])}</span><span>{int(dh) if not np.isnan(dh) else 0}/{int(mh)}일</span><span>목표 ${r["tp_price"]:,.2f} {kw(r["tp_price"])}</span></div>')
-            cards += (f'<div class="card"><div class="row"><span class="tk">{tk}</span>{pill(r["status"])}</div>'
-                      f'<div style="margin:4px 0">{badges(x["strategy"])}</div>{body}</div>')
-        if fresh:
-            st.markdown(f'<div class="todo">방금 들어간 {len(fresh)}종목 — 다음 장 시작에 봇이 익절 주문을 걸고 손절을 감시해요.</div>', unsafe_allow_html=True)
-            st.markdown('<div class="grid">' + ''.join(
-                f'<div class="card act"><div class="row"><span class="tk">{tk}</span>{badges(ss, short=True)}</div>'
-                f'<div class="chips"><span>진입 <b>${ep:,.2f}</b> <span class="muted">{kw(ep)}</span></span><span>익절 <b style="color:#5fd35f">${tp:,.2f}</b> <span class="muted">{kw(tp)}</span></span><span>손절 <b style="color:{C["red"]}">${sl:,.2f}</b> <span class="muted">{kw(sl)}</span></span></div></div>'
-                for tk, ss, ep, tp, sl in fresh) + '</div>', unsafe_allow_html=True)
-        if cards:
-            st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
-        st.markdown('<div class="muted" style="margin-top:6px">막대: 손절(−10%) ─ 0 ─ 목표(+5%). 세로선이 0, 흰 점이 지금 위치. 현재가는 마지막 추적 시점 기준이에요.</div>', unsafe_allow_html=True)
+        g = 'display:grid;grid-template-columns:42% 33% 25%;align-items:center'
+        body = ''
+        for tk, x in pre_rows.groupby('ticker'):
+            p = _num(pd.Series([x.iloc[0].get('price')])).iloc[0]
+            body += (f'<div style="{g};padding:10px 0;border-bottom:1px solid {C["line"]}">'
+                     f'<div style="min-width:0"><div style="{S10b};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nm.get(tk) or en.get(tk, tk)}</div><div style="{S10m}">{tk}</div></div>'
+                     f'<div style="text-align:right"><div style="{S10b}">${p:,.2f}</div><div style="{S10m}">{kw(p)}</div></div>'
+                     f'<div style="text-align:right"><div style="{S10};color:#5fd35f">${p * 1.05:,.2f}</div><div style="{S10};color:{C["red"]}">${p * 0.9:,.2f}</div></div></div>')
+    st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S10m};margin-bottom:8px">오늘 추천 ({sig_date})</div>{body}</div>', unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -396,7 +314,6 @@ elif view == '성적':
     sub = st.segmented_control('성적 보기', ['실제 매매', '과거부터 지금까지'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
     if sub == '실제 매매':
         L = _csv('data/live_trades.csv')
-        st.markdown('<div class="ss-sec">실제 매매 <small>10/26부터 · 한국투자 체결 기준</small></div>', unsafe_allow_html=True)
         if L.empty:
             st.markdown('<div class="card muted">아직 기록이 없어요. 장 마감 뒤 갱신 때 체결 내역으로 채워져요.</div>', unsafe_allow_html=True)
         else:
@@ -471,57 +388,6 @@ elif view == '성적':
                                f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(abs(r.pnl_usd))}) {abs(r.pnl_usd / r.buy_usd * 100) if r.buy_usd else 0:.1f}%</div></div>'
                                f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
-            kp = [
-                ('', '팔아서 확정된 손익', usd(real), f"{won(real, sign=True)} · 끝난 거래 {len(done)}건", color_pct(real)),
-                ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{won(unreal, sign=True)} · {len(hold_l)}건" if len(hold_l) else '0건', color_pct(unreal) if len(hold_l) else C['text']),
-                ('', '익절 · 손절 · 만기', f"{w} · {l_} · {e_}", '끝난 거래', C['text']),
-                ('', '한 번 살 때 평균', fmt_pct(done['ret_pct'].mean()) if len(done) else '—', '수수료 빼기 전', color_pct(done['ret_pct'].mean()) if len(done) else C['muted']),
-            ]
-            st.markdown('<div class="grid2">' + ''.join(
-                f'<div class="kpi {cls}"><div class="l">{l}</div><div class="v" style="color:{vc}">{v}</div><div class="d">{dsc}</div></div>'
-                for cls, l, v, dsc, vc in kp) + '</div>', unsafe_allow_html=True)
-            if len(cv) > 1:
-                ch = alt.Chart(cv).mark_line(point=True, color=C['blue'], strokeWidth=2).encode(
-                    x=alt.X('date:T', title=None, axis=alt.Axis(format='%m/%d', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
-                    y=alt.Y('equity_usd:Q', title=None, scale=alt.Scale(zero=False), axis=alt.Axis(format='$,.0f', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'])),
-                    tooltip=[alt.Tooltip('date:T', title='날짜', format='%Y-%m-%d'), alt.Tooltip('equity_usd:Q', title='계좌($)', format=',.2f')])
-                rl = alt.Chart(pd.DataFrame({'y': [start_eq]})).mark_rule(color=C['muted'], strokeDash=[4, 4]).encode(y='y:Q')
-                st.markdown('<div class="muted" style="margin-top:12px">계좌 금액 (달러)</div>', unsafe_allow_html=True)
-                st.altair_chart((rl + ch).properties(height=180, background=C['surface']).configure_view(stroke=None), use_container_width=True)
-            rows_ = ''
-            stt = {'closed': '', 'holding': '보유 중', 'ordered': '주문', 'unfilled': '안 사짐'}
-            def _d(x):
-                return x[5:].replace('-', '/') if isinstance(x, str) and len(x) >= 10 else ''
-            for r in L.sort_values('order_date', ascending=False).itertuples():
-                bfx = r.buy_fx if not np.isnan(r.buy_fx) else None; sfx = r.sell_fx if not np.isnan(r.sell_fx) else None
-                qty = '' if np.isnan(r.qty) else f'{r.qty:.0f}주'
-                wtxt = f'계좌의 {r.weight_pct:.0f}%' if not np.isnan(r.weight_pct) else ''
-                if r.status in ('closed', 'holding') and not np.isnan(r.buy_usd):
-                    closed_ = r.status == 'closed'
-                    tag = pill({"익절": "WIN", "손절": "LOSS", "만기": "EXPIRED"}.get(r.result, "EXPIRED")) if closed_ else pill("OPEN")
-                    pct = r.ret_pct if closed_ else r.cur_pct
-                    now_amt = r.sell_usd if closed_ else r.value_usd
-                    now_px = r.sell_px if closed_ else (r.value_usd / r.qty if r.qty and not np.isnan(r.value_usd) else np.nan)
-                    now_fx = sfx if closed_ else None
-                    when = f'{_d(r.buy_date)} 삼 → {_d(r.sell_date)} 팖' if closed_ else f'{_d(r.buy_date)} 삼 · 보유 중'
-                    lab2 = '판 때' if closed_ else '지금'
-                    px_s = lambda v: '—' if v is None or np.isnan(v) else f'${v:,.2f}'
-                    amt_s = lambda v, fx_: '—' if v is None or np.isnan(v) else f'${v:,.2f}<small>{won(v, fx_)}</small>'
-                    rows_ += (f'<div class="card" style="padding:12px 14px">'
-                              f'<div class="row"><span><span class="tk" style="font-size:14px">{r.symbol}</span> {tag}</span>'
-                              f'<span style="font-weight:700;font-size:14px;color:{color_pct(pct)}">{fmt_pct(pct)}</span></div>'
-                              f'<div class="muted" style="margin-top:2px">{when} · {qty} · {wtxt}</div>'
-                              f'<table class="tt"><tr><th></th><th>1주 가격(평단)</th><th>총 금액</th></tr>'
-                              f'<tr><td>산 때</td><td>{px_s(r.buy_px)}</td><td>{amt_s(r.buy_usd, bfx)}</td></tr>'
-                              f'<tr><td>{lab2}</td><td>{px_s(now_px)}</td><td>{amt_s(now_amt, now_fx)}</td></tr></table>'
-                              f'<div class="tfoot"><span class="muted">{"손익(확정)" if closed_ else "손익(확정 전)"}</span>'
-                              f'<span style="font-weight:700;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} <span style="font-weight:500">({won(r.pnl_usd, now_fx, sign=True)})</span></span></div></div>')
-                else:
-                    rows_ += (f'<div class="card" style="padding:12px 14px"><div class="row"><span><span class="tk" style="font-size:14px">{r.symbol}</span></span>'
-                              f'<span class="muted">{stt.get(r.status, r.status)}</span></div><div class="muted" style="margin-top:2px">{_d(r.order_date)} 마감 주문 · {wtxt}</div></div>')
-            st.markdown(rows_, unsafe_allow_html=True)
-            st.markdown('<div class="muted">매일 장 마감 뒤(한국 05:20 무렵) 한국투자 체결 내역으로 갱신돼요. 금액·수량은 공개 저장소라 기록하지 않고, 계좌 대비 비중(%)과 수익률만 보여요. '
-                        '직접 판 거래도 체결 기준으로 들어가요. 수익률은 증권사 수수료 빼기 전이에요.</div>', unsafe_allow_html=True)
     else:
         ex = closed_m[closed_m['exec_ok']] if not closed_m.empty else closed_m
         allv = closed_m[~closed_m['is_etf']] if not closed_m.empty else closed_m
