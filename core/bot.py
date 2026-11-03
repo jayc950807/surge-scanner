@@ -9,7 +9,7 @@
   규칙 (research/STRATEGY_V6.md · 분봉 재현 시뮬과 같은 방식)
     매수: 신호일 15:46 가격 +3% 한도의 LOC(장마감지정가) → 종가에 체결. LOC 가 거부되면 현재가 +1% 지정가.
     익절: 매일 장 시작 직후 평균단가 +5% 지정가 매도 (당일 주문이라 매일 다시 건다)
-    손절: 09:35부터 5분마다 현재가 확인, 평균단가 −10% 이하면 걸어 둔 주문 취소 → 현재가 −3% 지정가 매도 (안 팔리면 −7%)
+    손절: 09:31부터 1분마다 현재가 확인, 평균단가 −10% 이하면 걸어 둔 주문 취소 → 현재가 −3% 지정가 매도 (안 팔리면 −7%)
     만기: 산 뒤 2거래일째 장 마감에 MOC 매도 (거부되면 현재가 −3% 지정가)
 
   안전장치
@@ -40,7 +40,7 @@ from kis import KIS, KISError, round_px, EXCG_ORDER
 
 TP, SL, MAX_HOLD = 0.05, -0.10, 2
 LOC_CAP = 0.03
-POLL_MIN = 5
+POLL_MIN = 1          # 손절 확인 간격(분). 2026-11-04 5→1 (1분봉 시뮬레이션: 194만→203만, −15% 넘는 손절 6→3건)
 
 
 def env_f(name, default):
@@ -551,7 +551,7 @@ def run_monitor(b, max_minutes=350):
     log(f'  감시 시작 ET {now_et():%H:%M}')
     place_take_profits(b)
     prev = _held_set(b); last_rec = time.time()
-    nxt = max(now_et(), n0.replace(hour=9, minute=35, second=5, microsecond=0))
+    nxt = max(now_et(), n0.replace(hour=9, minute=31, second=5, microsecond=0))
     while True:
         sleep_until(nxt)
         if now_et() >= end:

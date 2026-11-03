@@ -6,7 +6,7 @@ on:
       stop_every:
         description: '손절 확인 간격(분)'
         required: false
-        default: '5'
+        default: '1'
 permissions:
   contents: write
 env:
@@ -28,7 +28,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python core/sim_realistic.py
         env:
-          STOP_EVERY: ${{ github.event.inputs.stop_every || '5' }}
+          STOP_EVERY: ${{ github.event.inputs.stop_every || '1' }}
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
