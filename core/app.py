@@ -393,7 +393,7 @@ elif view == '성적':
     sub = st.segmented_control('성적 보기', ['실제 매매', '과거부터 지금까지'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
     if sub == '실제 매매':
         L = _csv('data/live_trades.csv')
-        st.markdown('<div class="ss-sec">실제 매매 <small>봇 첫 매매 10/26(미국)부터 · 한국투자 체결 기준 · 10/27부터 추천 수로 나눠 전부 투자</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="ss-sec">실제 매매 <small>10/26부터 · 한국투자 체결 기준</small></div>', unsafe_allow_html=True)
         if L.empty:
             st.markdown('<div class="card muted">아직 기록이 없어요. 장 마감 뒤 갱신 때 체결 내역으로 채워져요.</div>', unsafe_allow_html=True)
         else:
@@ -424,9 +424,30 @@ elif view == '성적':
                     return ''
                 v = x * fx
                 return (('+' if v > 0 else ('−' if v < 0 else '')) if sign else '') + f'{abs(v) if sign else v:,.0f}원'
+            # ── 맨 위: 지금 내 계좌 (주식 + 현금) → 시작 금액 대비 손익 ──
+            if not AC.empty and not np.isnan(now_eq):
+                last = AC.iloc[-1]
+                cash_now = float(_num(pd.Series([last.get('cash_usd')])).iloc[0]); stock_now = float(_num(pd.Series([last.get('stock_usd')])).iloc[0])
+                diff = now_eq - start_eq
+                sgn = lambda v: '+' if v > 0 else ('−' if v < 0 else '')
+                st.markdown(
+                    f'<div class="card" style="padding:18px 18px 16px">'
+                    f'<div class="muted">지금 내 계좌 <span style="font-size:0.75rem">(주식 + 현금 · {last.get("date", "")} 기준)</span></div>'
+                    f'<div style="font-size:2.1rem;font-weight:800;line-height:1.15;margin-top:4px">${now_eq:,.2f}</div>'
+                    f'<div style="font-size:1.05rem;color:{C["sub"]}">{won(now_eq)}</div>'
+                    f'<div style="display:flex;gap:10px;margin-top:12px">'
+                    f'<div style="flex:1;border:1px solid {C["line"]};border-radius:10px;padding:8px 10px">'
+                    f'<div class="muted">투자 중 (주식)</div><div style="font-weight:700">${stock_now:,.2f}</div><div class="muted">{won(stock_now)}</div></div>'
+                    f'<div style="flex:1;border:1px solid {C["line"]};border-radius:10px;padding:8px 10px">'
+                    f'<div class="muted">현금</div><div style="font-weight:700">${cash_now:,.2f}</div><div class="muted">{won(cash_now)}</div></div></div>'
+                    f'<div style="margin-top:14px;padding-top:12px;border-top:1px solid {C["line"]}">'
+                    f'<div class="muted">처음 넣은 돈 ${start_eq:,.2f} ({won(start_eq)}) 대비</div>'
+                    f'<div style="font-size:1.6rem;font-weight:800;color:{color_pct(diff)}">{sgn(diff)}${abs(diff):,.2f} ({fmt_pct(chg)})</div>'
+                    f'<div style="font-size:1.0rem;font-weight:600;color:{color_pct(diff)}">{won(diff, sign=True)}</div></div></div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="card muted">계좌 금액은 장 마감 뒤 갱신 때 채워져요.</div>', unsafe_allow_html=True)
             kp = [
-                ('hero', '지금 계좌 (현금 + 주식)', (f"${now_eq:,.2f} · {won(now_eq)}" if won(now_eq) else f"${now_eq:,.2f}") if not np.isnan(now_eq) else '—',
-                 f"시작 ${start_eq:,.2f}({won(start_eq)}) → {fmt_pct(chg)} · {AC['date'].iloc[-1] if not AC.empty else ''} 기준 · 환율 {fx_now:,.0f}원" if not np.isnan(now_eq) else '장 마감 뒤 갱신 때 채워져요', color_pct(chg)),
                 ('', '팔아서 확정된 손익', usd(real), f"{won(real, sign=True)} · 끝난 거래 {len(done)}건", color_pct(real)),
                 ('', '들고 있는 것 (확정 전)', usd(unreal) if len(hold_l) else '없음', f"{won(unreal, sign=True)} · {len(hold_l)}건" if len(hold_l) else '0건', color_pct(unreal) if len(hold_l) else C['text']),
                 ('', '익절 · 손절 · 만기', f"{w} · {l_} · {e_}", '끝난 거래', C['text']),
