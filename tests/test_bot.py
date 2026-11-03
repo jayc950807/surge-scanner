@@ -178,6 +178,12 @@ class TestMonitor:
         bot.place_take_profits(bot.Broker(k))
         assert k.orders == [('sell', 'AAA', 2, 3.88, '00')]           # 목표(2.84)보다 위 → 현재가 −1%
 
+    def test_take_profit_never_below_target(self, live):
+        hold = [{'symbol': 'AAA', 'qty': 5, 'sellable': 5, 'avg': 1.30, 'price': 1.37, 'excg': 'NASD'}]
+        k = FakeKIS(hold=hold, prices={'AAA': 1.37})
+        bot.place_take_profits(bot.Broker(k))
+        assert k.orders == [('sell', 'AAA', 5, 1.36, '00')]            # 1.37×0.99=1.356 → 목표 1.36 아래로는 안 감
+
     def test_take_profit_retried_when_missing(self, live):
         hold = [{'symbol': 'AAA', 'qty': 2, 'sellable': 2, 'avg': 2.0, 'price': 2.0, 'excg': 'NASD'}]
         k = FakeKIS(hold=hold, prices={'AAA': 2.0})

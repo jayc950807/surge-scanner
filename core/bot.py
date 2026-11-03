@@ -425,7 +425,8 @@ def place_take_profits(b):
         px = b.price(h['symbol'], h['excg'])
         lim, why = tgt, '+5% 익절 주문'
         if px and px >= tgt:
-            lim, why = round_px(px * 0.99), f'목표 이미 넘음({px / h["avg"] * 100 - 100:+.1f}%) → 현재가 −1% 매도'
+            # 현재가 −1% 로 바로 팔리게 하되, 목표가(+5%)보다 낮게는 걸지 않음 (11/3 XTND: 목표 바로 위에서 −1% 해서 +3.85% 에 팔린 문제)
+            lim, why = max(tgt, round_px(px * 0.99)), f'목표 이미 넘음({px / h["avg"] * 100 - 100:+.1f}%) → 현재가 근처 매도'
         try:
             b.order('sell', h['symbol'], h['excg'], h['sellable'], lim, '00', why)
             if gh: print(f'::notice title=take-profit::{h["symbol"]} 익절 매도 주문 접수 — {why}')
