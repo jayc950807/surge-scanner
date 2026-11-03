@@ -4,7 +4,7 @@ name: Bot Monitor (장중 익절·손절)
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   actions: write
 concurrency:
   group: bot-monitor

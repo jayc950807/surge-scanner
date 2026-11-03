@@ -478,6 +478,31 @@ def redispatch():
         print('  다음 감시 작업 예약 실패:', type(e).__name__)
 
 
+def live_commit(msg):
+    """장중 실매매 기록을 저장소에 바로 올림(앱 '성적 → 실제 매매'가 장중에도 갱신되게). GitHub Actions 에서만."""
+    if not os.environ.get('GITHUB_ACTIONS'):
+        return
+    import subprocess
+    run = lambda *a: subprocess.run(list(a), capture_output=True, text=True)
+    run('git', 'config', 'user.name', 'github-actions[bot]'); run('git', 'config', 'user.email', 'github-actions[bot]@users.noreply.github.com')
+    run('git', 'add', LIVE_FILE, ACCT_FILE)
+    if run('git', 'diff', '--staged', '--quiet').returncode == 0:
+        return
+    run('git', 'commit', '-m', msg)
+    for _ in range(4):
+        if run('git', 'pull', '--rebase', 'origin', 'main').returncode == 0 and run('git', 'push', 'origin', 'HEAD:main').returncode == 0:
+            print('  실매매 기록 올림'); return
+        run('git', 'rebase', '--abort'); time.sleep(5)
+    print('  실매매 기록 올리기 실패(다음에 다시)')
+
+
+def _held_set(b):
+    try:
+        return {h['symbol'] for h in b.holdings()}
+    except KISError:
+        return None
+
+
 def run_monitor(b, max_minutes=350):
     start = time.time(); n0 = now_et(); today = n0.date()
     if not is_us_trading_day(today):
@@ -489,6 +514,7 @@ def run_monitor(b, max_minutes=350):
     sleep_until(open_t)
     log(f'  감시 시작 ET {now_et():%H:%M}')
     place_take_profits(b)
+    prev = _held_set(b); last_rec = time.time()
     nxt = max(now_et(), n0.replace(hour=9, minute=35, second=5, microsecond=0))
     while True:
         sleep_until(nxt)
@@ -499,6 +525,17 @@ def run_monitor(b, max_minutes=350):
             place_take_profits(b)      # 빠진 익절 주문(거부·실패·갭 상승) 다시 걸기 — 이미 걸려 있으면 건너뜀
         except KISError as e:
             print('  확인 실패:', str(e)[:80])
+        # 팔린 종목이 생겼거나 30분마다 → 실매매 기록 갱신해서 앱에 바로 반영
+        try:
+            cur = _held_set(b)
+            if b.live and os.path.exists(LIVE_FILE) and ((cur is not None and prev is not None and cur != prev) or time.time() - last_rec > 1800):
+                time.sleep(20)                 # 체결 내역 반영 대기
+                run_record(b); live_commit(f'live: {now_et():%Y-%m-%d %H:%M} ET 장중 갱신')
+                last_rec = time.time()
+            if cur is not None:
+                prev = cur
+        except Exception as e:
+            print('  장중 기록 갱신 실패:', type(e).__name__, str(e)[:60])
         if (time.time() - start) / 60 > max_minutes:
             log('  작업 시간 한도 → 다음 작업으로 넘김'); redispatch(); return
         nxt = nxt + timedelta(minutes=POLL_MIN)
