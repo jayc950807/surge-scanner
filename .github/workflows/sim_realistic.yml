@@ -2,6 +2,11 @@ name: Simulation (봇 방식 재계산)
 # 과거 신호를 지금 봇 방식(LOC 한도·익절 지정가·5분 손절·만기·수수료·나눠서 전부 투자)으로 1분봉 재계산 → data/sim_realistic.*
 on:
   workflow_dispatch:
+    inputs:
+      stop_every:
+        description: '손절 확인 간격(분)'
+        required: false
+        default: '5'
 permissions:
   contents: write
 env:
@@ -22,10 +27,12 @@ jobs:
           cache: 'pip'
       - run: pip install -r requirements.txt
       - run: python core/sim_realistic.py
+        env:
+          STOP_EVERY: ${{ github.event.inputs.stop_every || '5' }}
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/sim_realistic.csv data/sim_realistic.json
+          git add data/sim_realistic*.csv data/sim_realistic*.json
           git diff --staged --quiet && exit 0
           git commit -m "sim: 봇 방식 재계산"
           for i in 1 2 3 4 5; do git pull --rebase origin main && git push origin main && exit 0; git rebase --abort 2>/dev/null || true; sleep 7; done

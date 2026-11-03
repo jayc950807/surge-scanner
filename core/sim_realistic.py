@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import alpaca_data as ad
 
 FEE = 0.0025; SLIP = 0.005; TP = 0.05; SL = -0.10; LOC_CAP = 0.03; HOLD = 2
+STOP_EVERY = int(os.environ.get('STOP_EVERY', '5'))       # 손절 확인 간격(분). 5 = 지금 봇
+SUF = '' if STOP_EVERY == 5 else f'_{STOP_EVERY}m'
 
 
 def trades():
@@ -81,7 +83,7 @@ def sim_one(sym, sd):
                 continue
             if tp_on and h[j] >= tgt + 0.01:
                 return dict(status='closed', exit='익절', day=di, entry=entry, exit_px=tgt, date=str(day.date()))
-            if 575 <= t <= 940 and (t - 575) % 5 == 0:     # 09:35, 09:40 … 15:40 확인 (직전 봉 종가 = 그때 현재가)
+            if (575 if STOP_EVERY == 5 else 571) <= t <= 940 and (t - 575) % STOP_EVERY == 0:     # 확인 시각 (직전 봉 종가 = 그때 현재가)
                 cur = c[j - 1] if j > 0 else o[j]
                 if cur <= slp:
                     return dict(status='closed', exit='손절', day=di, entry=entry, exit_px=cur * (1 - SLIP), date=str(day.date()))
@@ -121,7 +123,7 @@ def main():
             s['ret_pct'] = round(((s['exit_px'] * (1 - FEE)) / (s['entry'] * (1 + FEE)) - 1) * 100, 2)
         out.append(s)
     o = pd.DataFrame(out)
-    os.makedirs('data', exist_ok=True); o.to_csv('data/sim_realistic.csv', index=False)
+    os.makedirs('data', exist_ok=True); o.to_csv(f'data/sim_realistic{SUF}.csv', index=False)
     c = o[o['status'] == 'closed'].copy()
     c['in'] = pd.to_datetime(c['signal_date']); c['out'] = pd.to_datetime(c['date']); c['r'] = c['ret_pct'] / 100; c['px'] = c['entry']
     f_real, mdd_real, n_real = account(c)
@@ -129,13 +131,13 @@ def main():
     t['px'] = pd.to_numeric(t['entry_price'], errors='coerce')
     f_old, mdd_old, n_old = account(t.dropna(subset=['in', 'out', 'px']))
     vc = o['status'].value_counts().to_dict(); ex = c['exit'].value_counts().to_dict()
-    msg = (f"봇 방식 재계산: 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
+    msg = (f"봇 방식 재계산(손절 {STOP_EVERY}분마다): 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
            f"{' · '.join(f'{k} {v}' for k, v in ex.items())} | 건당 평균 {c['ret_pct'].mean():+.2f}% | "
            f"100만원 → {f_real:,.0f}원 (최대 낙폭 {mdd_real*100:.0f}%) || 예전 계산(추적기 1분봉·비용 1%·전부 체결) → {f_old:,.0f}원 (최대 낙폭 {mdd_old*100:.0f}%)")
     print(msg); print(f'::notice title=sim::{msg}')
     json.dump(dict(final_real=f_real, mdd_real=mdd_real, n_real=n_real, final_old=f_old, mdd_old=mdd_old, n_old=n_old,
                    counts=vc, exits=ex, mean_real=float(c['ret_pct'].mean()), mean_old=float(x['result_pct'].mean()),
-                   updated=datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')), open('data/sim_realistic.json', 'w'), ensure_ascii=False, indent=1)
+                   updated=datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')), open(f'data/sim_realistic{SUF}.json', 'w'), ensure_ascii=False, indent=1)
 
 
 if __name__ == '__main__':
