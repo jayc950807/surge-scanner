@@ -57,8 +57,8 @@ def sim_one(sym, sd):
         return dict(status='no_data')
     g0 = m[m['day'] == days[0]]
     hm0 = g0.index.hour * 60 + g0.index.minute
-    p_bot = float(g0[hm0 <= 945]['c'].iloc[-1]) if (hm0 <= 945).any() else float(g0['c'].iloc[-1])   # 15:45 쯤 봇이 본 가격
-    close0 = float(g0['c'].iloc[-1])
+    p_bot = float(g0[hm0 <= 945]['Close'].iloc[-1]) if (hm0 <= 945).any() else float(g0['Close'].iloc[-1])   # 15:45 쯤 봇이 본 가격
+    close0 = float(g0['Close'].iloc[-1])
     cap = math.ceil(p_bot * (1 + LOC_CAP) * 100 - 1e-9) / 100
     if close0 > cap + 1e-9:
         return dict(status='unfilled', p_bot=p_bot, entry=close0, cap=cap)
@@ -66,7 +66,7 @@ def sim_one(sym, sd):
     for di, day in enumerate(days[1:HOLD + 1], start=1):
         g = m[m['day'] == day]
         hm = (g.index.hour * 60 + g.index.minute).values
-        o, h, l, c = g['o'].values, g['h'].values, g['l'].values, g['c'].values
+        o, h, l, c = g['Open'].values, g['High'].values, g['Low'].values, g['Close'].values
         tp_on = False
         for j in range(len(g)):
             t = hm[j]
@@ -115,7 +115,7 @@ def main():
         try:
             s = sim_one(r.ticker, r.signal_date)
         except Exception as e:
-            s = dict(status='error', err=type(e).__name__)
+            s = dict(status='error', err=f'{type(e).__name__}: {str(e)[:80]}')
         s.update(ticker=r.ticker, signal_date=r.signal_date, strategy=r.strategy, tracker_pct=r.result_pct, tracker_status=r.result_status)
         if s.get('status') == 'closed':
             s['ret_pct'] = round(((s['exit_px'] * (1 - FEE)) / (s['entry'] * (1 + FEE)) - 1) * 100, 2)
@@ -139,4 +139,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback; tb = traceback.format_exc()
+        print(tb); print('::error title=sim::' + tb.replace('\n', ' | ')[-900:]); raise
