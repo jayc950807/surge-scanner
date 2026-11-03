@@ -452,7 +452,7 @@ elif view == '성적':
             if not hold_l.empty:
                 NM = _csv('data/names_kr.csv'); nm = dict(zip(NM['symbol'], NM['name_kr'])) if not NM.empty else {}
                 UNI = _csv('data/ohlcv/universe.csv'); en = dict(zip(UNI['symbol'], UNI['name'])) if not UNI.empty and 'name' in UNI.columns else {}
-                S12m = f'font-size:12px;color:{C["muted"]}'; S12 = 'font-size:12px'; S14 = 'font-size:14px;font-weight:800'
+                S12m = f'font-size:10px;color:{C["muted"]}'; S12 = 'font-size:10px'; S14 = 'font-size:10px;font-weight:800'   # 투자 중 박스: 전부 10px (사용자 지정)
                 money = lambda v, fx_=None: '—' if v is None or np.isnan(v) else f'${v:,.2f}' + (f' ({won(v, fx_)})' if won(v, fx_) else '')
                 g = 'display:grid;grid-template-columns:30% 12% 37% 21%;align-items:center;column-gap:0'
                 rows_h = (f'<div style="{g};padding:0 0 6px;border-bottom:1px solid {C["line"]}">'
