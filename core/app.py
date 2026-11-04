@@ -298,14 +298,14 @@ if view == '오늘':
     if pre_rows.empty:
         body = f'<div style="{S10m};padding:6px 0">추천 없음</div>'
     else:
-        g = 'display:grid;grid-template-columns:42% 33% 25%;align-items:center'
+        g = 'display:grid;grid-template-columns:40% 28% 32%;align-items:center'
         body = ''
         for tk, x in pre_rows.groupby('ticker'):
             p = _num(pd.Series([x.iloc[0].get('price')])).iloc[0]
             body += (f'<div style="{g};padding:10px 0;border-bottom:1px solid {C["line"]}">'
                      f'<div style="min-width:0"><div style="{S10b};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nm.get(tk) or en.get(tk, tk)}</div><div style="{S10m}">{tk}</div></div>'
                      f'<div style="text-align:right"><div style="{S10b}">${p:,.2f}</div><div style="{S10m}">{kw(p)}</div></div>'
-                     f'<div style="text-align:right"><div style="{S10};color:#5fd35f">${p * 1.05:,.2f}</div><div style="{S10};color:{C["red"]}">${p * 0.9:,.2f}</div></div></div>')
+                     f'<div style="text-align:right;white-space:nowrap"><div style="{S10};color:#5fd35f">${p * 1.05:,.2f} <span style="color:{C["muted"]}">{kw(p * 1.05)}</span></div><div style="{S10};color:{C["red"]}">${p * 0.9:,.2f} <span style="color:{C["muted"]}">{kw(p * 0.9)}</span></div></div></div>')
     st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S10m};margin-bottom:8px">오늘 추천 ({sig_date})</div>{body}</div>', unsafe_allow_html=True)
 
 
@@ -374,7 +374,7 @@ elif view == '성적':
                 UNI = _csv('data/ohlcv/universe.csv'); en = dict(zip(UNI['symbol'], UNI['name'])) if not UNI.empty and 'name' in UNI.columns else {}
                 S12m = f'font-size:10px;color:{C["muted"]}'; S12 = 'font-size:10px'; S14 = 'font-size:10px;font-weight:800'   # 투자 중 박스: 전부 10px (사용자 지정)
                 money = lambda v, fx_=None: '—' if v is None or np.isnan(v) else f'${v:,.2f}' + (f' ({won(v, fx_)})' if won(v, fx_) else '')
-                g = 'display:grid;grid-template-columns:30% 12% 37% 21%;align-items:center;column-gap:0'
+                g = 'display:grid;grid-template-columns:24% 9% 37% 30%;align-items:center;column-gap:0'
                 rows_h = ''
                 for r in hold_l.sort_values('buy_date').itertuples():
                     name = nm.get(r.symbol) or en.get(r.symbol, r.symbol)
@@ -386,7 +386,9 @@ elif view == '성적':
                                f'<div style="{S14};text-align:right">{"" if np.isnan(r.qty) else f"{r.qty:.0f}주"}</div>'
                                f'<div style="text-align:right"><div style="{S14};color:{color_pct(r.pnl_usd)}">{money(r.value_usd)}</div>'
                                f'<div style="{S12};color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)} ({won(abs(r.pnl_usd))}) {abs(r.pnl_usd / r.buy_usd * 100) if r.buy_usd else 0:.1f}%</div></div>'
-                               f'<div style="text-align:right"><div style="{S12};color:#5fd35f">${tp:,.2f}</div><div style="{S12};color:{C["text"]}">${r.buy_px:,.2f}</div><div style="{S12};color:{C["red"]}">${sl:,.2f}</div></div></div>')
+                               f'<div style="text-align:right;white-space:nowrap"><div style="{S12};color:#5fd35f">${tp:,.2f} <span style="color:{C["muted"]}">{kw(tp)}</span></div>'
+                               f'<div style="{S12};color:{C["text"]}">${r.buy_px:,.2f} <span style="color:{C["muted"]}">{kw(r.buy_px)}</span></div>'
+                               f'<div style="{S12};color:{C["red"]}">${sl:,.2f} <span style="color:{C["muted"]}">{kw(sl)}</span></div></div></div>')
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S12m};margin-bottom:8px">투자 중 ({len(hold_l)}종목)</div>{rows_h}</div>', unsafe_allow_html=True)
             # ── 결과: 전체 · 전략별 익절/손절/만기 ──
             if not done.empty:

@@ -262,6 +262,9 @@ def run_record(b):
             if fx and r['sell_fx'] == '': d.at[i, 'sell_fx'] = fx
         else:
             h = hold.get(r['symbol'])
+            nt = now_et(); mins = nt.hour * 60 + nt.minute
+            if r['cur_pct'] != '' and r['status'] == 'holding' and not (570 <= mins <= 965 and nt.weekday() < 5):
+                continue                     # 장 밖에서는 시세가 엉뚱하게(0% 등) 올 수 있어 장중·마감 직후 값 유지
             px = (b.price(r['symbol'], h['excg']) or h['price']) if h else None
             d.at[i, 'status'] = 'holding'; d.at[i, 'cur_pct'] = f'{(px / bpx - 1) * 100:.2f}' if px else ''
             d.at[i, 'value_usd'] = f'{(bq - sq) * px:.2f}' if px else ''; d.at[i, 'pnl_usd'] = f'{(bq - sq) * (px - bpx):.2f}' if px else ''
