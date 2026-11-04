@@ -23,7 +23,8 @@ import alpaca_data as ad
 
 FEE = 0.0025; SLIP = 0.005; TP = 0.05; SL = -0.10; LOC_CAP = 0.03; HOLD = 2
 STOP_EVERY = int(os.environ.get('STOP_EVERY', '1'))       # 손절 확인 간격(분). 1 = 지금 봇(2026-11-04부터)
-SUF = '' if STOP_EVERY == 1 else f'_{STOP_EVERY}m'
+ENTRY_AT = os.environ.get('ENTRY_AT', 'close')                 # close = 마감가(LOC, 지금 봇) | 1546 = 탐지 직후 15:46 에 바로 매수
+SUF = ('' if STOP_EVERY == 1 else f'_{STOP_EVERY}m') + ('' if ENTRY_AT == 'close' else f'_entry{ENTRY_AT}')
 
 
 def trades():
@@ -62,9 +63,16 @@ def sim_one(sym, sd):
     p_bot = float(g0[hm0 <= 945]['Close'].iloc[-1]) if (hm0 <= 945).any() else float(g0['Close'].iloc[-1])   # 15:45 쯤 봇이 본 가격
     close0 = float(g0['Close'].iloc[-1])
     cap = math.ceil(p_bot * (1 + LOC_CAP) * 100 - 1e-9) / 100
-    if close0 > cap + 1e-9:
-        return dict(status='unfilled', p_bot=p_bot, entry=close0, cap=cap)
-    entry = close0; tgt = floor_c(entry * (1 + TP)); slp = entry * (1 + SL)
+    if ENTRY_AT == '1546':
+        k = g0[hm0 >= 946]
+        if k.empty:
+            return dict(status='no_data')
+        entry = float(k['Open'].iloc[0]) * (1 + SLIP)          # 15:46 에 바로 사는 가격(호가 차이만큼 불리하게)
+    else:
+        if close0 > cap + 1e-9:
+            return dict(status='unfilled', p_bot=p_bot, entry=close0, cap=cap)
+        entry = close0
+    tgt = floor_c(entry * (1 + TP)); slp = entry * (1 + SL)
     for di, day in enumerate(days[1:HOLD + 1], start=1):
         g = m[m['day'] == day]
         hm = (g.index.hour * 60 + g.index.minute).values
@@ -131,7 +139,7 @@ def main():
     t['px'] = pd.to_numeric(t['entry_price'], errors='coerce')
     f_old, mdd_old, n_old = account(t.dropna(subset=['in', 'out', 'px']))
     vc = o['status'].value_counts().to_dict(); ex = c['exit'].value_counts().to_dict()
-    msg = (f"봇 방식 재계산(손절 {STOP_EVERY}분마다): 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
+    msg = (f"봇 방식 재계산(손절 {STOP_EVERY}분마다, 매수 {ENTRY_AT}): 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
            f"{' · '.join(f'{k} {v}' for k, v in ex.items())} | 건당 평균 {c['ret_pct'].mean():+.2f}% | "
            f"100만원 → {f_real:,.0f}원 (최대 낙폭 {mdd_real*100:.0f}%) || 예전 계산(추적기 1분봉·비용 1%·전부 체결) → {f_old:,.0f}원 (최대 낙폭 {mdd_old*100:.0f}%)")
     print(msg); print(f'::notice title=sim::{msg}')
