@@ -259,9 +259,9 @@ c1.markdown(f'<div class="ss-h1">Surge Scanner</div><div class="ss-sub">마감 �
 if c2.button("새로고침", help="60초 캐시를 비우고 다시 읽어요", use_container_width=True):
     st.cache_data.clear(); st.rerun()
 
-VIEWS = ['오늘', '성적', '기록']
+VIEWS = ['탐지', '현황', '기록']
 try:
-    view = st.segmented_control('화면', VIEWS, default='오늘', selection_mode='single', label_visibility='collapsed', key='view') or '오늘'
+    view = st.segmented_control('화면', VIEWS, default='탐지', selection_mode='single', label_visibility='collapsed', key='view') or '탐지'
 except Exception:
     view = st.radio('화면', VIEWS, horizontal=True, label_visibility='collapsed', key='view_radio')
 
@@ -290,7 +290,7 @@ closed_m = mark_executable(closed_v6) if not closed_v6.empty else closed_v6
 
 
 # ════════════════════════════════════════════════════════════════════════════
-if view == '오늘':
+if view == '탐지':
     pre_rows = today[today['scan_type'] == 'preclose'] if (not today.empty and 'scan_type' in today.columns) else pd.DataFrame()
     S10m = f'font-size:10px;color:{C["muted"]}'; S10 = 'font-size:10px'; S10b = 'font-size:10px;font-weight:800'
     NM = _csv('data/names_kr.csv'); nm = dict(zip(NM['symbol'], NM['name_kr'])) if not NM.empty else {}
@@ -310,7 +310,7 @@ if view == '오늘':
 
 
 # ════════════════════════════════════════════════════════════════════════════
-elif view == '성적':
+elif view == '현황':
     sub = st.segmented_control('성적 보기', ['실제 매매', '시뮬레이션'], default='실제 매매', selection_mode='single', label_visibility='collapsed', key='perf_sub') or '실제 매매'
     if sub == '실제 매매':
         L = _csv('data/live_trades.csv')
