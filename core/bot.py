@@ -561,10 +561,10 @@ def run_monitor(b, max_minutes=350):
             place_take_profits(b)      # 빠진 익절 주문(거부·실패·갭 상승) 다시 걸기 — 이미 걸려 있으면 건너뜀
         except KISError as e:
             print('  확인 실패:', str(e)[:80])
-        # 팔린 종목이 생겼거나 30분마다 → 실매매 기록 갱신해서 앱에 바로 반영
+        # 팔린 종목이 생겼거나 5분마다 → 실매매 기록 갱신해서 앱에 바로 반영 (2026-11-04 30분→5분)
         try:
             cur = _held_set(b)
-            if b.live and os.path.exists(LIVE_FILE) and ((cur is not None and prev is not None and cur != prev) or time.time() - last_rec > 1800):
+            if b.live and os.path.exists(LIVE_FILE) and ((cur is not None and prev is not None and cur != prev) or time.time() - last_rec > 300):
                 time.sleep(20)                 # 체결 내역 반영 대기
                 run_record(b); live_commit(f'live: {now_et():%Y-%m-%d %H:%M} ET 장중 갱신')
                 last_rec = time.time()
