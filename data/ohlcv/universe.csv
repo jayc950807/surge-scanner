@@ -148,6 +148,7 @@ AGI,Alamos Gold Inc. Class A Common Shares,NYSE
 AGIG,Abundia Global Impact Group Inc.,AMEX
 AGIO,"Agios Pharmaceuticals, Inc. Common Stock",NASDAQ
 AGL,"agilon health, inc.",NYSE
+AGLT,"Agility Robotics, Inc. Common Stock",NASDAQ
 AGM,Federal Agricultural Mortgage Corporation,NYSE
 AGMB,AgomAb Therapeutics NV American Depositary Shares,NASDAQ
 AGMH,AGM Group Holdings Inc. Class A Ordinary Shares,NASDAQ
@@ -993,12 +994,11 @@ CCS,"CENTURY COMMUNITIES, INC.",NYSE
 CCSI,"Consensus Cloud Solutions, Inc. Common Stock",NASDAQ
 CCTG,CCSC Technology International Holdings Limited Class A Ordinary Shares,NASDAQ
 CCU,Compania Cervecerias Unidas S.A.,NYSE
-CCXI,Churchill Capital Corp XI Class A Ordinary Shares,NASDAQ
 CCZ,"Comcast Holdings Corp. 2.0% Exchangeable Subordinated Debentures due October 15, 2029 (ZONES)",NYSE
 CD,Chaince Digital Holdings Inc. Ordinary Shares,NASDAQ
 CDE,"Coeur Mining, Inc.",NYSE
 CDIO,Cardio Diagnostics Holdings Inc. Common stock,NASDAQ
-CDLR,Cadeler A/S American Depositary Share (each representing four (4) Ordinary Shares),NYSE
+CDLR,Cadeler plc,NYSE
 CDLX,"Cardlytics, Inc. Common Stock",NASDAQ
 CDNA,"CareDx, Inc. Common Stock",NASDAQ
 CDNL,Cardinal Infrastructure Group Inc. Class A Common Stock,NASDAQ
@@ -1756,7 +1756,7 @@ ETSS,Energy Transition Special Opportunities,NYSE
 ETSY,"Etsy, Inc.",NYSE
 ETX,EATON VANCE MUNICIPAL INCOME 2028 TERM TRUST,NYSE
 EU,enCore Energy Corp. Common Shares,NASDAQ
-EUDA,EUDA Health Holdings Limited Ordinary Shares,NASDAQ
+EUDA,EUDA Health Holdings Limited Class A Ordinary Shares,NASDAQ
 EURK,Eureka Acquisition Corp Class A Ordinary Share,NASDAQ
 EVAC,EQV Ventures Acquisition Corp. II,NYSE
 EVAX,Evaxion A/S American Depositary Share,NASDAQ
@@ -2355,7 +2355,7 @@ HLN,Haleon plc American Depositary Shares (Each representing two Ordinary Shares
 HLNE,Hamilton Lane Incorporated Class A Common Stock,NASDAQ
 HLP,Hongli Group Inc. Class A Ordinary Shares,NASDAQ
 HLSQ,Tessera Defense and Homeland Security Inc.,AMEX
-HLT,Hilton Worldwide Holdings Inc.,NYSE
+HLT,Hilton Worldwide Holdings Inc. Common Stock,NASDAQ
 HLXC,Helix Acquisition Corp. III Class A Ordinary Shares,NASDAQ
 HMC,"Honda Motor Co., Ltd. American Depositary Share, each representing three (3) shares of Common Stock",NYSE
 HMH,HMH Holding Inc. Class A Common Stock,NASDAQ
@@ -5470,7 +5470,7 @@ XRPN,Evernorth Holdings Inc. Class A Ordinary Shares,NASDAQ
 XRTX,XORTX Therapeutics Inc. Common Shares,NASDAQ
 XRX,Xerox Holdings Corporation Common Stock,NASDAQ
 XSLL,Xsolla SPAC 1 Class A Ordinary Shares,NASDAQ
-XTER,Karman Line Acquisition Corp. Class A Ordinary Shares,NASDAQ
+XTER,Xterax Corporation II Class A Ordinary Shares,NASDAQ
 XTIA,"XTI Aerospace, Inc. Common Stock",NASDAQ
 XTLB,XTL Biopharmaceuticals Ltd. American Depositary Shares,NASDAQ
 XTND,"Xtend AI Robotics, Inc.",NYSE
