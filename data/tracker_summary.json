@@ -1,12 +1,12 @@
 {
-  "last_tracked": "2026-11-05 21:22:58",
-  "open_count": 3,
-  "pending_count": 8,
-  "closed_count": 296,
-  "win_count": 211,
-  "loss_count": 75,
+  "last_tracked": "2026-11-06 21:04:12",
+  "open_count": 8,
+  "pending_count": 2,
+  "closed_count": 299,
+  "win_count": 213,
+  "loss_count": 76,
   "expired_count": 10,
-  "fail_count": 85,
+  "fail_count": 86,
   "live_stats": {
     "1": {
       "n": 84,
@@ -17,11 +17,11 @@
       "cost_pct": 1.0
     },
     "3": {
-      "n": 212,
+      "n": 215,
       "win_rate": 71.2,
-      "mean_pct": 2.22,
+      "mean_pct": 2.17,
       "median_pct": 4.0,
-      "overnight_mean_pct": 2.19,
+      "overnight_mean_pct": 2.13,
       "cost_pct": 1.0
     }
   }
