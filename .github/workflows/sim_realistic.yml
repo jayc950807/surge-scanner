@@ -11,6 +11,10 @@ on:
         description: '매수 시점 (close | 1546)'
         required: false
         default: 'close'
+      exit_at:
+        description: '만기 매도 시점 (close | 1540)'
+        required: false
+        default: 'close'
 permissions:
   contents: write
 env:
@@ -34,6 +38,7 @@ jobs:
         env:
           STOP_EVERY: ${{ github.event.inputs.stop_every || '1' }}
           ENTRY_AT: ${{ github.event.inputs.entry_at || 'close' }}
+          EXIT_AT: ${{ github.event.inputs.exit_at || 'close' }}
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"

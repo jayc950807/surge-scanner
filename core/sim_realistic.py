@@ -23,8 +23,9 @@ import alpaca_data as ad
 
 FEE = 0.0025; SLIP = 0.005; TP = 0.05; SL = -0.10; LOC_CAP = 0.03; HOLD = 2
 STOP_EVERY = int(os.environ.get('STOP_EVERY', '1'))       # 손절 확인 간격(분). 1 = 지금 봇(2026-11-04부터)
+EXIT_AT = os.environ.get('EXIT_AT', 'close')                   # close = 2일째 마감가(MOC, 지금 봇) | 1540 = 2일째 15:40 에 미리 매도
 ENTRY_AT = os.environ.get('ENTRY_AT', 'close')                 # close = 마감가(LOC, 지금 봇) | 1546 = 탐지 직후 15:46 에 바로 매수
-SUF = ('' if STOP_EVERY == 1 else f'_{STOP_EVERY}m') + ('' if ENTRY_AT == 'close' else f'_entry{ENTRY_AT}')
+SUF = ('' if STOP_EVERY == 1 else f'_{STOP_EVERY}m') + ('' if ENTRY_AT == 'close' else f'_entry{ENTRY_AT}') + ('' if EXIT_AT == 'close' else f'_exit{EXIT_AT}')
 
 
 def trades():
@@ -91,12 +92,14 @@ def sim_one(sym, sd):
                 continue
             if tp_on and h[j] >= tgt + 0.01:
                 return dict(status='closed', exit='익절', day=di, entry=entry, exit_px=tgt, date=str(day.date()))
+            if EXIT_AT == '1540' and di == HOLD and t == 940:          # 2일째 15:40: 남은 것 바로 매도(현재가 근처)
+                return dict(status='closed', exit='만기', day=di, entry=entry, exit_px=float(o[j]) * (1 - SLIP), date=str(day.date()), avail_same_day=True)
             if (575 if STOP_EVERY == 5 else 571) <= t <= 940 and (t - 575) % STOP_EVERY == 0:     # 확인 시각 (직전 봉 종가 = 그때 현재가)
                 cur = c[j - 1] if j > 0 else o[j]
                 if cur <= slp:
                     return dict(status='closed', exit='손절', day=di, entry=entry, exit_px=cur * (1 - SLIP), date=str(day.date()))
         if di == HOLD:
-            return dict(status='closed', exit='만기', day=di, entry=entry, exit_px=float(c[-1]), date=str(day.date()))
+            return dict(status='closed', exit='만기', day=di, entry=entry, exit_px=float(c[-1]), date=str(day.date()), avail_same_day=False)
     return dict(status='no_data')
 
 
@@ -104,7 +107,9 @@ def account(rows, cap=1_000_000.0):
     """나눠서 전부 투자 · 1주 단위 · 보유 중인 건 그대로. rows: in(date), out(date), r(소수), px(산 가격)"""
     T = rows.sort_values('in'); cash = cap; op = []; peak = cap; mdd = 0.0; n = 0
     usd = 1350.0                                           # 원 → 달러 (주 수 계산용, 결과는 원으로)
-    for d in sorted(set(T['in']) | set(T['out'])):
+    if 'avail' not in T.columns:
+        T = T.assign(avail=T['out'])
+    for d in sorted(set(T['in']) | set(T['avail'])):
         for p in [p for p in op if p[0] <= d]:
             cash += p[1]; op.remove(p)
         today = T[T['in'] == d]
@@ -113,7 +118,7 @@ def account(rows, cap=1_000_000.0):
             for t in today.itertuples():
                 q = math.floor(per / (t.px * usd))
                 if q < 1: continue
-                cost = q * t.px * usd; cash -= cost; op.append((t.out, cost * (1 + t.r), cost)); n += 1
+                cost = q * t.px * usd; cash -= cost; op.append((t.avail, cost * (1 + t.r), cost)); n += 1
         eq = cash + sum(p[2] for p in op); peak = max(peak, eq); mdd = min(mdd, eq / peak - 1)
     return cash + sum(p[1] for p in op), mdd, n
 
@@ -134,12 +139,14 @@ def main():
     os.makedirs('data', exist_ok=True); o.to_csv(f'data/sim_realistic{SUF}.csv', index=False)
     c = o[o['status'] == 'closed'].copy()
     c['in'] = pd.to_datetime(c['signal_date']); c['out'] = pd.to_datetime(c['date']); c['r'] = c['ret_pct'] / 100; c['px'] = c['entry']
+    same = c['avail_same_day'].astype(str).ne('False') if 'avail_same_day' in c.columns else pd.Series(True, index=c.index)
+    c['avail'] = np.where(same, c['out'], c['out'] + pd.Timedelta(days=1))    # 마감가에 판 돈은 그날 15:46 매수에 못 씀
     f_real, mdd_real, n_real = account(c)
     t = x.copy(); t['in'] = pd.to_datetime(t['entry_date']); t['out'] = pd.to_datetime(t['close_date']); t['r'] = t['result_pct'] / 100
     t['px'] = pd.to_numeric(t['entry_price'], errors='coerce')
     f_old, mdd_old, n_old = account(t.dropna(subset=['in', 'out', 'px']))
     vc = o['status'].value_counts().to_dict(); ex = c['exit'].value_counts().to_dict()
-    msg = (f"봇 방식 재계산(손절 {STOP_EVERY}분마다, 매수 {ENTRY_AT}): 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
+    msg = (f"봇 방식 재계산(손절 {STOP_EVERY}분마다, 매수 {ENTRY_AT}, 만기 매도 {EXIT_AT}): 신호 {len(o)}건 → 산 것 {len(c)} · 안 사짐(LOC 한도) {vc.get('unfilled', 0)} · 데이터 없음 {vc.get('no_data', 0) + vc.get('error', 0)} | "
            f"{' · '.join(f'{k} {v}' for k, v in ex.items())} | 건당 평균 {c['ret_pct'].mean():+.2f}% | "
            f"100만원 → {f_real:,.0f}원 (최대 낙폭 {mdd_real*100:.0f}%) || 예전 계산(추적기 1분봉·비용 1%·전부 체결) → {f_old:,.0f}원 (최대 낙폭 {mdd_old*100:.0f}%)")
     print(msg); print(f'::notice title=sim::{msg}')
