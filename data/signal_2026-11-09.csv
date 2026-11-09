@@ -1,0 +1,3 @@
+strategy,ticker,date,scan_time,scan_type,price_1530,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+3,DRIO,2026-11-09,05:46 KST,preclose,1.97,1.97,8.6,24.4,5,2.07,-17.1,-33.7,71760,2.07,1.77
+3,XLAB,2026-11-09,05:46 KST,preclose,1.12,1.12,25.7,39.0,4,2.75,-25.3,-41.1,17804859,1.18,1.01
