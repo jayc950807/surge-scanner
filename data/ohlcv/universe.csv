@@ -387,7 +387,6 @@ AREC,American Resources Corporation Class A Common Stock,NASDAQ
 ARES,Ares Management Corporation Class A Common Stock,NYSE
 ARGX,argenx SE American Depositary Shares,NASDAQ
 ARHS,"Arhaus, Inc. Class A Common Stock",NASDAQ
-ARI,"APOLLO COMMERCIAL REAL ESTATE FINANCE, INC.",NYSE
 ARIS,Aris Mining Corporation,NYSE
 ARKO,ARKO Corp. Common Stock,NASDAQ
 ARKR,Ark Restaurants Corp. Common Stock,NASDAQ
@@ -880,7 +879,6 @@ BWFG,"Bankwell Financial Group, Inc. Common Stock",NASDAQ
 BWIN,"The Baldwin Insurance Group, Inc. Class A Common Stock",NASDAQ
 BWIV,Blue Water Acquisition Corp. IV,NYSE
 BWLP,BW LPG Limited,NYSE
-BWMN,Bowman Consulting Group Ltd. Common Stock,NASDAQ
 BWMX,"Betterware de Mexico, S.A.P.I. de C.V.",NYSE
 BWXT,"BWX Technologies, Inc.",NYSE
 BX,Blackstone Inc.,NYSE
@@ -2447,6 +2445,7 @@ HWM,Howmet Aerospace Inc.,NYSE
 HXHX,Haoxin Holdings Limited Class A Ordinary Shares,NASDAQ
 HXL,Hexcel Corporation,NYSE
 HY,"Hyster-Yale, Inc.",NYSE
+HYAC,Haymaker Acquisition Corp V,NYSE
 HYFM,"Hydrofarm Holdings Group, Inc. Common Stock",NASDAQ
 HYFT,MindWalk Holdings Corp. Common Stock,NASDAQ
 HYLN,Hyliion Holdings Corp.,AMEX
@@ -2569,7 +2568,6 @@ INIO,INNIO N.V. Ordinary Shares,NASDAQ
 INKT,"MiNK Therapeutics, Inc. Common Stock",NASDAQ
 INLF,INLIF LIMITED Class A Ordinary Shares,NASDAQ
 INLX,"Intellinetics, Inc.",AMEX
-INM,InMed Pharmaceuticals Inc. Common Shares,NASDAQ
 INMB,INmune Bio Inc. Common stock,NASDAQ
 INMD,InMode Ltd. Ordinary Shares,NASDAQ
 INN,"Summit Hotel Properties, Inc.",NYSE
@@ -3332,6 +3330,7 @@ MTN,"Vail Resorts, Inc.",NYSE
 MTNB,"Matinas BioPharma Holdings, Inc.",AMEX
 MTNE,CH4 Natural Solutions Corporation,NYSE
 MTR,Mesa Royalty Trust,NYSE
+MTRI,"Mentari Therapeutics, Inc. Common Stock",NASDAQ
 MTRN,Materion Corporation,NYSE
 MTRX,Matrix Service Company Common Stock,NASDAQ
 MTSI,"MACOM Technology Solutions Holdings, Inc. Common Stock",NASDAQ
@@ -4276,7 +4275,6 @@ ROCK,"Gibraltar Industries, Inc. Common Stock",NASDAQ
 ROG,Rogers Corporation,NYSE
 ROIV,Roivant Sciences Ltd. Common Shares,NASDAQ
 ROK,"Rockwell Automation, Inc.",NYSE
-ROKU,"Roku, Inc. Class A Common Stock",NASDAQ
 ROL,"Rollins, Inc.",NYSE
 ROLR,"High Roller Technologies, Inc.",AMEX
 ROMA,Roma Green Finance Limited Class A Ordinary Shares,NASDAQ
@@ -4800,7 +4798,6 @@ TBLA,Taboola.com Ltd. Ordinary Shares,NASDAQ
 TBLD,Thornburg Income Builder Opportunities Trust Common Stock,NASDAQ
 TBN,Tamboran Resources Corporation,NYSE
 TC,Token Cat Limited American Depositary Shares,NASDAQ
-TCBI,"Texas Capital Bancshares, Inc. Common Stock, par value $0.01 per share",NASDAQ
 TCBK,TriCo Bancshares Common Stock,NASDAQ
 TCBS,"Texas Community Bancshares, Inc. Common Stock",NASDAQ
 TCBX,"Third Coast Bancshares, Inc. Common Stock",NYSE
@@ -5034,6 +5031,7 @@ TWLO,Twilio Inc.,NYSE
 TWLV,Twelve Seas Investment Company III Class A Ordinary Shares,NASDAQ
 TWST,Twist Bioscience Corporation Common Stock,NASDAQ
 TX,Ternium S.A. American Depositary Shares,NYSE
+TXCP,"Texas Capital Bancshares, Inc. Common Stock, par value $0.01 per share",NASDAQ
 TXG,"10x Genomics, Inc. Class A Common Stock",NASDAQ
 TXMD,"TherapeuticsMD, Inc. Common Stock",NASDAQ
 TXN,Texas Instruments Incorporated Common Stock,NASDAQ
