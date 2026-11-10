@@ -1,0 +1,4 @@
+strategy,ticker,date,scan_time,scan_type,price_1530,price,rsi7,intraday,consec_down,dist_low5,ret1d,ret3d,avg_vol20,tp_price,sl_price
+1,AIIO,2026-11-10,05:46 KST,preclose,5.88,5.88,11.8,26.6,9,0.34,-21.4,-41.3,43395,6.17,5.29
+3,AIIO,2026-11-10,05:46 KST,preclose,5.88,5.88,11.8,26.6,9,0.34,-21.4,-41.3,43395,6.17,5.29
+3,MRDN,2026-11-10,05:46 KST,preclose,6.27,6.27,10.6,35.4,4,2.79,-23.5,-31.6,40325,6.58,5.64
