@@ -55,7 +55,6 @@ ACGL,Arch Capital Group Ltd. Common Stock,NASDAQ
 ACH,"Accendra Health, Inc.",NYSE
 ACHC,"Acadia Healthcare Company, Inc. Common Stock",NASDAQ
 ACHR,Archer Aviation Inc.,NYSE
-ACHV,"Achieve Life Sciences, Inc. Common Shares",NASDAQ
 ACI,"Albertsons Companies, Inc.",NYSE
 ACIC,American Coastal Insurance Corporation Common Stock,NASDAQ
 ACIU,AC Immune SA Common Stock,NASDAQ
@@ -1796,7 +1795,6 @@ EXYN,"Exyn Technologies, Inc. Common Stock",NASDAQ
 EYE,"National Vision Holdings, Inc. Common Stock",NASDAQ
 EYPT,"EyePoint, Inc. Common Stock",NASDAQ
 EZGO,EZGO Technologies Ltd. Ordinary Shares,NASDAQ
-EZRA,"Reliance Global Group, Inc. Common Stock",NASDAQ
 F,Ford Motor Company,NYSE
 FA,First Advantage Corporation Common Stock,NASDAQ
 FABC,"Fabric.AI, Inc. Common Stock",NASDAQ
@@ -2059,7 +2057,7 @@ GBFH,GBank Financial Holdings Inc. Common Stock,NASDAQ
 GBLI,"Global Indemnity Group, LLC Class A Common Stock",NASDAQ
 GBR,New Concept Energy Inc,AMEX
 GBX,"The Greenbrier Companies, Inc.",NYSE
-GCBC,"Greene County Bancorp, Inc. Common Stock",NASDAQ
+GCBC,"Greene Bancorp, Inc. Common Stock",NASDAQ
 GCGR,General Catalyst Global Resilience Merger Corp. Class A Ordinary Shares,NASDAQ
 GCL,GCL Global Holdings Ltd Ordinary Shares,NASDAQ
 GCMG,GCM Grosvenor Inc. Class A Common Stock,NASDAQ
@@ -4041,7 +4039,6 @@ PSN,Parsons Corporation,NYSE
 PSNL,"Personalis, Inc. Common Stock",NASDAQ
 PSNY,Polestar Automotive Holding UK PLC Class A ADS,NASDAQ
 PSO,Pearson plc,NYSE
-PSQH,"PSQ Holdings, Inc.",NYSE
 PSQL,Pasqal Holding SA Ordinary Share,NASDAQ
 PSTL,"Postal Realty Trust, Inc",NYSE
 PSUS,"Pershing Square USA, Ltd.",NYSE
@@ -4117,6 +4114,7 @@ QUAD,"QUAD/GRAPHICS, INC.",NYSE
 QUBT,Quantum Computing Inc. Common Stock,NASDAQ
 QUCY,Quantum Cyber N.V. Ordinary Shares,NASDAQ
 QUIK,QuickLogic Corporation Common Stock,NASDAQ
+QUIT,"Achieve Life Sciences, Inc. Common Shares",NASDAQ
 QUMS,Quantumsphere Acquisition Corp. Ordinary Shares,NASDAQ
 QURE,uniQure N.V. Ordinary Shares,NASDAQ
 QVCG,"QVC Group, Inc. Common Stock",NASDAQ
@@ -4401,6 +4399,7 @@ SCNI,Scinai Immunotherapeutics Ltd. American Depositary Shares,NASDAQ
 SCNX,"Scienture Holdings, Inc. Common Stock",NASDAQ
 SCOR,"comScore, Inc. Common Stock",NASDAQ
 SCPQ,Social Commerce Partners Corporation Class A Ordinary Shares,NASDAQ
+SCQC,SPACCircle Acquisition Corp. Class A Ordinary Shares,NASDAQ
 SCSC,"ScanSource, Inc. Common Stock",NASDAQ
 SCTX,Scribe Therapeutics Inc. Common Stock,NASDAQ
 SCWO,374Water Inc. Common Stock,NASDAQ
@@ -5439,6 +5438,7 @@ XFLH,XFLH Capital Corporation,NYSE
 XFLT,XAI Floating Rate & Alternative Income Trust,NYSE
 XFOR,"X4 Pharmaceuticals, Inc. Common Stock",NASDAQ
 XGN,Exagen Inc. Common Stock,NASDAQ
+XGPU,"Reliance Global Group, Inc. Common Stock",NASDAQ
 XHG,XChange TEC.INC American Depositary Shares,NASDAQ
 XHLD,"TEN Holdings, Inc. Common Stock",NASDAQ
 XHR,"Xenia Hotels & Resorts, Inc.",NYSE

@@ -1,8 +1,6 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,overnight_pct,method,judge,scan_type
-3,DRIO,2026-11-06,2.375,2026-11-06,2.375,2.49,2.14,0.05,2,OPEN,2.38,2.38,2026-11-06,2.38,2026-11-06,,,0,2026-11-09,,v6_close_entry,,preclose
-3,SCAG,2026-11-06,0.9602,2026-11-06,0.9602,1.01,0.86,0.05,2,OPEN,0.96,0.96,2026-11-06,0.96,2026-11-06,,,0,2026-11-09,,v6_close_entry,,preclose
-3,DRIO,2026-11-09,1.97,,,2.07,1.77,0.05,2,PENDING,,,,,,,,0,2026-11-09,,,,preclose
-3,XLAB,2026-11-09,1.12,,,1.18,1.01,0.05,2,PENDING,,,,,,,,0,2026-11-09,,,,preclose
+3,DRIO,2026-11-09,2.06,2026-11-09,2.06,2.16,1.85,0.05,2,OPEN,2.06,2.06,2026-11-09,2.06,2026-11-09,,,0,2026-11-10,,v6_close_entry,,preclose
+3,XLAB,2026-11-09,1.12,2026-11-09,1.12,1.18,1.01,0.05,2,OPEN,1.12,1.12,2026-11-09,1.12,2026-11-09,,,0,2026-11-10,,v6_close_entry,,preclose
 1,AIIO,2026-11-10,5.88,,,6.17,5.29,0.05,2,PENDING,,,,,,,,0,2026-11-10,,,,preclose
 3,AIIO,2026-11-10,5.88,,,6.17,5.29,0.05,2,PENDING,,,,,,,,0,2026-11-10,,,,preclose
 3,MRDN,2026-11-10,6.27,,,6.58,5.64,0.05,2,PENDING,,,,,,,,0,2026-11-10,,,,preclose
