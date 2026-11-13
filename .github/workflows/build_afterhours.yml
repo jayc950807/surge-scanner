@@ -1,0 +1,26 @@
+name: Build afterhours (분석용)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: git clone -q -b events --depth 1 https://github.com/${{ github.repository }} /tmp/evsrc
+      - run: python core/build_afterhours.py
+      - name: Push
+        run: |
+          cd /tmp/ah && ls -la && git init -q -b afterhours && git add . \
+            && git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm mc \
+            && git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} afterhours
