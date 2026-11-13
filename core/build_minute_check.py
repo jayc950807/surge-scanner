@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import alpaca_data as ad
 E = pd.read_parquet('/tmp/evsrc/events.parquet')
 E['clpos'] = (E.c - E.l) / (E.h - E.l).clip(lower=1e-9)
-E = E[(E.intra > 0.2) & (E.clpos < 0.15) & (E.date >= '2020-01-01')]
+E = E[(E.intra > 0.2) & (E.date >= '2020-01-01')]
 print('events', len(E), flush=True)
 os.makedirs('/tmp/mc', exist_ok=True); snaps = []; mins = []; t0 = time.time()
 for i, (d, g) in enumerate(E.groupby('date')):

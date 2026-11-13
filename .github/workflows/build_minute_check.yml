@@ -21,6 +21,6 @@ jobs:
       - run: python core/build_minute_check.py
       - name: Push
         run: |
-          cd /tmp/mc && ls -la && git init -q -b minutecheck && git add . \
+          cd /tmp/mc && ls -la && git init -q -b minutecheck2 && git add . \
             && git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm mc \
-            && git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} minutecheck
+            && git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} minutecheck2
