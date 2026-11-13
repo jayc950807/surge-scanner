@@ -3,3 +3,4 @@ strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_pric
 3,ALGS,2026-11-12,1.97,,,2.07,1.77,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
 3,FBYD,2026-11-12,5.58,,,5.86,5.02,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
 3,TNXP,2026-11-12,3.31,,,3.48,2.98,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
+3,RMIX,2026-11-13,5.45,,,5.72,4.91,0.05,2,PENDING,,,,,,,,0,2026-11-13,,,,preclose
