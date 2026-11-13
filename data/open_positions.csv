@@ -1,6 +1,6 @@
 strategy,ticker,signal_date,signal_price,entry_date,entry_price,tp_price,sl_price,tp_pct,max_hold,status,current_price,max_price,max_price_date,min_price,min_price_date,change_pct,achievement_pct,days_held,last_updated,overnight_pct,method,judge,scan_type
-1,ALGS,2026-11-12,1.97,,,2.07,1.77,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
-3,ALGS,2026-11-12,1.97,,,2.07,1.77,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
-3,FBYD,2026-11-12,5.58,,,5.86,5.02,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
-3,TNXP,2026-11-12,3.31,,,3.48,2.98,0.05,2,PENDING,,,,,,,,0,2026-11-12,,,,preclose
+1,ALGS,2026-11-12,1.98,2026-11-12,1.98,2.08,1.78,0.05,2,OPEN,1.98,1.98,2026-11-12,1.98,2026-11-12,,,0,2026-11-13,,v6_close_entry,,preclose
+3,ALGS,2026-11-12,1.98,2026-11-12,1.98,2.08,1.78,0.05,2,OPEN,1.98,1.98,2026-11-12,1.98,2026-11-12,,,0,2026-11-13,,v6_close_entry,,preclose
+3,FBYD,2026-11-12,5.59,2026-11-12,5.59,5.87,5.03,0.05,2,OPEN,5.59,5.59,2026-11-12,5.59,2026-11-12,,,0,2026-11-13,,v6_close_entry,,preclose
+3,TNXP,2026-11-12,3.24,2026-11-12,3.24,3.4,2.92,0.05,2,OPEN,3.24,3.24,2026-11-12,3.24,2026-11-12,,,0,2026-11-13,,v6_close_entry,,preclose
 3,RMIX,2026-11-13,5.45,,,5.72,4.91,0.05,2,PENDING,,,,,,,,0,2026-11-13,,,,preclose

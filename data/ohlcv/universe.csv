@@ -1107,7 +1107,6 @@ CLDT,CHATHAM LODGING TRUST,NYSE
 CLDX,"Celldex Therapeutics, Inc.",NASDAQ
 CLF,Cleveland-Cliffs Inc.,NYSE
 CLFD,"Clearfield, Inc. Common Stock",NASDAQ
-CLGN,CollPlant Biotechnologies Ltd Ordinary Shares,NASDAQ
 CLH,"Clean Harbors, Inc",NYSE
 CLIK,Click Holdings Limited Class A Ordinary Share,NASDAQ
 CLIR,ClearSign Technologies Corporation Common Stock (DE),NASDAQ
@@ -2991,6 +2990,7 @@ LOOP,"Loop Industries, Inc. Common Stock",NASDAQ
 LOPE,"Grand Canyon Education, Inc. Common Stock",NASDAQ
 LOT,Lotus Technology Inc. American Depositary Shares,NASDAQ
 LOVE,The Lovesac Company Common Stock,NASDAQ
+LOVI,Live Oak Acquisition Corp. VI Class A Ordinary Shares,NASDAQ
 LPA,Logistic Properties of the Americas,AMEX
 LPAA,Launch One Acquisition Corp. Class A Ordinary shares,NASDAQ
 LPBB,Launch Two Acquisition Corp. Class A Ordinary Shares,NASDAQ
@@ -3131,6 +3131,7 @@ MDGL,"Madrigal Pharmaceuticals, Inc. Common Stock",NASDAQ
 MDIA,Mediaco Holding Inc. Class A Common Stock,NASDAQ
 MDLN,Medline Inc. Class A common stock,NASDAQ
 MDLZ,"Mondelez International, Inc. Class A Common Stock",NASDAQ
+MDRN,Modern Mining Technology Corp.,AMEX
 MDRR,"Medalist Diversified, Inc. Common Stock",NASDAQ
 MDT,Medtronic plc,NYSE
 MDU,"MDU Resources Group, Inc.",NYSE
@@ -3671,7 +3672,7 @@ OKYO,OKYO Pharma Limited Ordinary Shares,NASDAQ
 OLB,"The OLB Group, Inc. Common Stock",NASDAQ
 OLED,Universal Display Corporation Common Stock,NASDAQ
 OLLI,"Ollie's Bargain Outlet Holdings, Inc. Common Stock",NASDAQ
-OLMA,"Olema Pharmaceuticals, Inc. Common Stock",NASDAQ
+OLMA,"Olema Oncology, Inc. Common Stock",NASDAQ
 OLN,Olin Corp.,NYSE
 OLOX,Olenox Industries Inc. Common Stock,NASDAQ
 OLP,"One Liberty Properties, Inc.",NYSE
@@ -3708,6 +3709,7 @@ OPCH,"Option Care Health, Inc. Common Stock",NASDAQ
 OPEN,Opendoor Technologies Inc Common Stock,NASDAQ
 OPFI,OppFi Inc.,NYSE
 OPHC,"OptimumBank Holdings, Inc.",AMEX
+OPHI,CollPlant Biotechnologies Ltd Ordinary Shares,NASDAQ
 OPI,Office Properties Income Trust Common shares of beneficial interest,NASDAQ
 OPK,"OPKO Health, Inc. Common Stock",NASDAQ
 OPLN,"OPENLANE, Inc",NYSE
@@ -4044,7 +4046,6 @@ PTEN,"Patterson-UTI Energy, Inc. Common Stock",NASDAQ
 PTGX,"Protagonist Therapeutics, Inc. Common Stock",NASDAQ
 PTHS,Pelthos Therapeutics Inc.,AMEX
 PTIV,Pineapple Financial Inc.,AMEX
-PTLE,PTL LTD Class A Ordinary Shares,NASDAQ
 PTLO,Portillo's Inc. Class A Common Stock,NASDAQ
 PTN,"Palatin Technologies, Inc. Common Stock",NASDAQ
 PTON,"Peloton Interactive, Inc. Class A Common Stock",NASDAQ
@@ -5278,6 +5279,7 @@ VUZI,Vuzix Corporation Common Stock,NASDAQ
 VVOS,"Vivos Therapeutics, Inc. Common Stock",NASDAQ
 VVR,Invesco  Senior Income Trust,NYSE
 VVV,Valvoline Inc.,NYSE
+VVVV,vVARDIS Holding AG,NYSE
 VVX,"V2X, Inc.",NYSE
 VWAV,"VisionWave Holdings, Inc. Common Stock",NASDAQ
 VYGR,"Voyager Therapeutics, Inc. Common Stock",NASDAQ
@@ -5407,6 +5409,7 @@ WU,The Western Union Company,NYSE
 WULF,TeraWulf Inc. Common Stock,NASDAQ
 WVE,"Wave Life Sciences, Inc. Common Stock",NASDAQ
 WVVI,"Willamette Valley Vineyards, Inc. Common Stock",NASDAQ
+WWB,WINDWARD BIO GROUP AG          COM,NASDAQ
 WWD,"Woodward, Inc. Common Stock",NASDAQ
 WWR,"Westwater Resources, Inc.",AMEX
 WXM,WF International Limited Ordinary Shares,NASDAQ
@@ -5551,3 +5554,4 @@ ZVRA,"Zevra Therapeutics, Inc. Common Stock",NASDAQ
 ZWS,Zurn Elkay Water Solutions Corporation,NYSE
 ZYBT,Zhengye Biotechnology Holding Limited Class A Ordinary Shares,NASDAQ
 ZYME,Zymeworks Inc. Common Stock,NASDAQ
+ZYN,PTL LTD Class A Ordinary Shares,NASDAQ
