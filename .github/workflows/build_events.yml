@@ -1,0 +1,25 @@
+name: Build events (분석용 장기 데이터)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+  ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python core/build_events.py
+      - name: Push to events branch
+        run: |
+          cd /tmp/ev && git init -q -b events && git add . \
+            && git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm events \
+            && git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} events
