@@ -192,9 +192,9 @@ class TestMonitor:
         assert k.orders == [('sell', 'AAA', 2, 2.1, '00')]             # 이미 걸려 있으면 다시 안 검
 
     def test_stop_loss(self, live):
-        hold = [{'symbol': 'AAA', 'qty': 100, 'sellable': 0, 'avg': 2.0, 'price': 1.79, 'excg': 'NASD'},
-                {'symbol': 'BBB', 'qty': 10, 'sellable': 10, 'avg': 4.0, 'price': 3.7, 'excg': 'NYSE'}]
-        k = FakeKIS(hold=hold, prices={'AAA': 1.79, 'BBB': 3.7})
+        hold = [{'symbol': 'AAA', 'qty': 100, 'sellable': 0, 'avg': 2.0, 'price': 1.59, 'excg': 'NASD'},
+                {'symbol': 'BBB', 'qty': 10, 'sellable': 10, 'avg': 4.0, 'price': 3.4, 'excg': 'NYSE'}]
+        k = FakeKIS(hold=hold, prices={'AAA': 1.59, 'BBB': 3.4})
         k.open = [{'odno': '7', 'symbol': 'AAA', 'side': 'sell', 'qty_left': 100, 'price': 2.1, 'excg': 'NASD'}]
         sold = []
         orig = k.order
@@ -202,7 +202,7 @@ class TestMonitor:
             r = orig(side, sym, ex, qty, px, dvsn); k.hold = [h for h in k.hold if h['symbol'] != sym]; return r
         k.order = order
         bot.check_stops(bot.Broker(k))
-        assert k.cancels == ['7'] and k.orders == [('sell', 'AAA', 100, 1.73, '00')]   # −10.5% → 취소 후 현재가 −3%; BBB(−7.5%)는 유지
+        assert k.cancels == ['7'] and k.orders == [('sell', 'AAA', 100, 1.54, '00')]   # −20.5% → 취소 후 현재가 −3%; BBB(−15%)는 유지
 
     def test_round_px(self):
         assert round_px(2.163, up=True) == 2.17 and round_px(2.169) == 2.16 and round_px(0.51234) == 0.5123

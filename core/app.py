@@ -21,7 +21,7 @@ try:
 except Exception:  # 단독 실행 대비
     KST = timezone(timedelta(hours=9))
     ACTIVE_STRATEGIES = ['1', '3']; COST_PCT = 1.0
-    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2} for s in ACTIVE_STRATEGIES}
+    STRATEGY_CONFIG = {s: {'tp_pct': 0.05, 'sl_pct': -0.20, 'max_hold': 2} for s in ACTIVE_STRATEGIES}
     STRATEGY_NAMES = {'1': '1. 급락반등', '3': '2. 과매도'}
     def is_us_dst(d):
         return 3 < d.month < 11 or (d.month == 3 and d.day >= 8 + (6 - datetime(d.year, 3, 1).weekday()) % 7) or (d.month == 11 and d.day < 1 + (6 - datetime(d.year, 11, 1).weekday()) % 7)
@@ -255,7 +255,7 @@ try:
 except Exception:
     pass
 c1, c2 = st.columns([5, 1])
-c1.markdown(f'<div class="ss-h1">Surge Scanner</div><div class="ss-sub">마감 전 탐지 → 마감가 매수 · +5% / −10% / 2일 · 마지막 스캔 {scan_time} {stale}</div>', unsafe_allow_html=True)
+c1.markdown(f'<div class="ss-h1">Surge Scanner</div><div class="ss-sub">마감 전 탐지 → 마감가 매수 · +5% / −20% / 2일 · 마지막 스캔 {scan_time} {stale}</div>', unsafe_allow_html=True)
 if c2.button("새로고침", help="60초 캐시를 비우고 다시 읽어요", use_container_width=True):
     st.cache_data.clear(); st.rerun()
 
@@ -305,7 +305,7 @@ if view == '탐지':
             body += (f'<div style="{g};padding:10px 0;border-bottom:1px solid {C["line"]}">'
                      f'<div style="min-width:0"><div style="{S10b};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nm.get(tk) or en.get(tk, tk)}</div><div style="{S10m}">{tk}</div></div>'
                      f'<div style="text-align:right"><div style="{S10b}">${p:,.2f}</div><div style="{S10m}">{kw(p)}</div></div>'
-                     f'<div style="text-align:right;white-space:nowrap"><div style="{S10};color:#5fd35f">${p * 1.05:,.2f} <span style="color:{C["muted"]}">{kw(p * 1.05)}</span></div><div style="{S10};color:{C["red"]}">${p * 0.9:,.2f} <span style="color:{C["muted"]}">{kw(p * 0.9)}</span></div></div></div>')
+                     f'<div style="text-align:right;white-space:nowrap"><div style="{S10};color:#5fd35f">${p * 1.05:,.2f} <span style="color:{C["muted"]}">{kw(p * 1.05)}</span></div><div style="{S10};color:{C["red"]}">${p * 0.8:,.2f} <span style="color:{C["muted"]}">{kw(p * 0.8)}</span></div></div></div>')
     st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{S10m};margin-bottom:8px">오늘 추천 ({sig_date})</div>{body}</div>', unsafe_allow_html=True)
 
 
@@ -379,7 +379,7 @@ elif view == '현황':
                 for r in hold_l.sort_values('buy_date').itertuples():
                     name = nm.get(r.symbol) or en.get(r.symbol, r.symbol)
                     tp = round(r.buy_px * 1.05 + 1e-9, 2) if not np.isnan(r.buy_px) else np.nan
-                    sl = round(r.buy_px * 0.90, 2) if not np.isnan(r.buy_px) else np.nan
+                    sl = round(r.buy_px * 0.80, 2) if not np.isnan(r.buy_px) else np.nan
                     bfx = r.buy_fx if not np.isnan(r.buy_fx) else None
                     rows_h += (f'<div style="{g};padding:10px 0;border-bottom:1px solid {C["line"]}">'
                                f'<div style="min-width:0"><div style="{S14};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{name}</div><div style="{S12m}">{r.symbol}</div></div>'
@@ -487,7 +487,7 @@ elif view == '현황':
                           f'<div class="chips"><span><b style="color:#5fd35f">익절 {w}</b></span><span><b style="color:{C["red"]}">손절 {l}</b></span><span><b style="color:{C["warn"]}">만기 {e}</b></span><span>하룻밤 실험 <b>{fmt_pct(on.mean() if len(on) else np.nan)}</b></span></div></div>')
             st.markdown(f'<div class="grid">{cards}</div>', unsafe_allow_html=True)
             nj = ex['judge'].value_counts().to_dict() if 'judge' in ex.columns else {}
-            st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −10%(갭이면 더 크게)라서 도달률 67%가 넘어야 남아요. 판정: 1분봉 {nj.get("minute", 0)}건 · 일봉 {nj.get("daily", 0)}건. '
+            st.markdown(f'<div class="muted" style="margin-top:6px">이기면 +5%, 지면 −20%(갭이면 더 크게)라서 도달률 80%가 넘어야 남아요. 판정: 1분봉 {nj.get("minute", 0)}건 · 일봉 {nj.get("daily", 0)}건. '
                         f'하룻밤 실험 = 신호일 종가에 사서 다음날 시가에 팔았다면(기록용).</div>', unsafe_allow_html=True)
 
 
@@ -539,7 +539,7 @@ else:
 - **감시목록**: 전날 데이터로 "내일 신호가 날 수 있는 종목"(RSI7<45, 연속하락 3일 이상)을 미리 추려요. 하루 400~700종목.
 - **신호**: 미국장 마감 30분 전(15:30 ET) 가격으로 감시목록만 확인해서 1. 급락반등·2. 과매도 조건에 맞는 종목을 올려요(데이터가 15분 늦게 와서 15:46에 돌아요). ETF·레버리지 상품은 빼요. 마감 뒤 전 종목 스캔도 돌지만 그건 기록·대조용이에요.
 - **매수**: 신호일 **마감가**(종가 주문)에 산 것으로 계산해요.
-- **매도**: +5% 익절, −10% 손절, 최대 2거래일. 1분봉으로 어느 쪽이 먼저였는지 봐요. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요.
+- **매도**: +5% 익절, −20% 손절, 최대 2거래일. 1분봉으로 어느 쪽이 먼저였는지 봐요. 아침부터 손절가 아래/익절가 위로 시작하면 그 **시가**로 계산해요.
 - **비용**: 거래마다 왕복 {COST_PCT:.0f}%를 빼요.
 - **100만 원 시뮬레이션**: 마감 30분 전에 이미 조건이 맞았던 신호만. 한 종목에 그때 잔고의 10%, 동시에 최대 10종목. 자리가 없으면 그 신호는 건너뛰어요.
 - **하룻밤 실험**: 신호일 종가에 사서 다음날 시가에 팔았다면의 값. 기록만 해요.

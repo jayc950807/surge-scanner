@@ -6,7 +6,7 @@
   매수  : 신호 날 15:46 ET 가격 ×1.03 한도의 LOC(장마감 지정가). 종가가 한도보다 높으면 안 사짐.
   익절  : 다음 장부터 매일 09:30:30 에 +5% 지정가(센트 버림). 그때 이미 목표 위면 max(목표, 현재가×0.99) 로 바로 매도.
           걸어 둔 지정가는 가격이 목표보다 1센트 이상 위에서 거래돼야 체결로 봄(보수적).
-  손절  : 09:31 부터 1분마다(15:40 까지) 현재가가 산 가격 −10% 이하면 그 가격에서 0.5% 더 불리하게 매도
+  손절  : 09:31 부터 1분마다(15:40 까지) 현재가가 산 가격 −20% 이하면 그 가격에서 0.5% 더 불리하게 매도
           (실제 봇은 현재가 −3% 지정가 → 보통 현재가 근처에서 체결).
   만기  : 산 뒤 2거래일째 장 마감가(MOC).
   비용  : 한국투자 수수료 0.25% × 2 = 0.5% (+ 위 체결 불리함). 참고로 예전 계산(비용 1%)도 같이 냄.
@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(__file__))
 import alpaca_data as ad
 
-FEE = 0.0025; SLIP = 0.005; TP = 0.05; SL = -0.10; LOC_CAP = 0.03; HOLD = 2
+FEE = 0.0025; SLIP = 0.005; TP = 0.05; SL = float(os.environ.get('SIM_SL', '-0.20')); LOC_CAP = 0.03; HOLD = 2
 STOP_EVERY = int(os.environ.get('STOP_EVERY', '1'))       # 손절 확인 간격(분). 1 = 지금 봇(2026-11-04부터)
 EXIT_AT = os.environ.get('EXIT_AT', 'close')                   # close = 2일째 마감가(MOC, 지금 봇) | 1540 = 2일째 15:40 에 미리 매도
 ENTRY_AT = os.environ.get('ENTRY_AT', 'close')                 # close = 마감가(LOC, 지금 봇) | 1546 = 탐지 직후 15:46 에 바로 매수

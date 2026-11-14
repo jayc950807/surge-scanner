@@ -29,8 +29,8 @@ ACTIVE_STRATEGIES = ['1', '3']
 
 # v6: 손절 -10%, 최대 2거래일 (최근 217건 1분봉 재계산: -20%/5일보다 건당 평균↑, -15% 넘는 손실 39건→5건)
 STRATEGY_CONFIG = {
-    '1': {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2},
-    '3': {'tp_pct': 0.05, 'sl_pct': -0.10, 'max_hold': 2},
+    '1': {'tp_pct': 0.05, 'sl_pct': -0.20, 'max_hold': 2},
+    '3': {'tp_pct': 0.05, 'sl_pct': -0.20, 'max_hold': 2},
 }
 
 STRATEGY_NAMES = {

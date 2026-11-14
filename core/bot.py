@@ -3,13 +3,13 @@
 자동 매매 봇 (한국투자증권) — v6 규칙을 실제 주문으로
 
   python core/bot.py preclose   15:46 ET (마감 전 스캔 직후): 2일째 종목 종가 매도(MOC) → 새 신호 종가 매수(LOC)
-  python core/bot.py monitor    09:28 ET ~ 15:40 ET: 장 시작 직후 +5% 지정가 매도 걸기, 5분마다 −10% 확인해 손절
+  python core/bot.py monitor    09:28 ET ~ 15:40 ET: 장 시작 직후 +5% 지정가 매도 걸기, 1분마다 −20% 확인해 손절
   python core/bot.py status     보유 현황 (종목·보유일·수익률만, 금액 없음)
 
   규칙 (research/STRATEGY_V6.md · 분봉 재현 시뮬과 같은 방식)
     매수: 신호일 15:46 가격 +3% 한도의 LOC(장마감지정가) → 종가에 체결. LOC 가 거부되면 현재가 +1% 지정가.
     익절: 매일 장 시작 직후 평균단가 +5% 지정가 매도 (당일 주문이라 매일 다시 건다)
-    손절: 09:31부터 1분마다 현재가 확인, 평균단가 −10% 이하면 걸어 둔 주문 취소 → 현재가 −3% 지정가 매도 (안 팔리면 −7%)
+    손절: 09:31부터 1분마다 현재가 확인, 평균단가 −20% 이하면 걸어 둔 주문 취소 → 현재가 −3% 지정가 매도 (안 팔리면 −7%)
     만기: 산 뒤 2거래일째 장 마감에 MOC 매도 (거부되면 현재가 −3% 지정가)
 
   안전장치
@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from shared_config import is_us_trading_day, is_us_dst
 from kis import KIS, KISError, round_px, EXCG_ORDER
 
-TP, SL, MAX_HOLD = 0.05, -0.10, 2
+TP, SL, MAX_HOLD = 0.05, -0.20, 2  # 손절 −20%: 2026-11-14 사용자 결정 (−10%는 반등 전 바닥에서 파는 경우가 많았음)
 LOC_CAP = 0.03
 POLL_MIN = 1          # 손절 확인 간격(분). 2026-11-04 5→1 (1분봉 시뮬레이션: 194만→203만, −15% 넘는 손절 6→3건)
 
@@ -477,7 +477,7 @@ def place_take_profits(b):
 
 
 def check_stops(b):
-    """−10% 이하면 걸어 둔 매도 취소 → 현재가 −3% 지정가, 20초 뒤 남아 있으면 −7%"""
+    """−20% 이하면 걸어 둔 매도 취소 → 현재가 −3% 지정가, 20초 뒤 남아 있으면 −7%"""
     hold = b.holdings()
     for h in hold:
         if h['avg'] <= 0:
@@ -490,7 +490,7 @@ def check_stops(b):
         qty = h['qty']
         for disc in (0.97, 0.93):
             try:
-                b.order('sell', h['symbol'], h['excg'], qty, round_px(px * disc), '00', '−10% 손절')
+                b.order('sell', h['symbol'], h['excg'], qty, round_px(px * disc), '00', '−20% 손절')
             except KISError as e:
                 log(f'  손절 주문 실패: {str(e)[:60]}'); break
             if not b.live:

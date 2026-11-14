@@ -67,7 +67,7 @@ CLOSED_COLS = OPEN_COLS + [
     'max_achievement_pct',
     'gross_pct', 'cost_pct',
 ]
-METHOD_V6 = 'v6_close_entry'     # 신호일 종가 진입 · 진입 다음 거래일부터 판정 · -10%/2일
+METHOD_V6 = 'v6_close_entry'     # 신호일 종가 진입 · 진입 다음 거래일부터 판정 · -20%/2일
 METHOD_V5 = 'v5_next_open'
 METHOD_V4 = 'v4_signal_close'
 V6_MARKER = os.path.join('data', '.v6_reverified')
@@ -423,7 +423,7 @@ def write_v6_marker(res):
 
 
 def migrate_to_v6():
-    """처음 v6로 돌 때 한 번: 모든 기록을 v6 규칙(종가 진입·갭 체결·-10%/2일·비용)으로 다시 계산."""
+    """처음 v6로 돌 때 한 번: 모든 기록을 v6 규칙(종가 진입·갭 체결·-20%/2일·비용)으로 다시 계산."""
     if os.path.exists(V6_MARKER):
         return
     print("  [v6] 최초 1회 — 전체 기록을 새 규칙으로 재계산합니다")
@@ -1140,7 +1140,7 @@ def main():
 
     t0 = time.time()
     print("=" * 70)
-    print("  Position Tracker v6 — 종가 진입 · +5% / -10% / 2일")
+    print("  Position Tracker v6 — 종가 진입 · +5% / -20% / 2일")
     print(f"  Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
