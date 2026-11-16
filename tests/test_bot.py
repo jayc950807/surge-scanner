@@ -136,10 +136,10 @@ class TestPreclose:
         monkeypatch.setattr(bot, 'PAUSE', False); monkeypatch.setattr(bot, 'START_EQ', 30000.0)
         k = FakeKIS(prices={'AAA': 2.0}, cash=10000); bot.run_preclose(bot.Broker(k), NOW); assert k.orders == []   # −67% < −60% 한도
 
-    def test_live_check_stops_after_20_negative(self, live, monkeypatch):
+    def test_live_check_never_stops(self, live, monkeypatch):
         monkeypatch.setattr(bot, 'START_DATE', '2026-10-01')
         pd.DataFrame([{'ticker': f'T{i}', 'signal_date': '2026-10-05', 'scan_type': 'preclose', 'result_pct': '-1'} for i in range(20)]).to_csv('data/closed_positions.csv', index=False)
-        assert bot.live_check()[0] is False
+        assert bot.live_check()[0] is True
 
     def test_max_positions(self, live, monkeypatch):
         monkeypatch.setattr(bot, 'MAX_POS', 1)

@@ -20,7 +20,7 @@
     BOT_MAX_POS     동시 보유 최대 (기본 10)
     BOT_MAX_NEW     하루 새 매수 최대 (기본 10)
     BOT_START_EQUITY  시작 금액(USD). 계좌가 여기서 BOT_MAX_DD % 이상 줄면 새 매수 중지 (기본 60 — 나눠서 전부 투자 방식이라 2026-10-27 사용자 결정으로 15→60)
-    BOT_START_DATE  봇 시작일. 이후 마감 전 신호 실적이 20건 넘었는데 평균이 마이너스면 새 매수 중지
+    BOT_START_DATE  봇 시작일. 이후 마감 전 신호 실적을 로그에 표시 (매수를 멈추지는 않음)
   공개 저장소라 로그에는 금액·수량·계좌 정보를 쓰지 않는다. 자세한 내용은 TELEGRAM_TOKEN/TELEGRAM_CHAT_ID 가 있으면 텔레그램으로.
 """
 import os
@@ -131,7 +131,7 @@ def todays_signals(today):
 
 
 def live_check():
-    """봇 시작 뒤 마감 전 신호 실적 — 20건 이상인데 평균 마이너스면 False"""
+    """봇 시작 뒤 마감 전 신호 실적 — 표시만 함. 2026-11-16 사용자 결정: 실적이 나빠도 매수를 멈추지 않음"""
     if not START_DATE or not os.path.exists('data/closed_positions.csv'):
         return True, ''
     c = pd.read_csv('data/closed_positions.csv', dtype=str, keep_default_na=False)
@@ -139,8 +139,6 @@ def live_check():
         return True, ''
     c = c[(c['scan_type'] == 'preclose') & (c['signal_date'] >= START_DATE)].drop_duplicates(['ticker', 'signal_date'])
     r = pd.to_numeric(c.get('result_pct', pd.Series(dtype=str)), errors='coerce').dropna()
-    if len(r) >= 20 and r.mean() < 0:
-        return False, f'실전 실적 {len(r)}건 평균 {r.mean():+.2f}% — 새 매수 중지'
     return True, f'실전 실적 {len(r)}건 평균 {r.mean():+.2f}%' if len(r) else ''
 
 
