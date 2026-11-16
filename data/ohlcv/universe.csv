@@ -701,7 +701,6 @@ BJDX,"Bluejay Diagnostics, Inc. Common Stock",NASDAQ
 BJRI,"BJ's Restaurants, Inc. Common Stock",NASDAQ
 BKD,"Brookdale Senior Living, Inc.",NYSE
 BKE,"The Buckle, Inc.",NYSE
-BKH,Black Hills Corporation,NYSE
 BKHA,Black Hawk Acquisition Corporation Class A Ordinary Shares,NASDAQ
 BKKT,"Bakkt, Inc.",NYSE
 BKNG,Booking Holdings Inc. Common Stock,NASDAQ
@@ -811,6 +810,7 @@ BRN,"Barnwell Industries, Inc.",AMEX
 BRNX,BrenX Ltd. Ordinary Shares,NASDAQ
 BRO,"Brown & Brown, Inc.",NYSE
 BROS,Dutch Bros Inc.,NYSE
+BRRK,Bluerock Acquisition Corp. II Class A Ordinary Shares,NASDAQ
 BRSL,Brightstar Lottery PLC,NYSE
 BRSP,"BrightSpire Capital, Inc.",NYSE
 BRT,BRT Apartments Corp,NYSE
@@ -1659,7 +1659,7 @@ ELWT,"Elauwit Connection, Inc. Common Stock",NASDAQ
 EMA,Emera Incorporated,NYSE
 EMAT,Evolution Metals & Technologies Corp. Common Stock,NASDAQ
 EMBC,Embecta Corp. Common Stock,NASDAQ
-EMBJ,Embraer S.A. American Depositary Shares (Each representing Four Common Shares),NYSE
+EMBJ,Embraer S.A. American Depositary Shares (Each representing One Common Share),NYSE
 EME,"EMCOR Group, Inc.",NYSE
 EMIS,Emmis Acquisition Corp. Class A Ordinary Shares,NASDAQ
 EML,Eastern Company (The) Common Stock,NASDAQ
@@ -1939,7 +1939,7 @@ FNWB,First Northwest Bancorp Common Stock,NASDAQ
 FNWD,Finward Bancorp Common Stock,NASDAQ
 FOA,Finance of America Companies Inc.,NYSE
 FOCL,EDAP TMS S.A. American Depositary Shares,NASDAQ
-FOFO,"Hang Feng Technology Innovation Co., Ltd. Ordinary Shares",NASDAQ
+FOFO,"Hang Feng Technology Innovation Co., Ltd. Class A Ordinary Shares",NASDAQ
 FOIL,"Londian Wason New Energy Tech Inc. American Depositary Shares, each representing five Ordinary Shares",NYSE
 FOR,Forestar Group Inc.,NYSE
 FORM,"FormFactor, Inc. FormFactor, Inc. Common Stock",NASDAQ
@@ -2448,6 +2448,7 @@ HYMC,Hycroft Mining Holding Corporation Class A Common Stock,NASDAQ
 HYNE,"Hoyne Bancorp, Inc. Common Stock",NASDAQ
 HYPD,"Hyperion DeFi, Inc. Common Stock",NASDAQ
 HYPR,"Hyperfine, Inc. Class A Common Stock",NASDAQ
+HZN,Bright Horizon Energy Corporation,NYSE
 HZO,"MarineMax, Inc.",NYSE
 IA,"Innovative Solutions and Support, Inc. Common Stock",NASDAQ
 IACO,Idea Acquisition Corp. Class A Ordinary Shares,NASDAQ
@@ -2643,7 +2644,6 @@ ISRG,"Intuitive Surgical, Inc. Common Stock",NASDAQ
 ISTR,Investar Holding Corporation Common Stock,NASDAQ
 IT,"Gartner, Inc.",NYSE
 ITG,"ITG, Inc. Class A Common Stock",NASDAQ
-ITGR,Integer Holdings Corporation,NYSE
 ITHA,ITHAX Acquisition Corp III Class A Ordinary Shares,NASDAQ
 ITIC,Investors Title Company Common Stock,NASDAQ
 ITOC,iTonic Holdings Ltd Class A Ordinary Shares,NASDAQ
@@ -2835,7 +2835,6 @@ KSS,Kohls Corporation,NYSE
 KT,KT Corp.,NYSE
 KTB,"Kontoor Brands, Inc. Common Stock",NYSE
 KTCC,Key Tronic Corporation Common Stock,NASDAQ
-KTF,DWS Municipal Income Trust,NYSE
 KTH,"Structured Products CorTS PECO Energy Cap Trust III, 8% Cert.",NYSE
 KTN,"Structured Products CorTS Aon Capital A, 8.205% Cert.",NYSE
 KTOS,"Kratos Defense & Security Solutions, Inc. Common Stock",NASDAQ
@@ -3582,7 +3581,6 @@ NVX,NOVONIX Limited American Depository Shares,NASDAQ
 NWAX,New America Acquisition I Corp.,NYSE
 NWBI,"Northwest Bancshares, Inc. Common Stock",NASDAQ
 NWCL,newcleo plc Ordinary Shares,NASDAQ
-NWE,"NorthWestern Energy Group, Inc. Common Stock",NASDAQ
 NWFL,Norwood Financial Corp. Common Stock,NASDAQ
 NWG,"NatWest Group plc American Depositary Shares, (each representing two (2) Ordinary Shares)",NYSE
 NWGL,CL Workshop Group Limited American Depositary Shares,NASDAQ
@@ -3915,7 +3913,6 @@ PLAY,"Dave & Buster's Entertainment, Inc. Common Stock",NASDAQ
 PLBC,Plumas Bancorp,NASDAQ
 PLBL,Polibeli Group Ltd Class A Ordinary Shares,NASDAQ
 PLBY,"Playboy, Inc. Common Stock",NASDAQ
-PLCE,"Children's Place, Inc. (The) Common Stock",NASDAQ
 PLCI,Pelican Acquisition II Corporation Ordinary Shares,NASDAQ
 PLD,"PROLOGIS, INC.",NYSE
 PLG,Platinum Group Metals LTD.,AMEX
@@ -3972,6 +3969,7 @@ PONO,"Pono Capital Four, Inc. Class A Ordinary Shares",NASDAQ
 PONY,Pony AI Inc. American Depositary Shares,NASDAQ
 POOL,Pool Corporation Common Stock,NASDAQ
 POR,Portland General Electric Company,NYSE
+PORT,Southport Acquisition Corp. II,NYSE
 POST,"POST HOLDINGS, INC.",NYSE
 POWI,"Power Integrations, Inc. Common Stock",NASDAQ
 POWL,"Powell Industries, Inc. Common Stock",NASDAQ
@@ -5330,7 +5328,7 @@ WFC,Wells Fargo & Co.,NYSE
 WFCF,"Where Food Comes From, Inc. Common Stock",NASDAQ
 WFF,WF Holding Limited Ordinary Shares,NASDAQ
 WFG,West Fraser Timber Co. Ltd,NYSE
-WFRD,Weatherford International plc Ordinary Shares,NASDAQ
+WFRD,Weatherford International Corp Common Stock,NASDAQ
 WGO,"Winnebago Industries, Inc.",NYSE
 WGS,GeneDx Holdings Corp. Class A Common Stock,NASDAQ
 WH,"Wyndham Hotels & Resorts, Inc. Common Stock",NYSE
@@ -5409,7 +5407,7 @@ WU,The Western Union Company,NYSE
 WULF,TeraWulf Inc. Common Stock,NASDAQ
 WVE,"Wave Life Sciences, Inc. Common Stock",NASDAQ
 WVVI,"Willamette Valley Vineyards, Inc. Common Stock",NASDAQ
-WWB,WINDWARD BIO GROUP AG          COM,NASDAQ
+WWB,Windward Bio Group AG Common Shares,NASDAQ
 WWD,"Woodward, Inc. Common Stock",NASDAQ
 WWR,"Westwater Resources, Inc.",AMEX
 WXM,WF International Limited Ordinary Shares,NASDAQ
