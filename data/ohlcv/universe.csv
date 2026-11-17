@@ -52,7 +52,6 @@ ACET,"Adicet Bio, Inc. Common Stock",NASDAQ
 ACFN,"Acorn Energy, Inc. Common Stock",NASDAQ
 ACGC,ACP Holdings Acquisition Corp. Class A Ordinary Shares,NASDAQ
 ACGL,Arch Capital Group Ltd. Common Stock,NASDAQ
-ACH,"Accendra Health, Inc.",NYSE
 ACHC,"Acadia Healthcare Company, Inc. Common Stock",NASDAQ
 ACHR,Archer Aviation Inc.,NYSE
 ACI,"Albertsons Companies, Inc.",NYSE
@@ -1551,7 +1550,6 @@ DUOL,"Duolingo, Inc. Class A Common Stock",NASDAQ
 DUOT,"Duos Technologies Group, Inc. Common Stock",NASDAQ
 DV,"DoubleVerify Holdings, Inc.",NYSE
 DVA,DaVita Inc.,NYSE
-DVLT,Datavault AI Inc. Common Stock,NASDAQ
 DVN,Devon Energy Corporation,NYSE
 DWSN,Dawson Geophysical Company Common Stock,NASDAQ
 DWTX,"Dogwood Therapeutics, Inc. Common Stock",NASDAQ
@@ -2154,7 +2152,7 @@ GLU,The Gabelli Utility & Income Trust,AMEX
 GLUE,"Monte Rosa Therapeutics, Inc. Common Stock",NASDAQ
 GLXG,Galaxy Payroll Group Limited Class A Ordinary Shares,NASDAQ
 GLXY,Galaxy Digital Inc. Class A Common Stock,NASDAQ
-GM,General Motors Company,NYSE
+GM,General Motors Company Common Stock,NASDAQ
 GMAB,Genmab A/S ADS,NASDAQ
 GME,GameStop Corp. Class A,NYSE
 GMED,GLOBUS MEDICAL INC,NYSE
@@ -3244,7 +3242,7 @@ MO,"Altria Group, Inc.",NYSE
 MOB,Mobilicom Limited Ordinary Shares,NASDAQ
 MOBI,"Mobia Medical, Inc. Common Stock",NASDAQ
 MOBX,"Mobix Labs, Inc. Class A Common Stock",NASDAQ
-MOD,Modine Manufacturing Co,NYSE
+MOD,"Modexus Solutions, Inc.",NYSE
 MODD,"Modular Medical, Inc. Common Stock",NASDAQ
 MOGU,"MOGU Inc. American Depositary Shares, each representing three-hundred (300) Class A Ordinary Shares",NYSE
 MOH,"Molina Healthcare, Inc.",NYSE
@@ -5029,6 +5027,7 @@ TXMD,"TherapeuticsMD, Inc. Common Stock",NASDAQ
 TXN,Texas Instruments Incorporated Common Stock,NASDAQ
 TXNM,"TXNM Energy, Inc.",NYSE
 TXO,"TXO Partners, L.P.",NYSE
+TXR,Torex Resources Inc.,NYSE
 TXRH,"Texas Roadhouse, Inc. Common Stock",NASDAQ
 TXT,"Textron, Inc.",NYSE
 TY,TRI-Continental Corporation,NYSE
@@ -5146,7 +5145,6 @@ VALU,"Value Line, Inc. Common Stock",NASDAQ
 VANI,"Vivani Medical, Inc. Common Stock (DE)",NASDAQ
 VATE,INNOVATE Corp.,NYSE
 VBIO,"Valion Bio, Inc. Common Stock",NASDAQ
-VBNK,VersaBank Common Shares,NASDAQ
 VC,Visteon Corporation Common Stock,NASDAQ
 VCEL,Vericel Corporation Common Stock,NASDAQ
 VCIG,VCI Global Limited Ordinary Share,NASDAQ
@@ -5246,6 +5244,7 @@ VREX,Varex Imaging Corporation Common Stock,NASDAQ
 VRM,"Vroom, Inc. Common Stock",NASDAQ
 VRNS,"Varonis Systems, Inc. Common Stock",NASDAQ
 VRRM,Verra Mobility Corporation Class A Common Stock,NASDAQ
+VRSA,Versa Bancorp Common Stock,NASDAQ
 VRSK,"Verisk Analytics, Inc. Common Stock",NASDAQ
 VRSN,"VeriSign, Inc. Common Stock",NASDAQ
 VRT,Vertiv Holdings Co Class A Common Stock,NYSE
