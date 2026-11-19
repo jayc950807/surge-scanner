@@ -404,29 +404,45 @@ def run_preclose(b, now=None):
         log(f'  계좌가 시작 대비 −{MAX_DD*100:.0f}% 아래 → 새 매수 중지', f'  계좌 {equity:,.0f} < 시작 {START_EQ:,.0f} × {1-MAX_DD:.2f} → 새 매수 중지'); return
     slots = MAX_POS - (len(held) - len(exiting))
     # 살 후보: 이미 보유·주문 중이 아닌 신호, 빈자리·하루 한도 안에서
-    cands = []
+    room = max(0, min(MAX_NEW, slots))
+    pool = []   # 자리 수와 상관없이 일단 가격까지 모음 — 비싸서 빠지는 종목이 생기면 다음 신호가 그 자리를 채우게 (11/19 SNEX 빠지고 UPLD 못 산 문제)
     for sym, px1530 in sigs:
         if sym in held:
             log(f'  {sym} 이미 보유 → 건너뜀'); continue
-        if len(cands) >= max(0, min(MAX_NEW, slots)):
-            log(f'  자리 없음 → {sym} 건너뜀'); continue
         ex = exchange_of(sym)
         px = b.price(sym, ex) or px1530
         if not px:
             log(f'  {sym} 가격 없음 → 건너뜀'); continue
-        cands.append([sym, ex, px, round_px(px * (1 + LOC_CAP), up=True)])
+        pool.append([sym, ex, px, round_px(px * (1 + LOC_CAP), up=True)])
+    cands = pool[:room]
+    for c in pool[room:]:
+        log(f'  자리 없음 → {c[0]} 건너뜀')
     if SIZING == 'split':
-        # 그날 쓸 수 있는 현금을 살 종목 수로 똑같이 나눔. 1주도 못 사는 종목(비싼 것부터)은 빼고 다시 나눔
+        # 그날 쓸 수 있는 현금을 살 종목 수로 똑같이 나눔. 1주도 못 사는 종목(비싼 것부터)은 빼고, 빈자리는 다음 신호로 채운 뒤 다시 나눔
         while cands and min(cash / len(cands), cash) < max(c[3] for c in cands):
-            drop = max(cands, key=lambda c: c[3]); cands.remove(drop)
+            drop = max(cands, key=lambda c: c[3]); cands.remove(drop); pool.remove(drop)
             log(f'  {drop[0]} 나눈 금액으로 1주도 못 삼 → 건너뜀')
+            nxt = [c for c in pool if c not in cands]
+            if nxt and len(cands) < room:
+                cands.append(nxt[0]); log(f'  빈자리 → {nxt[0][0]} 추가')
         per = cash / len(cands) if cands else 0.0
         log(f'  신호 {len(sigs)}종목 · 살 종목 {len(cands)} · 현금을 {len(cands)}등분', f'  현금 {cash:,.2f} ÷ {len(cands)} = 종목당 {per:,.2f} (계좌 {equity:,.2f})')
     else:
         per = equity * POS_PCT
         log(f'  신호 {len(sigs)}종목 · 빈자리 {max(slots, 0)}', f'  신호 {len(sigs)} · 빈자리 {slots} · 계좌 {equity:,.0f} · 종목당 {per:,.0f} · 현금 {cash:,.0f}')
+    qtys = {c[0]: math.floor(min(per, cash) / c[3]) for c in cands}
+    if SIZING == 'split' and cands:
+        # 주식은 1주 단위라 나누고 남는 돈이 생김 → 남은 돈으로 금액이 가장 적게 담긴 종목부터 1주씩 더 (11/19 현금이 $15 남은 문제)
+        left = cash - sum(qtys[c[0]] * c[3] for c in cands)
+        while True:
+            fit = [c for c in cands if c[3] <= left + 1e-9]
+            if not fit:
+                break
+            c = min(fit, key=lambda c: (qtys[c[0]] * c[3], c[3]))
+            qtys[c[0]] += 1; left -= c[3]
     for sym, ex, px, lim in cands:
-        qty = math.floor(min(per, cash) / lim)
+        qty = qtys[sym] if SIZING == 'split' else math.floor(min(per, cash) / lim)
+        qty = min(qty, math.floor(cash / lim + 1e-9))
         if qty < 1:
             log(f'  {sym} 살 돈 부족 → 건너뜀'); continue
         used = lim

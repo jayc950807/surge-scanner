@@ -71,7 +71,7 @@ class TestPreclose:
                  {'strategy': '3', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '4.00'}])
         k = FakeKIS(prices={'AAA': 2.00, 'BBB': 4.00}, cash=1000.0)
         bot.run_preclose(bot.Broker(k), NOW)
-        assert k.orders == [('buy', 'AAA', 242, 2.06, '34'), ('buy', 'BBB', 121, 4.12, '34')]   # 1000 ÷ 2 = 500씩 (한도가 +3%)
+        assert k.orders == [('buy', 'AAA', 243, 2.06, '34'), ('buy', 'BBB', 121, 4.12, '34')]   # 1000 ÷ 2 = 500씩 (한도가 +3%), 남은 2.96 으로 AAA 1주 더
 
     def test_split_one_signal_uses_all_cash(self, live):
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
@@ -86,13 +86,23 @@ class TestPreclose:
         bot.run_preclose(bot.Broker(k), NOW)
         assert k.orders == [('buy', 'AAA', 29, 2.06, '34')]                # 30씩이면 BBB(51.5) 못 삼 → 빼고 AAA 에 60 전부
 
+    def test_split_refills_slot_when_expensive_dropped(self, live, monkeypatch):
+        monkeypatch.setattr(bot, 'MAX_NEW', 2)
+        signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
+                 {'strategy': '1', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '50.00'},
+                 {'strategy': '1', 'ticker': 'CCC', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '3.00'}])
+        k = FakeKIS(prices={'AAA': 2.00, 'BBB': 50.00, 'CCC': 3.00}, cash=40.0)
+        bot.run_preclose(bot.Broker(k), NOW)
+        assert [o[1] for o in k.orders] == ['AAA', 'CCC']                   # BBB 가 비싸서 빠지면 다음 신호 CCC 가 그 자리를 채움
+        assert sum(o[2] * o[3] for o in k.orders) > 40 - 3.09               # 남는 돈이 1주 값보다 적게
+
     def test_split_uses_only_cash_keeps_holdings(self, live):
         hold = [{'symbol': 'ZZZ', 'qty': 10, 'sellable': 10, 'avg': 5.0, 'price': 5.0, 'excg': 'NASD'}]
         k = FakeKIS(hold=hold, fills=[{'date': '20261022', 'symbol': 'ZZZ', 'side': 'buy', 'qty': 10, 'price': 5.0}], prices={'AAA': 2.0, 'BBB': 2.0}, cash=40.0)
         signals([{'strategy': '1', 'ticker': 'AAA', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'},
                  {'strategy': '1', 'ticker': 'BBB', 'date': '2026-10-22', 'scan_type': 'preclose', 'price_1530': '2.00'}])
         bot.run_preclose(bot.Broker(k), NOW)
-        assert k.orders == [('buy', 'AAA', 9, 2.06, '34'), ('buy', 'BBB', 9, 2.06, '34')]      # 현금 40 ÷ 2 = 20씩, ZZZ 는 그대로
+        assert k.orders == [('buy', 'AAA', 10, 2.06, '34'), ('buy', 'BBB', 9, 2.06, '34')]      # 현금 40 ÷ 2 = 20씩(+남은 돈으로 1주), ZZZ 는 그대로
 
     def test_day2_exit_moc_and_slots(self, live):
         # AAA: 화(10-20) 종가 매수 → 수=1일, 목=2일 → 목요일 마감에 MOC. BBB: 수(10-21) 매수 → 목=1일 → 보유
