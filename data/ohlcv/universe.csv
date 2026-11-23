@@ -512,6 +512,7 @@ AVTX,"Avalo Therapeutics, Inc. Common Stock",NASDAQ
 AVX,Avax One Technology Ltd. Common Shares,NASDAQ
 AVXL,Anavex Life Sciences Corp. Common Stock,NASDAQ
 AVY,Avery Dennison Corp.,NYSE
+AVZO,"Avenzo Therapeutics, Inc. Common Stock",NASDAQ
 AWI,"Armstrong World Industries, Inc.",NYSE
 AWK,"American Water Works Company, Inc",NYSE
 AWR,American States Water Company,NYSE
@@ -688,7 +689,7 @@ BIO,"Bio-Rad Laboratories, Inc.Class A",NYSE
 BIOA,"BioAge Labs, Inc. Common Stock",NASDAQ
 BIOT,Instinct Bio Technical Company Holdings Inc. Ordinary Shares,NASDAQ
 BIOX,Bioceres Crop Solutions Corp. Ordinary Shares,NASDAQ
-BIPC,Brookfield Infrastructure Corporation Class A Exchangeable Subordinate Voting Shares,NYSE
+BIP,Brookfield Infrastructure Partners Inc. Class A Subordinate Voting Shares,NYSE
 BIPI,BIP Bermuda Holdings I Limited 5.125% Perpetual Subordinated Notes,NYSE
 BIRD,"Smartbird, Inc. Class A Common Stock",NASDAQ
 BIRK,Birkenstock Holding plc,NYSE
@@ -701,7 +702,6 @@ BJDX,"Bluejay Diagnostics, Inc. Common Stock",NASDAQ
 BJRI,"BJ's Restaurants, Inc. Common Stock",NASDAQ
 BKD,"Brookdale Senior Living, Inc.",NYSE
 BKE,"The Buckle, Inc.",NYSE
-BKHA,Black Hawk Acquisition Corporation Class A Ordinary Shares,NASDAQ
 BKKT,"Bakkt, Inc.",NYSE
 BKNG,Booking Holdings Inc. Common Stock,NASDAQ
 BKR,Baker Hughes Company Class A Common Stock,NASDAQ
@@ -1127,6 +1127,7 @@ CLST,"Catalyst Bancorp, Inc. Common Stock",NASDAQ
 CLVT,Clarivate Plc,NYSE
 CLWT,Euro Tech Holdings Company Limited Common Stock,NASDAQ
 CLX,Clorox Company,NYSE
+CLYD,"Clywedog Therapeutics Holdings, Inc. Common Stock",NASDAQ
 CLYM,"Climb Bio, Inc. Common Stock",NASDAQ
 CM,Canadian Imperial Bank of Commerce,NYSE
 CMBT,CMB.TECH NV,NYSE
@@ -1770,6 +1771,7 @@ EVO,Evotec SE American Depositary Shares,NASDAQ
 EVOX,Evolution Global Acquisition Corp Class A Ordinary Shares,NASDAQ
 EVR,Evercore Inc.,NYSE
 EVRG,"Evergy, Inc. Common Stock",NASDAQ
+EVRL,Everli Global Holdings Inc. Class A Ordinary Shares,NASDAQ
 EVTC,"EVERTEC, INC.",NYSE
 EVTL,Vertical Aerospace Ltd.,NYSE
 EWAV,East West Ave Acquisition Corp. Common Stock,NASDAQ
@@ -3063,7 +3065,6 @@ MA,Mastercard Incorporated,NYSE
 MAA,"Mid-America Apartment Communities, Inc.",NYSE
 MAAS,Maase Inc. Class A Ordinary Shares,NASDAQ
 MAC,The Macerich Company,NYSE
-MACI,Melar Acquisition Corp. I Class A Ordinary Shares,NASDAQ
 MAGH,Magnitude International Ltd Ordinary Shares,NASDAQ
 MAGN,Magnera Corporation,NYSE
 MAIA,"MAIA Biotechnology, Inc.",AMEX
@@ -4232,7 +4233,6 @@ RLGT,"Radiant Logistics, Inc.",AMEX
 RLI,RLI Corp.,NYSE
 RLJ,RLJ Lodging Trust,NYSE
 RLMD,"Relmada Therapeutics, Inc. Common Stock",NASDAQ
-RLYB,Rallybio Corporation Common Stock,NASDAQ
 RM,REGIONAL MANAGEMENT CORP,NYSE
 RMBI,"Richmond Mutual Bancorporation, Inc. Common Stock",NASDAQ
 RMBS,Rambus Inc. Common Stock,NASDAQ
@@ -5161,6 +5161,7 @@ VERA,"Vera Therapeutics, Inc. Class A Common Stock",NASDAQ
 VERI,"Veritone, Inc. Common Stock",NASDAQ
 VERU,Veru Inc. Common Stock,NASDAQ
 VERX,"Vertex, Inc. Class A Common Stock",NASDAQ
+VESI,"Vesicor Therapeutics Holdings, Inc. Class A Common Stock",NASDAQ
 VET,VERMILION ENERGY INC.,NYSE
 VFC,V.F. Corporation,NYSE
 VFF,"Village Farms International, Inc. Common Shares",NASDAQ
