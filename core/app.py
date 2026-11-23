@@ -368,6 +368,20 @@ elif view == '현황':
                     unsafe_allow_html=True)
             else:
                 st.markdown('<div class="card muted">계좌 금액은 장 마감 뒤 갱신 때 채워져요.</div>', unsafe_allow_html=True)
+            # ── 계좌 그래프 (시뮬레이션 그래프와 같은 모양, 실제 계좌 금액) ──
+            if not cv.empty and len(cv) >= 2:
+                g = cv.copy(); g['won'] = g['equity_usd'] * (fx_now if not np.isnan(fx_now) else np.nan)
+                g['chg'] = (g['equity_usd'] / start_eq - 1) * 100
+                st.markdown(f'<div style="font-size:12px;color:{C["muted"]};margin-top:12px">내 계좌 금액 ($)</div>', unsafe_allow_html=True)
+                base = alt.Chart(g).encode(x=alt.X('date:T', title=None, axis=alt.Axis(format='%m/%d', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'], labelFontSize=10)))
+                line = base.mark_line(color=C['blue'], strokeWidth=2).encode(y=alt.Y('equity_usd:Q', title=None, scale=alt.Scale(zero=False), axis=alt.Axis(format='$,.0f', labelColor=C['sub'], gridColor=C['line'], domainColor=C['line'], labelFontSize=10)))
+                rule = alt.Chart(pd.DataFrame({'y': [start_eq]})).mark_rule(color=C['muted'], strokeDash=[4, 4]).encode(y='y:Q')
+                hover = alt.selection_point(fields=['date'], nearest=True, on='mouseover', empty=False)
+                pts = base.mark_circle(size=60, color=C['blue']).encode(y='equity_usd:Q', opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+                                                                        tooltip=[alt.Tooltip('date:T', title='날짜', format='%Y-%m-%d'), alt.Tooltip('equity_usd:Q', title='계좌 $', format=',.2f'),
+                                                                                 alt.Tooltip('won:Q', title='원화', format=',.0f'), alt.Tooltip('chg:Q', title='원금 대비 %', format='+.1f')]).add_params(hover)
+                st.altair_chart((rule + line + pts).properties(height=200, background=C['surface']).configure_view(stroke=None), use_container_width=True)
+                st.markdown(f'<div style="font-size:10px;color:{C["muted"]};margin:-6px 0 10px">점선 = 원금 ${start_eq:,.2f}</div>', unsafe_allow_html=True)
             # ── 투자 중인 종목 ──
             if not hold_l.empty:
                 NM = _csv('data/names_kr.csv'); nm = dict(zip(NM['symbol'], NM['name_kr'])) if not NM.empty else {}
