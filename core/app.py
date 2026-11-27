@@ -426,6 +426,20 @@ elif view == '현황':
                     sub_ = dd[dd['strats'].map(lambda z: sid in z)]
                     rows_r += line(f'{STRAT_SHORT[sid]} {STRAT_KR[sid]} {len(sub_)}건', sub_)
                 st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{T10m};margin-bottom:6px">끝난 거래</div>{rows_r}</div>', unsafe_allow_html=True)
+                # ── 실제로 사고판 기록 (최근 순, 한 줄씩) ──
+                NM2 = _csv('data/names_kr.csv'); nm2 = dict(zip(NM2['symbol'], NM2['name_kr'])) if not NM2.empty else {}
+                RC = {'익절': '#5fd35f', '손절': C['red'], '만기': C['warn']}
+                lst = done.sort_values(['sell_date', 'buy_date'], ascending=False)
+                rows_l = ''
+                for r in lst.itertuples():
+                    nmk = nm2.get(r.symbol, '') or r.symbol
+                    sd_ = str(r.sell_date)[5:].replace('-', '/'); bd_ = str(r.buy_date)[5:].replace('-', '/')
+                    rows_l += (f'<div style="display:grid;grid-template-columns:30% 22% 26% 22%;align-items:center;padding:7px 0;border-bottom:1px solid {C["line"]};font-size:10px">'
+                               f'<div><div style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nmk}</div><div style="color:{C["muted"]}">{r.symbol}</div></div>'
+                               f'<div style="color:{C["muted"]}">{bd_} → {sd_}<br>{"" if np.isnan(r.qty) else f"{r.qty:.0f}주"}</div>'
+                               f'<div style="text-align:right">${r.buy_px:,.2f} → ${r.sell_px:,.2f}<br><b style="color:{RC.get(r.result, C["text"])}">{r.result}</b></div>'
+                               f'<div style="text-align:right;font-weight:800;color:{color_pct(r.pnl_usd)}">{usd(r.pnl_usd)}<br>{fmt_pct(r.ret_pct)}</div></div>')
+                st.markdown(f'<div class="card" style="padding:14px 14px 6px"><div style="{T10m};margin-bottom:6px">사고판 기록 ({len(lst)}건)</div>{rows_l}</div>', unsafe_allow_html=True)
     else:
         ex = closed_m[closed_m['exec_ok']] if not closed_m.empty else closed_m
         allv = closed_m[~closed_m['is_etf']] if not closed_m.empty else closed_m

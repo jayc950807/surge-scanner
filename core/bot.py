@@ -198,6 +198,41 @@ def kr_names(symbols):
         print(f'  한글 종목명 {len(found)}개 추가')
 
 
+def _match_lots(d, fills):
+    """체결을 기록 행(주문)별로 나눔. 같은 종목을 팔고 다시 사도 섞이지 않게 (2026-11-25 SUPX: 손절 2주 판 돈이
+    같은 날 다시 산 19주의 매도에 합쳐져 '만기 +4.3%'로 잘못 기록됨).
+    - 매수 체결 → 주문일이 체결일 이하인 행 중 가장 최근 행
+    - 매도 체결 → 먼저 산 행부터 차례로(선입선출). 같은 날이면 매도가 먼저(봇은 장중·마감에 팔고, 새로 사는 건 마감 체결)
+    반환 {행 번호: (매수 체결들, 매도 체결들)}"""
+    out = {}
+    for sym, g in d[d['status'] != 'unfilled'].groupby('symbol'):
+        rows = sorted(g.index, key=lambda i: (g.at[i, 'order_date'], i))
+        ev = sorted([f for f in fills if f['symbol'] == sym], key=lambda f: (f['date'], 0 if f['side'] == 'sell' else 1))
+        open_ = []                                   # [행, 남은 수량]
+        for f in ev:
+            fd = f['date']
+            if f['side'] == 'buy':
+                cand = [i for i in rows if g.at[i, 'order_date'].replace('-', '') <= fd]
+                if not cand:
+                    continue
+                i = cand[-1]; out.setdefault(i, ([], []))[0].append(dict(f))
+                for o in open_:
+                    if o[0] == i:
+                        o[1] += f['qty']; break
+                else:
+                    open_.append([i, f['qty']])
+            else:
+                q = f['qty']
+                for o in open_:
+                    if q <= 0:
+                        break
+                    if o[1] <= 0:
+                        continue
+                    take = min(q, o[1]); o[1] -= take; q -= take
+                    out.setdefault(o[0], ([], []))[1].append(dict(f, qty=take))
+    return out
+
+
 def run_record(b):
     """체결 내역·잔고로 실매매 기록 갱신 (조회만, 주문 없음)"""
     d = live_load()
@@ -221,6 +256,7 @@ def run_record(b):
             eq_now = b.cash('SPY', 'AMEX', 500) + sum(h['qty'] * (h['price'] or h['avg']) for h in hold.values())
         except KISError:
             eq_now = None
+    lots = _match_lots(d, fills)
     for i, r in d.iterrows():
         if r['status'] == 'closed' and r['qty'] != '':
             if fx and r['buy_fx'] == '': d.at[i, 'buy_fx'] = fx          # 예전 기록은 지금 환율로 채움(근사)
@@ -228,14 +264,12 @@ def run_record(b):
             continue
         if r['status'] == 'unfilled':
             continue
-        od = r['order_date'].replace('-', '')
-        buys = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'buy' and f['date'] >= od]
+        buys, sells = lots.get(i, ([], []))
         if not buys:
             if ts > r['order_date']:
                 d.at[i, 'status'] = 'unfilled'; d.at[i, 'updated'] = ts
             continue
         bd = min(f['date'] for f in buys); bq = sum(f['qty'] for f in buys); bpx = sum(f['qty'] * f['price'] for f in buys) / bq
-        sells = [f for f in fills if f['symbol'] == r['symbol'] and f['side'] == 'sell' and f['date'] >= bd]
         sq = sum(f['qty'] for f in sells)
         d.at[i, 'buy_date'] = f'{bd[:4]}-{bd[4:6]}-{bd[6:]}'; d.at[i, 'buy_px'] = f'{bpx:.4f}'
         d.at[i, 'qty'] = str(bq); d.at[i, 'buy_usd'] = f'{bq * bpx:.2f}'

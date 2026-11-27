@@ -242,3 +242,17 @@ class TestLiveRecord:
         bot.run_record(bot.Broker(k))
         d = pd.read_csv('data/live_trades.csv', dtype=str).set_index('symbol')
         assert d.at['AAA', 'status'] == 'unfilled' and d.at['BBB', 'status'] == 'holding' and abs(float(d.at['BBB', 'cur_pct']) - 5.0) < 0.01
+
+    def test_sell_then_rebuy_same_symbol_not_mixed(self, live, monkeypatch):
+        # 2026-11-25 SUPX: 11/23 산 2주를 11/25 장중 손절, 같은 날 마감에 19주 다시 사서 11/27 익절
+        bot.live_record_order('2026-11-23', 'SUPX', 12.5, 3.13); bot.live_record_order('2026-11-25', 'SUPX', 92.8, 2.455)
+        k = FakeKIS(fills=[{'date': '20261123', 'symbol': 'SUPX', 'side': 'buy', 'qty': 2, 'price': 3.13},
+                           {'date': '20261125', 'symbol': 'SUPX', 'side': 'buy', 'qty': 19, 'price': 2.455},
+                           {'date': '20261125', 'symbol': 'SUPX', 'side': 'sell', 'qty': 2, 'price': 2.47},
+                           {'date': '20261127', 'symbol': 'SUPX', 'side': 'sell', 'qty': 19, 'price': 2.57}])
+        monkeypatch.setattr(bot, 'now_et', lambda: datetime(2026, 11, 27, 16, 30, tzinfo=ET))
+        bot.run_record(bot.Broker(k))
+        d = pd.read_csv('data/live_trades.csv', dtype=str)
+        a, b2 = d.iloc[0], d.iloc[1]
+        assert a.qty == '2' and a.result == '손절' and abs(float(a.sell_px) - 2.47) < 1e-6
+        assert b2.qty == '19' and b2.result == '익절' and abs(float(b2.sell_px) - 2.57) < 1e-6 and abs(float(b2.sell_usd) - 48.83) < 0.01
