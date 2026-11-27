@@ -646,7 +646,6 @@ BFC,Bank First Corporation Common Stock,NASDAQ
 BFH,"Bread Financial Holdings, Inc.",NYSE
 BFLR,"BlueFlare, Inc. Common Stock",NASDAQ
 BFLY,"Butterfly Network, Inc.",NYSE
-BFRG,"Bullfrog AI Holdings, Inc. Common Stock",NASDAQ
 BFRI,Biofrontera Inc. Common Stock,NASDAQ
 BFS,"Saul Centers, Inc.",NYSE
 BFST,"Business First Bancshares, Inc. Common Stock",NASDAQ
@@ -1048,7 +1047,6 @@ CGON,"CG Oncology, Inc. Common stock",NASDAQ
 CGTL,Creative Global Technology Holdings Limited Class A Ordinary Shares,NASDAQ
 CGTX,"Cognition Therapeutics, Inc. Common Stock",NASDAQ
 CHA,Chagee Holdings Limited American Depositary Shares,NASDAQ
-CHAI,"Core AI Holdings, Inc. Common Shares",NASDAQ
 CHAR,Charlton Aria Acquisition Corporation Class A Ordinary Shares,NASDAQ
 CHCI,"Comstock Holding Companies, Inc. Class A Common Stock",NASDAQ
 CHCO,City Holding Company Common Stock,NASDAQ
@@ -1422,7 +1420,6 @@ DCOY,Decoy Therapeutics Inc. Common Stock,NASDAQ
 DCTH,"Delcath Systems, Inc. Common Stock",NASDAQ
 DCX,Digital Currency X Technology Inc. Class A Ordinary Shares,NASDAQ
 DD,"DuPont de Nemours, Inc. Common Stock",NYSE
-DDC,DDC Enterprise Limited,AMEX
 DDD,3D Systems Corporation,NYSE
 DDI,"DoubleDown Interactive Co., Ltd. American Depository Shares",NASDAQ
 DDL,Dingdong (Cayman) Limited American Depositary Shares (each two representing three Ordinary Shares),NYSE
@@ -2068,7 +2065,6 @@ GCTS,"GCT Semiconductor Holding, Inc.",NYSE
 GD,General Dynamics Corporation,NYSE
 GDDY,GoDaddy Inc,NYSE
 GDEV,GDEV Inc. Ordinary Shares,NASDAQ
-GDHG,Golden Heaven Group Holdings Ltd. Class A Ordinary Shares,NASDAQ
 GDOT,Green Dot Corporation,NYSE
 GDRX,"GoodRx Holdings, Inc. Class A Common Stock",NASDAQ
 GDS,GDS Holdings Limited ADS,NASDAQ
@@ -2212,7 +2208,7 @@ GRBK,"Green Brick Partners, Inc",NYSE
 GRC,The Gorman-Rupp Company Common Shares,NYSE
 GRCE,"Grace Therapeutics, Inc. Common Stock",NASDAQ
 GRDN,"Guardian Pharmacy Services, Inc.",NYSE
-GRDX,GridAI Technologies Corp. Common Stock,NASDAQ
+GRDX,GridAI Power Corp. Common Stock,NASDAQ
 GRFS,"Grifols, S.A. American Depositary Shares",NASDAQ
 GRI,"GRI Bio, Inc. Common Stock",NASDAQ
 GRML,Greenland Mines Ltd. Common Stock,NASDAQ
@@ -2305,7 +2301,6 @@ HCKT,Hackett Group Inc (The). Common Stock,NASDAQ
 HCM,HUTCHMED (China) Limited American Depositary Shares,NASDAQ
 HCMA,HCM III Acquisition Corp. Class A Ordinary Share,NASDAQ
 HCSG,"Healthcare Services Group, Inc. Common Stock",NASDAQ
-HCTI,"Healthcare Triangle, Inc. Common Stock",NASDAQ
 HCWB,HCW Biologics Inc. Common Stock,NASDAQ
 HD,"Home Depot, Inc.",NYSE
 HDB,HDFC Bank Limited,NYSE
@@ -2855,7 +2850,6 @@ KYNB,"Kyntra Bio, Inc. Common Stock",NASDAQ
 KYTX,"Kyverna Therapeutics, Inc. Common Stock",NASDAQ
 KZIA,Kazia Therapeutics Limited American Depositary Shares,NASDAQ
 L,Loews Corporation,NYSE
-LAB,Standard BioTools Inc. Common Stock,NASDAQ
 LABT,Lakewood-Amedex Biotherapeutics Inc. Common Stock,NASDAQ
 LAC,Lithium Americas Corp.,NYSE
 LAD,"Lithia Motors, Inc.",NYSE
@@ -2919,6 +2913,7 @@ LFVN,Lifevantage Corporation Common Stock (Delaware),NASDAQ
 LFWD,Lifeward Ltd. Ordinary Shares,NASDAQ
 LGCL,Lucas GC Limited Class A Ordinary Shares,NASDAQ
 LGCY,Legacy Education Inc.,AMEX
+LGHL,Lion Group Holding Ltd. American Depositary Share,NASDAQ
 LGIH,"LGI Homes, Inc. Common Stock",NASDAQ
 LGL,"The LGL Group, Inc.",AMEX
 LGN,Legence Corp. Class A Common stock,NASDAQ
@@ -3311,7 +3306,6 @@ MTCH,"Match Group, Inc. Common Stock",NASDAQ
 MTD,Mettler-Toledo International,NYSE
 MTDR,MATADOR RESOURCES COMPANY,NYSE
 MTEK,Maris-Tech Ltd. Ordinary Shares,NASDAQ
-MTEN,Mingteng International Corporation Inc. Class A Ordinary Shares,NASDAQ
 MTEX,"Mannatech, Incorporated Common Stock",NASDAQ
 MTG,MGIC Investment Corp.,NYSE
 MTH,Meritage Homes Corporation,NYSE
@@ -3453,7 +3447,6 @@ NIO,"NIO Inc. American depositary shares, each representing one Class A ordinary
 NIPG,NIP Group Inc. American Depositary Shares,NASDAQ
 NIQ,NIQ Global Intelligence plc,NYSE
 NIU,Niu Technologies American Depositary Shares,NASDAQ
-NIVF,NewGenIvf Group Limited Class A Ordinary Shares,NASDAQ
 NIXX,"Nixxy, Inc. Common Stock",NASDAQ
 NJR,New Jersey Resources Corp,NYSE
 NKE,"Nike, Inc.",NYSE
@@ -3811,7 +3804,6 @@ PBFS,"Pioneer Bancorp, Inc. Common Stock",NASDAQ
 PBH,Prestige Consumer Healthcare Inc.,NYSE
 PBHC,"Pathfinder Bancorp, Inc. Common Stock (MD)",NASDAQ
 PBI,Pitney Bowes Inc.,NYSE
-PBK,PowerBank Corporation Common Stock,NASDAQ
 PBLS,"Parabilis Medicines, Inc. Common Stock",NASDAQ
 PBM,Psyence Biomedical Ltd. Common Shares,NASDAQ
 PBR,PETROLEO BRASILEIRO S.A.-PETROBRAS ADS (REP 1 COMMON SHARE),NYSE
@@ -4442,7 +4434,7 @@ SGHC,Super Group (SGHC) Limited,NYSE
 SGHT,"Sight Sciences, Inc. Common Stock",NASDAQ
 SGI,Somnigroup International Inc.,NYSE
 SGLD,Scorpio Gold Corporation American Depositary Shares,NASDAQ
-SGLY,Singularity Future Technology Ltd. Common Stock,NASDAQ
+SGLY,Compower Ltd. Common Stock,NASDAQ
 SGML,Sigma Lithium Corporation Common Shares,NASDAQ
 SGMT,Sagimet Biosciences Inc. Series A Common Stock,NASDAQ
 SGP,"SpyGlass Pharma, Inc. Common Stock",NASDAQ
@@ -5138,7 +5130,6 @@ VALN,Valneva SE American Depositary Shares,NASDAQ
 VALU,"Value Line, Inc. Common Stock",NASDAQ
 VANI,"Vivani Medical, Inc. Common Stock (DE)",NASDAQ
 VATE,INNOVATE Corp.,NYSE
-VBIO,"Valion Bio, Inc. Common Stock",NASDAQ
 VC,Visteon Corporation Common Stock,NASDAQ
 VCEL,Vericel Corporation Common Stock,NASDAQ
 VCIG,VCI Global Limited Ordinary Share,NASDAQ
@@ -5268,7 +5259,6 @@ VTS,"Vitesse Energy, Inc..",NYSE
 VTSI,"VirTra, Inc. Common Stock",NASDAQ
 VTVT,vTv Therapeutics Inc. Class A Common Stock,NASDAQ
 VUZI,Vuzix Corporation Common Stock,NASDAQ
-VVOS,"Vivos Therapeutics, Inc. Common Stock",NASDAQ
 VVR,Invesco  Senior Income Trust,NYSE
 VVV,Valvoline Inc.,NYSE
 VVVV,vVARDIS Holding AG,NYSE
@@ -5330,7 +5320,6 @@ WHD,"Cactus, Inc.",NYSE
 WHF,"WhiteHorse Finance, Inc. Common Stock",NASDAQ
 WHG,"WESTWOOD HOLDINGS GROUP, INC.",NYSE
 WHK,WhiteHawk Minerals Corp.,NYSE
-WHLR,"Wheeler Real Estate Investment Trust, Inc. Common Stock",NASDAQ
 WHR,Whirlpool Corp.,NYSE
 WHWK,"Whitehawk Therapeutics, Inc. Common Stock",NASDAQ
 WINA,Winmark Corporation Common Stock,NASDAQ
